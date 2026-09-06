@@ -1,0 +1,2 @@
+ALTER TABLE users ADD COLUMN avatar_source VARCHAR(40) NOT NULL DEFAULT 'auto';
+ALTER TABLE external_identities ADD COLUMN avatar_url VARCHAR(2048) NOT NULL DEFAULT '';

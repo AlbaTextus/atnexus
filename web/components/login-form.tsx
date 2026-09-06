@@ -1,0 +1,145 @@
+"use client"
+
+import Link from "next/link"
+import { useEffect, useState, type FormEvent } from "react"
+import { AlertCircle, KeyRound } from "lucide-react"
+import { browserSupportsWebAuthn, startAuthentication } from "@simplewebauthn/browser"
+import { PasswordInput } from "@/components/password-input"
+import { AuthCard } from "@/components/auth-card"
+import { SocialLogin } from "@/components/social-login"
+import { externalLoginError } from "@/lib/external-login"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Field, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
+import { api, safeReturnTo } from "@/lib/api"
+import { authErrorMessage } from "@/lib/auth-errors"
+
+type LoginFormProps = { returnTo: string | null; oauthError?: string | null }
+type UserResponse = { id: string; email: string; display_name?: string | null }
+type PasskeyOptions = { ceremony_token: string; publicKey: Record<string, unknown> }
+const rememberedEmailKey = "albatextus.remembered-email"
+
+export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [rememberEmail, setRememberEmail] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [passkeyBusy, setPasskeyBusy] = useState(false)
+  const [error, setError] = useState(externalLoginError(oauthError || null))
+  const [socialBusy, setSocialBusy] = useState(false)
+  const destination = safeReturnTo(returnTo)
+  const pending = busy || passkeyBusy || socialBusy
+
+  useEffect(() => {
+    try {
+      const remembered = localStorage.getItem(rememberedEmailKey)
+      if (remembered) {
+        setEmail(remembered)
+        setRememberEmail(true)
+      }
+    } catch {
+      // Storage can be unavailable in private or restricted browsers.
+    }
+  }, [])
+
+  function changeRememberEmail(checked: boolean) {
+    setRememberEmail(checked)
+    if (!checked) {
+      try { localStorage.removeItem(rememberedEmailKey) } catch { /* Login does not require storage. */ }
+    }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (pending) return
+    setBusy(true)
+    setError("")
+    try {
+      const normalizedEmail = email.trim()
+      await api<UserResponse>("/api/v1/sessions", {
+        method: "POST",
+        body: JSON.stringify({ email: normalizedEmail, password }),
+      })
+      try {
+        if (rememberEmail) localStorage.setItem(rememberedEmailKey, normalizedEmail)
+        else localStorage.removeItem(rememberedEmailKey)
+      } catch { /* A storage preference must not prevent a successful login. */ }
+      window.location.href = destination
+    } catch (reason) {
+      setError(authErrorMessage(reason, "暂时无法登录，请稍后重试。"))
+      setBusy(false)
+    }
+  }
+
+  async function passkeyLogin() {
+    if (pending) return
+    setError("")
+    if (!browserSupportsWebAuthn()) {
+      setError("当前浏览器不支持通行密钥，请使用邮箱和密码登录。")
+      return
+    }
+    setPasskeyBusy(true)
+    try {
+      const ceremony = await api<PasskeyOptions>("/api/v1/passkeys/login/options", { method: "POST" })
+      const assertion = await startAuthentication({ optionsJSON: ceremony.publicKey as never })
+      await api<UserResponse>("/api/v1/passkeys/login/finish", {
+        method: "POST",
+        body: JSON.stringify(assertion),
+        headers: { "X-WebAuthn-Ceremony": ceremony.ceremony_token },
+      })
+      window.location.href = destination
+    } catch (reason) {
+      setError(authErrorMessage(reason, "通行密钥登录失败，请重试或使用邮箱登录。"))
+      setPasskeyBusy(false)
+    }
+  }
+
+  return (
+    <AuthCard
+      title="欢迎回来" titleId="login-title" description="登录你的 AlbaTextus 账户"
+      footer={<p className="text-center text-sm text-muted-foreground">还没有账户？ <Button variant="link" nativeButton={false} role="link" render={<Link href={`/register${returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : ""}`} />} className="h-auto p-0">创建账户</Button></p>}
+    >
+      {error && <Alert id="login-error" variant="destructive" className="mb-5"><AlertCircle aria-hidden="true" /><AlertDescription>{error}</AlertDescription></Alert>}
+
+      <form onSubmit={submit} aria-busy={pending} aria-describedby={error ? "login-error" : undefined}>
+        <FieldGroup className="gap-5">
+          <Field data-disabled={pending}>
+            <FieldLabel htmlFor="email" className="sr-only">电子邮箱</FieldLabel>
+            <Input
+              id="email" name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false}
+              required maxLength={320} value={email} disabled={pending} className="h-11 px-3" placeholder="邮箱或登录标识"
+              onChange={(event) => { setEmail(event.target.value); setError("") }}
+            />
+          </Field>
+          <Field data-disabled={pending}>
+            <FieldLabel htmlFor="password" className="sr-only">密码</FieldLabel>
+            <PasswordInput
+              id="password" name="password" autoComplete="current-password" required value={password} disabled={pending}
+              placeholder="密码" onChange={(event) => { setPassword(event.target.value); setError("") }}
+            />
+          </Field>
+          <Field orientation="horizontal" data-disabled={pending} className="gap-2.5">
+            <Checkbox id="remember-email" name="remember-email" checked={rememberEmail} disabled={pending} onCheckedChange={changeRememberEmail} />
+            <FieldLabel htmlFor="remember-email">记住邮箱</FieldLabel>
+          </Field>
+          <Button type="submit" size="lg" disabled={pending} className="h-11 w-full">
+            {busy && <Spinner data-icon="inline-start" aria-hidden="true" />}
+            {busy ? "正在登录…" : "登录"}
+          </Button>
+        </FieldGroup>
+      </form>
+
+      <FieldSeparator className="my-6">或通过以下方式登录</FieldSeparator>
+      <div className="flex flex-col gap-3">
+      <SocialLogin returnTo={destination} disabled={pending} onBusyChange={setSocialBusy} />
+      <Button type="button" variant="outline" size="lg" onClick={passkeyLogin} disabled={pending} className="h-11 w-full">
+        {passkeyBusy ? <Spinner data-icon="inline-start" aria-hidden="true" /> : <KeyRound data-icon="inline-start" aria-hidden="true" />}
+        {passkeyBusy ? "正在验证…" : "使用通行密钥登录"}
+      </Button>
+      </div>
+    </AuthCard>
+  )
+}

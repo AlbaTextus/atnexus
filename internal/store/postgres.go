@@ -228,7 +228,7 @@ func (p *Postgres) ConsumePasskeyCeremony(ctx context.Context, tokenHash, kind s
 
 func (p *Postgres) ClientByID(ctx context.Context, id string) (Client, error) {
 	var c Client
-	err := p.pool.QueryRow(ctx, `SELECT id, name, secret_hash, redirect_uris, allowed_grant_types, allowed_scopes, access_token_ttl, refresh_token_ttl, is_active, minimum_role FROM oauth_clients WHERE id = $1`, id).Scan(&c.ID, &c.Name, &c.SecretHash, &c.RedirectURIs, &c.AllowedGrantTypes, &c.AllowedScopes, &c.AccessTokenTTL, &c.RefreshTokenTTL, &c.IsActive, &c.MinimumRole)
+	err := p.pool.QueryRow(ctx, `SELECT id, name, secret_hash, redirect_uris, allowed_grant_types, allowed_scopes, access_token_ttl, refresh_token_ttl, is_active, minimum_role,homepage_url,description,icon_url,updated_at FROM oauth_clients WHERE id = $1`, id).Scan(&c.ID, &c.Name, &c.SecretHash, &c.RedirectURIs, &c.AllowedGrantTypes, &c.AllowedScopes, &c.AccessTokenTTL, &c.RefreshTokenTTL, &c.IsActive, &c.MinimumRole, &c.HomepageURL, &c.Description, &c.IconURL, &c.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Client{}, ErrNotFound
 	}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { AlertCircle } from "lucide-react"
 import { api } from "@/lib/api"
 import { managementError } from "@/lib/applications"
+import { authErrorMessage } from "@/lib/auth-errors"
 import { type LoginProvider } from "@/lib/external-login"
 import { ProviderIcon } from "@/components/provider-icon"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -11,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 
-export function SocialLogin({ returnTo, disabled = false, onBusyChange }: { returnTo: string; disabled?: boolean; onBusyChange?: (busy: boolean) => void }) {
+export function SocialLogin({ returnTo, disabled = false, onBusyChange, verificationHeaders, onAttemptFailed }: { returnTo: string; disabled?: boolean; onBusyChange?: (busy: boolean) => void; verificationHeaders?: Record<string, string>; onAttemptFailed?: () => void }) {
   const [providers, setProviders] = useState<LoginProvider[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState("")
@@ -28,9 +29,9 @@ export function SocialLogin({ returnTo, disabled = false, onBusyChange }: { retu
     if (disabled || busy || !provider.enabled) return
     setBusy(provider.id); setError(""); onBusyChange?.(true)
     try {
-      const result = await api<{ authorization_url: string }>(`/api/v1/auth/providers/${provider.id}/start`, { method: "POST", body: JSON.stringify({ return_to: returnTo }) })
+      const result = await api<{ authorization_url: string }>(`/api/v1/auth/providers/${provider.id}/start`, { method: "POST", body: JSON.stringify({ return_to: returnTo }), headers: verificationHeaders })
       window.location.assign(result.authorization_url)
-    } catch (reason) { setError(managementError(reason)); setBusy(""); onBusyChange?.(false) }
+    } catch (reason) { setError(authErrorMessage(reason, managementError(reason))); setBusy(""); onBusyChange?.(false); onAttemptFailed?.() }
   }
 
   return <div className="flex flex-col gap-3">

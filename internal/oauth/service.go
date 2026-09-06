@@ -61,7 +61,7 @@ func (s *Service) ValidateAuthorize(ctx context.Context, in AuthorizeRequest) (s
 		return store.Client{}, oauthError("invalid_request", "client_id and redirect_uri are required", 400)
 	}
 	parsedRedirect, err := url.ParseRequestURI(in.RedirectURI)
-	if err != nil || parsedRedirect.Scheme == "" || parsedRedirect.Fragment != "" {
+	if err != nil || (parsedRedirect.Scheme != "https" && parsedRedirect.Scheme != "http") || parsedRedirect.Hostname() == "" || parsedRedirect.User != nil || parsedRedirect.Fragment != "" {
 		return store.Client{}, oauthError("invalid_request", "redirect_uri is invalid", 400)
 	}
 	client, err := s.store.ClientByID(ctx, in.ClientID)
@@ -90,22 +90,43 @@ func (s *Service) ValidateAuthorize(ctx context.Context, in AuthorizeRequest) (s
 }
 
 func (s *Service) CreateAuthorizationCode(ctx context.Context, userID uuid.UUID, in AuthorizeRequest) (string, *Error) {
-	client, err := s.ValidateAuthorize(ctx, in)
+	code, record, err := s.PrepareAuthorizationCode(ctx, userID, in)
 	if err != nil {
 		return "", err
 	}
-	if roleErr := s.checkMinimumRole(ctx, client, userID); roleErr != nil {
-		return "", roleErr
-	}
-	code, genErr := security.RandomToken(32)
-	if genErr != nil {
-		return "", oauthError("server_error", "could not create authorization code", 500)
-	}
-	challenge, method := optionalString(in.CodeChallenge), optionalString(in.CodeChallengeMethod)
-	if dbErr := s.store.CreateAuthorizationCode(ctx, store.NewAuthorizationCode{CodeHash: security.HashToken(code), ClientID: client.ID, UserID: userID, RedirectURI: in.RedirectURI, Scopes: normalizeScopes(in.Scope), CodeChallenge: challenge, CodeChallengeMethod: method, ExpiresAt: s.now().Add(s.cfg.AuthorizationCodeTTL)}); dbErr != nil {
+	if dbErr := s.store.CreateAuthorizationCode(ctx, record); dbErr != nil {
 		return "", oauthError("server_error", "could not persist authorization code", 500)
 	}
 	return code, nil
+}
+
+// PrepareAuthorizationCode validates a request without issuing a usable code.
+// Consent stores the prepared record in the same transaction as the decision.
+func (s *Service) PrepareAuthorizationCode(ctx context.Context, userID uuid.UUID, in AuthorizeRequest) (string, store.NewAuthorizationCode, *Error) {
+	client, err := s.ValidateAuthorize(ctx, in)
+	if err != nil {
+		return "", store.NewAuthorizationCode{}, err
+	}
+	if roleErr := s.checkMinimumRole(ctx, client, userID); roleErr != nil {
+		return "", store.NewAuthorizationCode{}, roleErr
+	}
+	code, genErr := security.RandomToken(32)
+	if genErr != nil {
+		return "", store.NewAuthorizationCode{}, oauthError("server_error", "could not create authorization code", 500)
+	}
+	challenge, method := optionalString(in.CodeChallenge), optionalString(in.CodeChallengeMethod)
+	return code, store.NewAuthorizationCode{CodeHash: security.HashToken(code), ClientID: client.ID, UserID: userID, RedirectURI: in.RedirectURI, Scopes: normalizeScopes(in.Scope), CodeChallenge: challenge, CodeChallengeMethod: method, ExpiresAt: s.now().Add(s.cfg.AuthorizationCodeTTL)}, nil
+}
+
+func (s *Service) ValidateConsent(ctx context.Context, userID uuid.UUID, in AuthorizeRequest) (store.Client, *Error) {
+	client, err := s.ValidateAuthorize(ctx, in)
+	if err != nil {
+		return store.Client{}, err
+	}
+	if err := s.checkMinimumRole(ctx, client, userID); err != nil {
+		return store.Client{}, err
+	}
+	return client, nil
 }
 
 func (s *Service) ExchangeCode(ctx context.Context, clientID, clientSecret, code, redirectURI, verifier string) (TokenResponse, *Error) {
@@ -215,7 +236,7 @@ func (s *Service) issueToken(ctx context.Context, client store.Client, userID *u
 	var refresh string
 	var refreshHash *string
 	var refreshExpiry *time.Time
-	if withRefresh {
+	if withRefresh && contains(client.AllowedGrantTypes, "refresh_token") {
 		refresh, err = security.RandomToken(32)
 		if err != nil {
 			return TokenResponse{}, oauthError("server_error", "could not create refresh token", 500)

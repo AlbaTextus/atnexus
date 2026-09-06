@@ -65,6 +65,9 @@ func (a *API) startExternalLogin(w http.ResponseWriter, r *http.Request) {
 	if !readAccountJSON(w, r, &input) {
 		return
 	}
+	if !input.Link && !a.verifyHuman(w, r) {
+		return
+	}
 	st, ok := a.externalStore(w)
 	if !ok {
 		return

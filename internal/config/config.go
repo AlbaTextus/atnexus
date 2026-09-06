@@ -30,6 +30,7 @@ type Config struct {
 	PasskeyChallengeTTL       time.Duration
 	ClientSecretEncryptionKey string
 	LoginProviders            []LoginProvider
+	Turnstile                 Turnstile
 }
 
 func Load() (Config, error) {
@@ -53,6 +54,13 @@ func Load() (Config, error) {
 		LoginProviders:            loadLoginProviders(),
 	}
 	var err error
+	c.Turnstile, err = loadTurnstile(c.AuthUIURL)
+	if err != nil {
+		return Config{}, err
+	}
+	if err := c.Turnstile.Validate(c.Env); err != nil {
+		return Config{}, err
+	}
 	if err := ValidateLoginProviders(c.LoginProviders, c.Env); err != nil {
 		return Config{}, err
 	}

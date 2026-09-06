@@ -63,6 +63,10 @@ type PasskeyCeremony struct {
 type Client struct {
 	ID                string
 	Name              string
+	HomepageURL       string
+	Description       string
+	IconURL           string
+	UpdatedAt         time.Time
 	SecretHash        *string
 	RedirectURIs      []string
 	AllowedGrantTypes []string

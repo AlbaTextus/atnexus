@@ -3,6 +3,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model LegalDocument {
+  slug        String   @id @db.VarChar(20)
+  title       String   @db.VarChar(100)
+  description String   @default("") @db.VarChar(300)
+  content     String   @db.Text
+  revision    Int      @default(1)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("legal_documents")
+}
+
 model User {
   id           String              @id @default(uuid()) @db.Uuid
   email        String              @unique @db.VarChar(320)
@@ -21,6 +32,7 @@ model User {
   applications OAuthClient[]       @relation("ApplicationOwner")
   externalIdentities ExternalIdentity[]
   externalLoginFlows ExternalLoginFlow[]
+  consentRequests OAuthConsentRequest[]
 
   @@map("users")
 }
@@ -128,9 +140,26 @@ model OAuthClient {
   codes             AuthorizationCode[]
   tokens            OAuthToken[]
   owner             User?               @relation("ApplicationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  consentRequests   OAuthConsentRequest[]
 
   @@index([ownerId])
   @@map("oauth_clients")
+}
+
+model OAuthConsentRequest {
+  tokenHash     String   @id @map("token_hash") @db.Char(64)
+  userId        String   @map("user_id") @db.Uuid
+  clientId      String   @map("client_id") @db.VarChar(100)
+  sessionHash   String   @map("session_hash") @db.Char(64)
+  requestData   Json     @map("request_data")
+  clientVersion DateTime @map("client_version") @db.Timestamptz(6)
+  expiresAt     DateTime @map("expires_at") @db.Timestamptz(6)
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client        OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("oauth_consent_requests")
 }
 
 model AuthorizationCode {

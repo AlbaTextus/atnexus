@@ -1,12 +1,13 @@
 "use client"
 
-import Link from "next/link"
 import { useEffect, useState, type FormEvent } from "react"
 import { AlertCircle, KeyRound } from "lucide-react"
 import { browserSupportsWebAuthn, startAuthentication } from "@simplewebauthn/browser"
 import { PasswordInput } from "@/components/password-input"
 import { AuthCard } from "@/components/auth-card"
+import { AuthFooter } from "@/components/auth-footer"
 import { SocialLogin } from "@/components/social-login"
+import { AuthVerification, useAuthVerification } from "@/components/auth-verification"
 import { externalLoginError } from "@/lib/external-login"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -23,6 +24,7 @@ type PasskeyOptions = { ceremony_token: string; publicKey: Record<string, unknow
 const rememberedEmailKey = "albatextus.remembered-email"
 
 export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
+  const verification = useAuthVerification()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [rememberEmail, setRememberEmail] = useState(false)
@@ -54,7 +56,7 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (pending) return
+    if (pending || !verification.ready) return
     setBusy(true)
     setError("")
     try {
@@ -62,6 +64,7 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
       await api<UserResponse>("/api/v1/sessions", {
         method: "POST",
         body: JSON.stringify({ email: normalizedEmail, password }),
+        headers: verification.headers,
       })
       try {
         if (rememberEmail) localStorage.setItem(rememberedEmailKey, normalizedEmail)
@@ -70,12 +73,13 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
       window.location.href = destination
     } catch (reason) {
       setError(authErrorMessage(reason, "暂时无法登录，请稍后重试。"))
+      verification.reset()
       setBusy(false)
     }
   }
 
   async function passkeyLogin() {
-    if (pending) return
+    if (pending || !verification.ready) return
     setError("")
     if (!browserSupportsWebAuthn()) {
       setError("当前浏览器不支持通行密钥，请使用邮箱和密码登录。")
@@ -83,7 +87,7 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
     }
     setPasskeyBusy(true)
     try {
-      const ceremony = await api<PasskeyOptions>("/api/v1/passkeys/login/options", { method: "POST" })
+      const ceremony = await api<PasskeyOptions>("/api/v1/passkeys/login/options", { method: "POST", headers: verification.headers })
       const assertion = await startAuthentication({ optionsJSON: ceremony.publicKey as never })
       await api<UserResponse>("/api/v1/passkeys/login/finish", {
         method: "POST",
@@ -93,6 +97,7 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
       window.location.href = destination
     } catch (reason) {
       setError(authErrorMessage(reason, "通行密钥登录失败，请重试或使用邮箱登录。"))
+      verification.reset()
       setPasskeyBusy(false)
     }
   }
@@ -100,7 +105,7 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
   return (
     <AuthCard
       title="欢迎回来" titleId="login-title" description="登录你的 AlbaTextus 账户"
-      footer={<p className="text-center text-sm text-muted-foreground">还没有账户？ <Button variant="link" nativeButton={false} role="link" render={<Link href={`/register${returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : ""}`} />} className="h-auto p-0">创建账户</Button></p>}
+      footer={<AuthFooter returnTo={returnTo} />}
     >
       {error && <Alert id="login-error" variant="destructive" className="mb-5"><AlertCircle aria-hidden="true" /><AlertDescription>{error}</AlertDescription></Alert>}
 
@@ -125,7 +130,8 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
             <Checkbox id="remember-email" name="remember-email" checked={rememberEmail} disabled={pending} onCheckedChange={changeRememberEmail} />
             <FieldLabel htmlFor="remember-email">记住邮箱</FieldLabel>
           </Field>
-          <Button type="submit" size="lg" disabled={pending} className="h-11 w-full">
+          <AuthVerification verification={verification} disabled={pending} />
+          <Button type="submit" size="lg" disabled={pending || !verification.ready} className="h-11 w-full">
             {busy && <Spinner data-icon="inline-start" aria-hidden="true" />}
             {busy ? "正在登录…" : "登录"}
           </Button>
@@ -134,8 +140,8 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
 
       <FieldSeparator className="my-6">或通过以下方式登录</FieldSeparator>
       <div className="flex flex-col gap-3">
-      <SocialLogin returnTo={destination} disabled={pending} onBusyChange={setSocialBusy} />
-      <Button type="button" variant="outline" size="lg" onClick={passkeyLogin} disabled={pending} className="h-11 w-full">
+      <SocialLogin returnTo={destination} disabled={pending || !verification.ready} onBusyChange={setSocialBusy} verificationHeaders={verification.headers} onAttemptFailed={verification.reset} />
+      <Button type="button" variant="outline" size="lg" onClick={passkeyLogin} disabled={pending || !verification.ready} className="h-11 w-full">
         {passkeyBusy ? <Spinner data-icon="inline-start" aria-hidden="true" /> : <KeyRound data-icon="inline-start" aria-hidden="true" />}
         {passkeyBusy ? "正在验证…" : "使用通行密钥登录"}
       </Button>

@@ -123,7 +123,7 @@ func TestCreateAndExchangeAuthorizationCode(t *testing.T) {
 	if oauthErr != nil {
 		t.Fatalf("exchange failed: %#v", oauthErr)
 	}
-	if response.AccessToken == "" || response.RefreshToken == "" || response.Scope != "email openid" {
+	if response.AccessToken == "" || response.RefreshToken != "" || response.Scope != "email openid" {
 		t.Fatalf("unexpected token response: %#v", response)
 	}
 }

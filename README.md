@@ -69,6 +69,12 @@ Compose 会启动 PostgreSQL、Go API（8080）和认证前端（3000）。生�
 
 ## 用户中心与子系统接入
 
+### 本地图床
+
+相邻的 `../imgbed` 图床可通过 `go run ./cmd/register-imgbed` 注册为 **AlbaTextus 图床**（Client ID：`albatextus-imgbed`）。此命令复用已注册图床密钥，将凭据写入 `../imgbed/.dev.vars`，不打印密钥，不重新 seed 用户或其他应用。默认主页为 `http://127.0.0.1:8080`，回调为 `/api/auth/oauth/callback`，授权范围 `profile email`，仅允许授权码登录。
+
+联调时在本项目执行 `go build -o release/oauth-imgbed.exe ./cmd/server`，再在图床目录运行 `.\deploy\start-local.ps1`。该脚本使用 OAuth API 的 `127.0.0.1:8081` 和账号中心前端的 `localhost:3000`，避免与图床的 8080 端口冲突。图床以中心 `id` 建立会话，`USER` 对应普通上传用户，`ADMIN` / `SUPER_ADMIN` 对应图床管理员。
+
 ### 第三方账号登录
 
 执行最新 `pnpm db:deploy` 后，在 `.env` 配置第三方凭据并重启 Go 服务。登录页、注册页和账户安全页共用服务端提供的平台状态；未配置的平台显示为“暂未开放”，不会发起无效跳转。凭据只在 Go 服务中使用，不要配置为 `NEXT_PUBLIC_*`。
@@ -108,6 +114,24 @@ LINUX DO 的 Discovery 没有声明 `email_verified`。因此新用户按稳定�
 
 修改请求及开始登录需要 `X-AlbaTextus-Client: account-center`，拒绝跨站请求。回调验证浏览器 Cookie、state 和 PKCE，并只返回受限的本地页面或子系统授权接口。所有响应禁止缓存。
 
+### Cloudflare Turnstile 安全验证
+
+登录及注册页面共用 Turnstile 验证组件。服务端在邮箱登录、注册、第三方登录发起、通行密钥登录挑战创建之前调用 Cloudflare Siteverify；缺少、伪造、过期、重复使用的令牌会被拒绝，验证服务不可用时也不会放行。已登录用户绑定第三方账号继续使用原有会话校验；OAuth 子系统换取令牌和已有会话的单点登录不弹出额外验证。
+
+在根目录 `.env` 配置 `TURNSTILE_SITE_KEY` 和 `TURNSTILE_SECRET_KEY`。两项均为空时关闭；只配置一项会拒绝启动。`TURNSTILE_ALLOWED_HOSTNAMES` 是逗号分隔的精确域名，默认使用 `AUTH_UI_URL` 的主机名，不包含协议、端口或路径。正式环境会校验 Siteverify 返回的域名、`action=authenticate` 和 5 分钟有效期；同一个令牌只能使用一次，失败重试时前端重新创建验证组件。
+
+本地可以使用 [Cloudflare 官方测试密钥](https://developers.cloudflare.com/turnstile/troubleshooting/testing/)：
+
+```dotenv
+TURNSTILE_SITE_KEY=1x00000000000000000000AA
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+TURNSTILE_TEST_MODE=true
+```
+
+测试模式显示标记，只用于联调，不提供真实机器人防护；`APP_ENV=production` 会拒绝测试模式和官方测试密钥。正式使用时替换为自己的密钥，设置 `TURNSTILE_TEST_MODE=false`，并在 Cloudflare 控制台配置站点允许的域名。Secret Key 仅由 Go 服务读取，无需设置 `NEXT_PUBLIC_*`，修改后重启 Go 服务即可。
+
+`GET /api/v1/auth/verification` 只返回公开的 `enabled`、`site_key`、`test_mode`、`action`，不返回 Secret Key。受保护请求通过 `X-Turnstile-Token` 携带组件生成的令牌；通行密钥后续完成请求使用先前签发的一次性 ceremony。错误码为 `turnstile_required`、`turnstile_failed`、`turnstile_unavailable`。部署如有 CSP，需要允许 `https://challenges.cloudflare.com` 的脚本和 iframe。窄屏自动使用 compact 组件；脚本加载失败、验证过期或超时会提示重试。
+
 登录后可访问：
 
 - `/account`：个人概览和已开放的应用，支持搜索与访问应用主页。
@@ -117,6 +141,11 @@ LINUX DO 的 Discovery 没有声明 `email_verified`。因此新用户按稳定�
 - `/admin/applications/new`：管理员创建应用，填写主页、描述、图标 URL 与回调地址。
 - `/admin/applications/:id`：管理员查看接入信息、编辑配置、重置密钥、停用或删除应用。
 - `/admin/integration`：管理员接入指南。
+- `/admin/legal`：管理员编辑隐私政策与用户协议，支持 Markdown 实时预览、分栏及单独编辑/预览视图。
+
+协议正文保存到 `legal_documents`，由 `20260906030000_legal_documents` 迁移创建并保留原有两份协议的内容。管理员可以修改标题、简介和 Markdown 正文（最多 100,000 字符），点击“保存并同步”后 `/privacy`、`/terms` 读取最新版本。切换协议会保留当前编辑页内的草稿；未保存内容不会出现在公开页面。管理接口为 `GET/PUT /api/v1/admin/legal/:slug`，仅允许管理员会话，写入需携带 `X-AlbaTextus-Client: account-center`；`slug` 仅支持 `privacy` 与 `terms`。公开接口 `GET /api/v1/legal/:slug` 无需登录，各接口均禁止缓存。
+
+写入时提交读取到的 `revision`，并发修改会返回 `409 legal_conflict`，避免覆盖其他管理员更新。预览与公开页共用 Markdown 渲染组件，支持 GFM 表格、任务列表、删除线等；忽略原始 HTML，过滤不安全链接，不执行脚本。正文中的图片从 HTTPS 或本站相对地址加载，不通过服务端代理抓取。
 
 普通用户的导航不显示后台入口；直接访问后台也不会加载管理内容，管理 API 返回 `403 admin_required`。旧 `/account/applications`、`/account/integration` 及其子路径重定向到对应后台地址。
 
@@ -132,7 +161,11 @@ LINUX DO 的 Discovery 没有声明 `email_verified`。因此新用户按稳定�
 
 最低访问角色按 `USER < ADMIN < SUPER_ADMIN` 校验。修改回调地址、最低角色或启停状态，以及重置密钥，会撤销该应用已有令牌和未使用的授权码；修改名称、描述、图标不会撤销授权。删除应用同时删除相关授权数据。
 
-子系统先生成随机 `state` 与 PKCE 参数，跳转授权接口；回调验证 `state`，用授权码交换令牌，再携带 Bearer Token 请求 `/api/v1/me`，以返回的 `id` 建立自己的用户会话。用户已登录中心时，再进入其他接入应用可以复用中心登录会话。
+子系统先生成随机 `state` 与 PKCE 参数，跳转授权接口。未登录时先登录账户中心，随后进入 `/consent` 授权确认页，展示后台登记的应用名称、图标、主页、简介、最低角色、当前账户与申请的权限。每次授权都需点击“允许并继续”才会签发授权码；点击“拒绝”会向已验证的回调地址返回 `error=access_denied` 和原始 `state`，不签发授权码。已有中心登录会话可以复用，仍需确认本次应用授权。
+
+授权请求由 `20260906040000_oauth_consent` 迁移提供存储，10 分钟有效，绑定发起时的用户和登录会话，且只能处理一次。读取确认信息使用 `GET /api/v1/oauth/consent?request=...`；提交使用 `POST /api/v1/oauth/consent`，JSON 为 `request_token` 和 `decision`（`allow` / `deny`），并携带 `X-AlbaTextus-Client: account-center`。回调地址、scope、state 与 PKCE 均从服务端保存的原始请求读取。应用配置变更、会话失效或请求过期时需从应用重新发起。确认页禁止被嵌入 iframe，避免被其他页面诱导点击。
+
+回调验证 `state` 后，用授权码交换令牌，再携带 Bearer Token 请求 `/api/v1/me`，以返回的 `id` 建立自己的用户会话。子系统用户信息始终包含 `id` / `sub`；申请 `profile` 才返回昵称、头像、角色和创建时间，申请 `email` 才返回邮箱及登录标识说明，不再返回密码状态等中心内部字段。子系统应按实际需要申请权限。只有开启 `refresh_token` 的应用才签发刷新令牌，确认页会展示对应的保持登录权限。
 
 当前实现是 OAuth 2.0，不签发 OpenID Connect ID Token；请使用通用 OAuth 客户端，通过用户接口读取身份，不能把访问令牌当作 JWT 解码。中心退出或令牌撤销不会自动清除子系统自己的会话；子系统应在退出时清理自己的会话，并处理令牌失效。
 

@@ -1,4 +1,9 @@
+import { ApiError } from "@/lib/api"
+
 const messages: Record<string, string> = {
+  turnstile_required: "请先完成安全验证。",
+  turnstile_failed: "安全验证未通过或已过期，请重新验证。",
+  turnstile_unavailable: "安全验证服务暂时不可用，请稍后重试。",
   invalid_credentials: "邮箱或密码不正确，请检查后重试。",
   email_exists: "这个邮箱已经注册过了，请直接登录。",
   invalid_request: "请检查填写的信息后重试。",
@@ -17,5 +22,5 @@ export function authErrorMessage(reason: unknown, fallback: string): string {
   if (reason.name === "NotAllowedError" || reason.name === "AbortError") {
     return "通行密钥验证已取消或超时，你可以重试或使用邮箱登录。"
   }
-  return messages[reason.message] || fallback
+  return (reason instanceof ApiError && messages[reason.code]) || messages[reason.message] || fallback
 }

@@ -78,6 +78,7 @@ func (p *Postgres) ChangePassword(ctx context.Context, id uuid.UUID, previousHas
 		`UPDATE oauth_tokens SET revoked_at=NOW() WHERE user_id=$1 AND revoked_at IS NULL`,
 		`UPDATE authorization_codes SET used_at=NOW() WHERE user_id=$1 AND used_at IS NULL`,
 		`DELETE FROM external_login_flows WHERE user_id=$1`,
+		`DELETE FROM oauth_consent_requests WHERE user_id=$1`,
 	} {
 		if _, err := tx.Exec(ctx, query, id); err != nil {
 			return err

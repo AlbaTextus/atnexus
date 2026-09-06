@@ -19,6 +19,7 @@ import (
 	"github.com/AlbaTextus/oauth/internal/passkey"
 	"github.com/AlbaTextus/oauth/internal/security"
 	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/oauth/internal/turnstile"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -31,6 +32,7 @@ type API struct {
 	log           *slog.Logger
 	clientSecrets *security.SecretCipher
 	federation    *federation.Service
+	turnstile     *turnstile.Service
 }
 
 func New(cfg config.Config, st store.Store, logger *slog.Logger) (*API, error) {
@@ -49,7 +51,11 @@ func New(cfg config.Config, st store.Store, logger *slog.Logger) (*API, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &API{cfg: cfg, store: st, oauth: oauth.NewService(st, cfg), passkey: passkeyService, log: logger, clientSecrets: clientSecrets, federation: federatedLogin}, nil
+	humanVerification, err := turnstile.New(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &API{cfg: cfg, store: st, oauth: oauth.NewService(st, cfg), passkey: passkeyService, log: logger, clientSecrets: clientSecrets, federation: federatedLogin, turnstile: humanVerification}, nil
 }
 
 func (a *API) Router() http.Handler {
@@ -62,6 +68,10 @@ func (a *API) Router() http.Handler {
 	r.Delete("/api/v1/sessions/current", a.logout)
 	r.Get("/api/v1/me", a.me)
 	r.Get("/api/v1/auth/providers", a.loginProviders)
+	r.Get("/api/v1/auth/verification", a.authVerification)
+	r.Get("/api/v1/legal/{slug}", a.getLegalDocument)
+	r.Get("/api/v1/admin/legal/{slug}", a.getAdminLegalDocument)
+	r.Put("/api/v1/admin/legal/{slug}", a.updateLegalDocument)
 	r.Post("/api/v1/auth/providers/{provider}/start", a.startExternalLogin)
 	r.Get("/api/v1/auth/providers/{provider}/callback", a.externalLoginCallback)
 	r.Get("/api/v1/account/identities", a.externalIdentities)
@@ -84,6 +94,8 @@ func (a *API) Router() http.Handler {
 	r.Get("/api/v1/passkeys", a.listPasskeys)
 	r.Delete("/api/v1/passkeys/{id}", a.deletePasskey)
 	r.Get("/oauth/authorize", a.authorize)
+	r.Get("/api/v1/oauth/consent", a.getConsent)
+	r.Post("/api/v1/oauth/consent", a.decideConsent)
 	r.Post("/oauth/token", a.token)
 	r.Post("/oauth/revoke", a.revoke)
 	r.Post("/oauth/introspect", a.introspect)
@@ -163,6 +175,9 @@ type userInput struct {
 }
 
 func (a *API) register(w http.ResponseWriter, r *http.Request) {
+	if !a.verifyHuman(w, r) {
+		return
+	}
 	var in userInput
 	if err := decodeJSON(r, &in); err != nil {
 		writeJSON(w, 400, map[string]any{"error": "invalid_request", "error_description": "request body must be valid JSON"})
@@ -198,6 +213,9 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
+	if !a.verifyHuman(w, r) {
+		return
+	}
 	var in userInput
 	if err := decodeJSON(r, &in); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid_request"})
@@ -239,6 +257,7 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) authorize(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	in := oauth.AuthorizeRequest{ClientID: r.URL.Query().Get("client_id"), RedirectURI: r.URL.Query().Get("redirect_uri"), ResponseType: r.URL.Query().Get("response_type"), Scope: r.URL.Query().Get("scope"), State: r.URL.Query().Get("state"), CodeChallenge: r.URL.Query().Get("code_challenge"), CodeChallengeMethod: r.URL.Query().Get("code_challenge_method")}
 	if err := validateState(in.State); err != nil {
 		writeOAuthError(w, err)
@@ -255,19 +274,12 @@ func (a *API) authorize(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, loginURL, http.StatusFound)
 		return
 	}
-	code, err := a.oauth.CreateAuthorizationCode(r.Context(), u.ID, in)
+	client, err := a.oauth.ValidateConsent(r.Context(), u.ID, in)
 	if err != nil {
 		writeOAuthError(w, err)
 		return
 	}
-	destination, _ := url.Parse(in.RedirectURI)
-	query := destination.Query()
-	query.Set("code", code)
-	if in.State != "" {
-		query.Set("state", in.State)
-	}
-	destination.RawQuery = query.Encode()
-	http.Redirect(w, r, destination.String(), http.StatusFound)
+	a.beginConsent(w, r, u, client, in)
 }
 
 func (a *API) token(w http.ResponseWriter, r *http.Request) {
@@ -328,7 +340,10 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	var user store.User
 	var scope string
+	var tokenScopes []string
+	usingToken := false
 	if accessToken := bearer(r); accessToken != "" {
+		usingToken = true
 		token, err := a.oauth.AuthenticateAccessToken(r.Context(), accessToken)
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
@@ -346,6 +361,7 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		scope = strings.Join(token.Scopes, " ")
+		tokenScopes = token.Scopes
 	} else {
 		var ok bool
 		user, ok = a.currentUser(r)
@@ -355,6 +371,9 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	view := userView(user)
+	if usingToken {
+		view = consentUserInfo(user, tokenScopes)
+	}
 	if scope != "" {
 		view["scope"] = scope
 	}
@@ -422,6 +441,9 @@ func (a *API) passkeyRegistrationFinish(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *API) passkeyLoginOptions(w http.ResponseWriter, r *http.Request) {
+	if !a.verifyHuman(w, r) {
+		return
+	}
 	options, ceremonyToken, err := a.passkey.BeginLogin(r.Context())
 	if err != nil {
 		a.log.Error("begin passkey login", "error", err)

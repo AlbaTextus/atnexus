@@ -1,11 +1,10 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
-import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, Check, Code2, Fingerprint, GitBranch, Github, Globe2, HeartHandshake, History, KeyRound, LayoutGrid, LockKeyhole, MessageCircle, Moon, ShieldCheck, Sparkles, Sun, UserPlus, UserRound } from "lucide-react"
+import { useEffect, useState, useSyncExternalStore } from "react"
+import { motion } from "framer-motion"
+import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, Check, Code2, Fingerprint, GitBranch, Github, Globe2, HeartHandshake, History, KeyRound, LayoutGrid, LockKeyhole, MessageCircle, ShieldCheck, Sparkles, UserPlus, UserRound } from "lucide-react"
 import { api } from "@/lib/api"
-import { isAdminRole } from "@/lib/applications"
-import { cn } from "@/lib/utils"
 import type { AccountUser } from "@/components/account-shell"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,41 +12,48 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 
 const repository = "https://github.com/AlbaTextus/oauth"
+const themeStorageKey = "albatextus-paper-theme"
 const guide = [
   { number: "01", icon: UserRound, title: "拥有一个账户", description: "使用邮箱注册，或选择已开放的第三方账号登录。你的资料，在这里统一管理。" },
   { number: "02", icon: ShieldCheck, title: "选择你的应用", description: "在用户中心找到已开放的应用，确认它申请的信息，再决定是否授权。" },
   { number: "03", icon: Fingerprint, title: "让登录更从容", description: "在账户安全中添加通行密钥，下次通过指纹、面容或设备 PIN 轻松登录。" },
 ]
 
-function HomeBrand({ footer = false }: { footer?: boolean }) {
-  return <Link href="/" aria-label="AlbaTextus 首页" className="home-brand">
-    <span className="home-brand-mark" aria-hidden="true">A<span /></span>
-    <span>AlbaTextus{footer && <small>让每一次连接，都从信任开始。</small>}</span>
+const reducedMotionQuery = "(prefers-reduced-motion: reduce)"
+function subscribeReducedMotion(onChange: () => void) {
+  const query = window.matchMedia(reducedMotionQuery)
+  query.addEventListener("change", onChange)
+  return () => query.removeEventListener("change", onChange)
+}
+const getReducedMotion = () => window.matchMedia(reducedMotionQuery).matches
+const getServerReducedMotion = () => true
+
+function HomeBrand({ footer = false, collapsed = false }: { footer?: boolean; collapsed?: boolean }) {
+  const reducedMotion = useSyncExternalStore(subscribeReducedMotion, getReducedMotion, getServerReducedMotion)
+  const compact = footer || collapsed
+  const transition = { duration: reducedMotion ? 0 : 0.56, ease: [0.22, 1, 0.36, 1] as const }
+  return <Link href={footer ? "/" : "#top"} aria-label="AlbaTextus 首页" className="home-brand" data-collapsed={compact}>
+    <span className="home-wordmark" aria-hidden="true">
+      <span>A</span>
+      <motion.span className="home-wordmark-part" initial={false} animate={{ width: compact ? 0 : "auto", opacity: compact ? 0 : 1 }} transition={transition}>lba</motion.span>
+      <span>T</span>
+      <motion.span className="home-wordmark-part" initial={false} animate={{ width: compact ? 0 : "auto", opacity: compact ? 0 : 1 }} transition={transition}>extus</motion.span>
+    </span>
+    {footer && <small>让每一次连接，都从信任开始。</small>}
   </Link>
 }
 
 export function HomePage() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark")
+  const [theme, setTheme] = useState<"dark" | "light">("light")
   const [user, setUser] = useState<AccountUser | null>(null)
-  const [activeSection, setActiveSection] = useState("top")
-  const admin = Boolean(user && isAdminRole(user.role))
+  const [brandCollapsed, setBrandCollapsed] = useState(false)
 
   useEffect(() => {
     let frame = 0
     function updateSection() {
       frame = 0
-      const atBottom = window.scrollY > 0 && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 12
-      const boundary = (document.querySelector(".home-header")?.getBoundingClientRect().bottom ?? 100) + 40
-      let current = "top"
-      for (const id of ["home-applications", "guide", "community"]) {
-        if ((document.getElementById(id)?.getBoundingClientRect().top ?? Infinity) <= boundary) current = id
-      }
-      // Several anchors may share the final scroll position on a tall screen.
-      // Preserve the requested section when the browser clamps to the bottom.
-      const hash = window.location.hash.slice(1)
-      const requested = document.getElementById(hash)
-      const visibleAnchor = ["guide", "community"].includes(hash) && requested && requested.getBoundingClientRect().top < window.innerHeight
-      setActiveSection(atBottom ? (visibleAnchor ? hash : "community") : current)
+      // Separate thresholds prevent flicker when scrolling around the boundary.
+      setBrandCollapsed(current => window.scrollY > 80 ? true : window.scrollY < 20 ? false : current)
     }
     function scheduleUpdate() { if (!frame) frame = window.requestAnimationFrame(updateSection) }
     updateSection()
@@ -64,7 +70,7 @@ export function HomePage() {
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem("albatextus-home-theme")
+      const saved = window.localStorage.getItem(themeStorageKey)
       if (saved === "light" || saved === "dark") setTheme(saved)
     } catch { /* Browsers may disable local storage. The default theme still works. */ }
     const controller = new AbortController()
@@ -74,49 +80,20 @@ export function HomePage() {
     return () => controller.abort()
   }, [])
 
-  function toggleTheme() {
-    const next = theme === "dark" ? "light" : "dark"
-    setTheme(next)
-    try { window.localStorage.setItem("albatextus-home-theme", next) } catch { /* Keep the selection for this visit. */ }
-  }
-
   return <div className="home-shell" data-theme={theme} id="top">
     <a href="#home-main" className="home-skip">跳转到主要内容</a>
-    <div className="home-announcement">
-      <span><span className="home-status-dot" aria-hidden="true" />你的统一账户中心，已就绪</span>
-      <span className="home-announcement-divider" aria-hidden="true" />
-      <a href="#guide">认识 AlbaTextus <ArrowUpRight size={13} aria-hidden="true" /></a>
-    </div>
-
     <header className="home-header">
       <div className="home-container home-header-inner">
-        <HomeBrand />
-        <nav aria-label="主页导航" className="home-navigation">
-          <a href="#top" className="home-nav-link" aria-current={activeSection === "top" ? "page" : undefined}>主页</a>
-          <Link href={admin ? "/admin" : "/account"} className={cn("home-nav-link", admin && "home-admin-link")}>{admin ? "管理" : "账户"}</Link>
-          <a href="#home-applications" className="home-nav-link" aria-current={activeSection === "home-applications" ? "location" : undefined}>应用</a>
-          <a href="#guide" className="home-nav-link" aria-current={activeSection === "guide" ? "location" : undefined}>指南</a>
-          <a href="#community" className="home-nav-link" aria-current={activeSection === "community" ? "location" : undefined}>社区</a>
-          <a href={`${repository}/blob/main/README.md`} target="_blank" rel="noopener noreferrer" className="home-nav-link">文档</a>
-        </nav>
+        <HomeBrand collapsed={brandCollapsed} />
         <div className="home-header-actions">
-          <Button variant="ghost" size="icon" aria-label={theme === "dark" ? "切换为浅色主题" : "切换为深色主题"} onClick={toggleTheme}>{theme === "dark" ? <Sun /> : <Moon />}</Button>
           <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<a href={repository} target="_blank" rel="noopener noreferrer" />} aria-label="GitHub 项目（新窗口）" className="home-repo-link"><Github /></Button>
-          {user ? <>
-            <Button nativeButton={false} role="link" render={<Link href="/account" />}>用户中心<ArrowUpRight data-icon="inline-end" /></Button>
-          </> : <>
-            <Button variant="ghost" nativeButton={false} role="link" render={<Link href="/login" />}>登录</Button>
-            <Button nativeButton={false} role="link" render={<Link href="/register" />}>注册<ArrowUpRight data-icon="inline-end" /></Button>
-          </>}
+          <Button nativeButton={false} role="link" render={<Link href="/account" />}>前往用户中心<ArrowUpRight data-icon="inline-end" /></Button>
         </div>
       </div>
     </header>
 
     <main id="home-main" tabIndex={-1}>
       <section className="home-hero" aria-labelledby="home-title">
-        <div className="home-hero-grid" aria-hidden="true" />
-        <div className="home-orbit home-orbit-one" aria-hidden="true" />
-        <div className="home-orbit home-orbit-two" aria-hidden="true" />
         <div className="home-container home-hero-content">
           <Badge variant="outline" className="h-8 gap-2 px-3"><Sparkles data-icon="inline-start" />ALBATEXTUS ACCOUNT</Badge>
           <h1 id="home-title">一个账户，<br /><span>连接每个应用。</span></h1>

@@ -132,7 +132,7 @@ TURNSTILE_TEST_MODE=true
 
 `GET /api/v1/auth/verification` 只返回公开的 `enabled`、`site_key`、`test_mode`、`action`，不返回 Secret Key。受保护请求通过 `X-Turnstile-Token` 携带组件生成的令牌；通行密钥后续完成请求使用先前签发的一次性 ceremony。错误码为 `turnstile_required`、`turnstile_failed`、`turnstile_unavailable`。部署如有 CSP，需要允许 `https://challenges.cloudflare.com` 的脚本和 iframe。窄屏自动使用 compact 组件；脚本加载失败、验证过期或超时会提示重试。
 
-访问 `/` 进入公开主页，包含登录 / 注册入口、用户中心入口、使用指南和多栏页脚。主页默认深色绿调，支持明暗主题切换并记住当前浏览器的选择；登录后显示个人资料入口和对应的后台导航。主页主题独立于登录页及用户中心，未登录时也可浏览。
+访问 `/` 进入公开主页，包含登录 / 注册入口、用户中心入口、使用指南和多栏页脚。主页、登录页及用户中心采用从 Anthropic 官网采样的配色：主体背景 `#F0EEE6`、浅色表面 `#FAF9F5`、卡片 `#E3DACC`、文字与主按钮 `#141413`，少量点缀使用 `#C6613F`。主页默认浅色，可切换深色并记住当前浏览器的选择；登录后显示个人资料入口和对应的后台导航。主页的明暗切换独立于登录页及用户中心，未登录时也可浏览。
 
 登录后可访问：
 

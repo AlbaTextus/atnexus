@@ -1,23 +1,15 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState, useSyncExternalStore } from "react"
-import { motion } from "framer-motion"
-import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, Check, Code2, Fingerprint, GitBranch, Github, Globe2, HeartHandshake, History, KeyRound, LayoutGrid, LockKeyhole, MessageCircle, ShieldCheck, Sparkles, UserPlus, UserRound } from "lucide-react"
-import { api } from "@/lib/api"
-import type { AccountUser } from "@/components/account-shell"
-import { Badge } from "@/components/ui/badge"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
+import { motion, useInView } from "framer-motion"
+import { ArrowUpRight, Check, Code2, Fingerprint, Github, Globe2, ShieldCheck, Sparkles, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { CloudflareNetwork } from "@/components/cloudflare-network"
 
 const repository = "https://github.com/AlbaTextus/oauth"
-const themeStorageKey = "albatextus-paper-theme"
-const guide = [
-  { number: "01", icon: UserRound, title: "拥有一个账户", description: "使用邮箱注册，或选择已开放的第三方账号登录。你的资料，在这里统一管理。" },
-  { number: "02", icon: ShieldCheck, title: "选择你的应用", description: "在用户中心找到已开放的应用，确认它申请的信息，再决定是否授权。" },
-  { number: "03", icon: Fingerprint, title: "让登录更从容", description: "在账户安全中添加通行密钥，下次通过指纹、面容或设备 PIN 轻松登录。" },
-]
+
 
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)"
 function subscribeReducedMotion(onChange: () => void) {
@@ -28,24 +20,34 @@ function subscribeReducedMotion(onChange: () => void) {
 const getReducedMotion = () => window.matchMedia(reducedMotionQuery).matches
 const getServerReducedMotion = () => true
 
+function ScrollReveal({ children, className, delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const inView = useInView(ref, { once: true, amount: 0.12, margin: "0px 0px -35px 0px" })
+  const reducedMotion = useSyncExternalStore(subscribeReducedMotion, getReducedMotion, getServerReducedMotion)
+  const [focused, setFocused] = useState(false)
+  const visible = reducedMotion || inView || focused
+  return <motion.div ref={ref} className={className} data-scroll-reveal data-revealed={visible} initial={false}
+    animate={visible ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 32, scale: 0.985 }}
+    transition={{ duration: reducedMotion || focused ? 0 : 0.65, delay: visible && !reducedMotion && !focused ? delay : 0, ease: [0.22, 1, 0.36, 1] }}
+    onFocusCapture={() => setFocused(true)}>{children}</motion.div>
+}
+
 function HomeBrand({ footer = false, collapsed = false }: { footer?: boolean; collapsed?: boolean }) {
   const reducedMotion = useSyncExternalStore(subscribeReducedMotion, getReducedMotion, getServerReducedMotion)
-  const compact = footer || collapsed
+  const compact = !footer && collapsed
   const transition = { duration: reducedMotion ? 0 : 0.56, ease: [0.22, 1, 0.36, 1] as const }
   return <Link href={footer ? "/" : "#top"} aria-label="AlbaTextus 首页" className="home-brand" data-collapsed={compact}>
     <span className="home-wordmark" aria-hidden="true">
       <span>A</span>
-      <motion.span className="home-wordmark-part" initial={false} animate={{ width: compact ? 0 : "auto", opacity: compact ? 0 : 1 }} transition={transition}>lba</motion.span>
+      <motion.span className="home-wordmark-part" initial={false} animate={{ width: compact ? 0 : "auto", opacity: compact ? 0 : 1 }} transition={transition}>{footer ? "LBA" : "lba"}</motion.span>
       <span>T</span>
-      <motion.span className="home-wordmark-part" initial={false} animate={{ width: compact ? 0 : "auto", opacity: compact ? 0 : 1 }} transition={transition}>extus</motion.span>
+      <motion.span className="home-wordmark-part" initial={false} animate={{ width: compact ? 0 : "auto", opacity: compact ? 0 : 1 }} transition={transition}>{footer ? "EXTUS" : "extus"}</motion.span>
     </span>
-    {footer && <small>让每一次连接，都从信任开始。</small>}
   </Link>
 }
 
 export function HomePage() {
-  const [theme, setTheme] = useState<"dark" | "light">("light")
-  const [user, setUser] = useState<AccountUser | null>(null)
+  const reducedMotion = useSyncExternalStore(subscribeReducedMotion, getReducedMotion, getServerReducedMotion)
   const [brandCollapsed, setBrandCollapsed] = useState(false)
 
   useEffect(() => {
@@ -68,19 +70,8 @@ export function HomePage() {
     }
   }, [])
 
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(themeStorageKey)
-      if (saved === "light" || saved === "dark") setTheme(saved)
-    } catch { /* Browsers may disable local storage. The default theme still works. */ }
-    const controller = new AbortController()
-    api<AccountUser>("/api/v1/me", { signal: controller.signal }).then(value => {
-      if (!controller.signal.aborted) setUser(value)
-    }).catch(() => { /* The public homepage also works without a session or API connection. */ })
-    return () => controller.abort()
-  }, [])
 
-  return <div className="home-shell" data-theme={theme} id="top">
+  return <div className="home-shell home-credit-inspired" data-theme="light" id="top">
     <a href="#home-main" className="home-skip">跳转到主要内容</a>
     <header className="home-header">
       <div className="home-container home-header-inner">
@@ -93,63 +84,56 @@ export function HomePage() {
     </header>
 
     <main id="home-main" tabIndex={-1}>
-      <section className="home-hero" aria-labelledby="home-title">
-        <div className="home-container home-hero-content">
-          <Badge variant="outline" className="h-8 gap-2 px-3"><Sparkles data-icon="inline-start" />ALBATEXTUS ACCOUNT</Badge>
-          <h1 id="home-title">一个账户，<br /><span>连接每个应用。</span></h1>
-          <p className="home-hero-description">少一点登录的繁琐，多一点连接的自由。<br />在 AlbaTextus，安全访问你的应用，轻松管理你的数字身份。</p>
-
-          <div className="home-entries" id="home-applications">
-            <Link href={user ? "/account/profile" : "/register"} className="home-entry home-entry-primary">
-              <Card className="h-full gap-6 p-7" interactive>
-                <CardHeader className="gap-5 px-0">
-                  <div className="home-entry-top"><span className="home-entry-icon">{user ? <UserRound size={27} aria-hidden="true" /> : <UserPlus size={27} aria-hidden="true" />}</span><ArrowUpRight size={21} className="home-entry-arrow" aria-hidden="true" /></div>
-                  <CardTitle><h2>{user ? "我的个人资料" : "创建你的账户"}</h2></CardTitle>
-                  <CardDescription>{user ? "更新昵称、选择头像，让每个应用都认识你。" : "创建一个账户，开启你的 AlbaTextus 体验。"}</CardDescription>
-                </CardHeader>
-                <CardContent className="mt-auto px-0"><span className="home-entry-action">{user ? "管理个人资料" : "立即注册"}<ArrowRight size={16} aria-hidden="true" /></span></CardContent>
-              </Card>
-            </Link>
-            <Link href="/account" className="home-entry">
-              <Card className="h-full gap-6 p-7" interactive>
-                <CardHeader className="gap-5 px-0">
-                  <div className="home-entry-top"><span className="home-entry-icon"><LayoutGrid size={27} aria-hidden="true" /></span><ArrowUpRight size={21} className="home-entry-arrow" aria-hidden="true" /></div>
-                  <CardTitle><h2>进入用户中心</h2></CardTitle>
-                  <CardDescription>发现已开放的应用，管理你的账户安全。</CardDescription>
-                </CardHeader>
-                <CardContent className="mt-auto px-0"><span className="home-entry-action">前往用户中心<ArrowRight size={16} aria-hidden="true" /></span></CardContent>
-              </Card>
-            </Link>
+      <section className="landing-hero home-container" aria-labelledby="home-title">
+        <ScrollReveal className="landing-copy">
+          <p className="landing-eyebrow"><Sparkles size={14} aria-hidden="true" /> ALBATEXTUS ACCOUNT</p>
+          <h1 id="home-title">一个账户，<br /><span>让连接更简单。</span></h1>
+          <p className="landing-description">你的数字身份，从这里开始。<br />统一登录、管理资料、安全授权，让每一次连接都轻松自然。</p>
+          <div className="landing-benefits"><span><Fingerprint aria-hidden="true" />通行密钥</span><span><Globe2 aria-hidden="true" />统一身份</span><span><ShieldCheck aria-hidden="true" />安全授权</span></div>
+        </ScrollReveal>
+        <motion.div className="landing-visual" initial={false} animate={reducedMotion ? {y:0} : {y:[0,-8,0]}} transition={{duration:7,repeat:Infinity,ease:"easeInOut"}} aria-label="账户功能示意">
+          <div className="landing-glow" aria-hidden="true" />
+          <div className="identity-card">
+            <div className="identity-top"><span><Fingerprint size={24} />ALBATEXTUS</span></div>
+            <div className="identity-person"><div className="identity-avatar"><UserRound size={32} /></div><div><strong>每个应用，同一个你。</strong><p>你的专属数字身份</p></div></div>
+            <div className="identity-bottom"><span>ONE ACCOUNT. EVERY CONNECTION.</span><ShieldCheck size={23} /></div>
           </div>
-
-          <p className="home-login-hint"><LockKeyhole size={15} aria-hidden="true" />{user ? <><span>欢迎回来，{user.display_name || (user.email_is_alias ? "朋友" : user.email.split("@")[0])}</span><Link href="/account/security">查看账户安全<ArrowRight size={13} aria-hidden="true" /></Link></> : <><span>已经有账户了？</span><Link href="/login">登录，继续你的旅程<ArrowRight size={13} aria-hidden="true" /></Link></>}</p>
-
-          <div className="home-trust" aria-label="账户服务特点">
-            <span><ShieldCheck size={16} aria-hidden="true" />授权由你决定</span>
-            <span><Fingerprint size={16} aria-hidden="true" />支持通行密钥</span>
-            <span><Globe2 size={16} aria-hidden="true" />一个账户，多个应用</span>
-          </div>
-          <a href="#guide" className="home-scroll-link" aria-label="向下查看使用指南"><ArrowDown size={18} /></a>
-        </div>
+          <div className="identity-floating identity-passkey"><span className="identity-feature-icon"><Fingerprint size={21} /></span><div><strong>轻触，即可登录</strong><small>Passkey · 无需记住密码</small></div><Check size={16} /></div>
+          <div className="identity-floating identity-connect"><span className="identity-feature-icon"><ShieldCheck size={21} /></span><div><strong>授权，由你决定</strong><small>只分享你允许的信息</small></div></div>
+        </motion.div>
+      </section>
+      <section className="landing-developer home-container" aria-labelledby="developer-title">
+        <ScrollReveal className="landing-code">
+          <div className="landing-code-bar"><span className="code-window-dots" aria-hidden="true"><i /><i /><i /></span><span className="code-window-title"><Code2 size={14} aria-hidden="true" />HTTP API</span><span aria-hidden="true" /></div>
+          <pre aria-label="OAuth 授权请求与重定向响应示例"><code><span className="code-option">GET</span> <span className="code-string">/oauth/authorize</span>{"\n"}<span className="code-comment">?client_id=…&amp;response_type=code&amp;…</span>{"\n\n"}<span className="code-comment"># 已登录 · 跳转授权确认页</span>{"\n"}<span className="code-command">HTTP/1.1</span> <span className="code-value">302 Found</span>{"\n"}<span className="code-property">Location</span>: <span className="code-string">https://…/consent?request=…</span>{"\n"}<span className="code-property">Cache-Control</span>: <span className="code-variable">no-store</span>{"\n\n"}<span className="code-comment">…</span></code></pre>
+        </ScrollReveal>
+        <ScrollReveal className="landing-developer-copy" delay={0.12}><p className="landing-eyebrow">BUILT FOR COMMUNITY</p><h2 id="developer-title">专为社区打造</h2><p>为社区成员与应用提供统一的账户入口。从登录、个人资料到应用授权，让社区里的每一次连接都更简单。</p><ul><li><Check />一个账户，连接社区里的应用</li><li><Check />安全授权，分享的信息由你决定</li><li><Check />开放源代码，与社区一起完善</li></ul></ScrollReveal>
       </section>
 
-      <section id="guide" className="home-guide home-container" aria-labelledby="home-guide-title">
-        <div className="home-section-heading"><div><p className="home-eyebrow">简单开始，自在连接</p><h2 id="home-guide-title">从这里，找到你的下一站。</h2></div><p>把账户留在一处，<br />把时间留给你真正想做的事。</p></div>
-        <div className="home-guide-grid">{guide.map(step => <article key={step.number} className="home-guide-step"><div className="home-step-top"><step.icon size={22} aria-hidden="true" /><span>{step.number}</span></div><h3>{step.title}</h3><p>{step.description}</p></article>)}</div>
-        <div className="home-guide-note"><HeartHandshake size={19} aria-hidden="true" /><p>你的账户，你来掌握。<span>随时在用户中心管理资料、登录方式和账户安全。</span></p><Link href="/account/security">了解账户安全<ArrowUpRight size={16} aria-hidden="true" /></Link></div>
+      <section className="edge-section home-container" aria-labelledby="edge-title">
+        <div className="edge-layout">
+          <ScrollReveal className="edge-copy">
+            <img className="edge-cloudflare-logo" src="/brands/cloudflare.svg" alt="Cloudflare" width="341" height="156" />
+            <h2 id="edge-title">全球连接，就近响应。</h2>
+            <p className="edge-description">Cloudflare 提供 DNS 解析与代理服务，<br className="edge-desktop-break" />通过全球网络，让社区的每一次连接更顺畅。</p>
+          </ScrollReveal>
+          <ScrollReveal className="edge-brand-reveal" delay={0.18}>
+            <CloudflareNetwork />
+          </ScrollReveal>
+        </div>
       </section>
     </main>
 
     <footer className="home-footer" id="community">
       <div className="home-container">
         <div className="home-footer-grid">
-          <div className="home-footer-brand"><HomeBrand footer /><p>一个账户，连接每个应用。<br />为你的应用提供统一、安全的登录体验。</p><span className="home-footer-signature"><span className="home-status-dot" aria-hidden="true" />Designed for connection.</span></div>
-          <nav aria-label="页脚导航" className="home-footer-column"><h2>导航</h2><a href="#guide">使用指南</a><Link href="/account">用户中心</Link><Link href="/privacy">隐私政策</Link><Link href="/terms">用户协议</Link></nav>
-          <nav aria-label="项目与社区" className="home-footer-column"><h2>项目与社区</h2><a href={repository} target="_blank" rel="noopener noreferrer"><Github size={17} aria-hidden="true" />GitHub<ArrowUpRight size={13} aria-hidden="true" /></a><a href={`${repository}/issues`} target="_blank" rel="noopener noreferrer"><MessageCircle size={17} aria-hidden="true" />问题反馈</a><a href={`${repository}/commits/main`} target="_blank" rel="noopener noreferrer"><History size={17} aria-hidden="true" />更新记录</a><p className="home-community-note">每一个想法，<br />都能让下一次连接更好。</p></nav>
-          <div className="home-footer-column"><h2>技术资源</h2><div className="home-resource-links"><Button variant="outline" size="sm" nativeButton={false} role="link" render={<a href={`${repository}/blob/main/README.md`} target="_blank" rel="noopener noreferrer" />}><BookOpen data-icon="inline-start" />项目文档</Button><Button variant="outline" size="sm" nativeButton={false} role="link" render={<a href={`${repository}/blob/main/README.md#api`} target="_blank" rel="noopener noreferrer" />}><Code2 data-icon="inline-start" />API 文档</Button><Button variant="outline" size="sm" nativeButton={false} role="link" render={<a href="/.well-known/oauth-authorization-server" target="_blank" rel="noopener noreferrer" />}><KeyRound data-icon="inline-start" />OAuth 元数据</Button><Button variant="outline" size="sm" nativeButton={false} role="link" render={<a href={repository} target="_blank" rel="noopener noreferrer" />}><GitBranch data-icon="inline-start" />源代码</Button></div><p className="home-resource-note"><Check size={13} aria-hidden="true" />OAuth 2.0 · PKCE · Passkey</p></div>
+          <div className="home-footer-brand"><HomeBrand footer /></div>
+          <nav aria-label="服务与文档" className="home-footer-column"><h2>服务与文档</h2><Link href="/account">用户中心</Link><a href={repository + "/blob/main/README.md"} target="_blank" rel="noopener noreferrer">接入文档</a><a href="/.well-known/oauth-authorization-server" target="_blank" rel="noopener noreferrer">OAuth 元数据</a></nav>
+          <nav aria-label="项目与社区" className="home-footer-column"><h2>项目与社区</h2><a href={repository} target="_blank" rel="noopener noreferrer">GitHub 源代码</a><a href={repository + "/issues"} target="_blank" rel="noopener noreferrer">问题反馈</a><a href={repository + "/commits/main"} target="_blank" rel="noopener noreferrer">更新记录</a></nav>
         </div>
         <Separator />
-        <div className="home-footer-bottom"><p>© {new Date().getFullYear()} AlbaTextus</p><span>每个应用，同一个你。</span><a href="#top">回到顶部<ArrowUpRight size={14} aria-hidden="true" /></a></div>
+        <div className="home-footer-bottom"><p>© {new Date().getFullYear()} AlbaTextus. All rights reserved.</p><nav className="home-footer-legal" aria-label="法律信息"><Link href="/privacy">隐私政策</Link><Link href="/terms">服务条款</Link></nav></div>
+        <div className="home-footer-watermark" aria-hidden="true">ALBATEXTUS</div>
       </div>
     </footer>
   </div>

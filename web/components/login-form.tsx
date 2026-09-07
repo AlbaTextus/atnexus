@@ -5,6 +5,7 @@ import { AlertCircle, KeyRound } from "lucide-react"
 import { browserSupportsWebAuthn, startAuthentication } from "@simplewebauthn/browser"
 import { PasswordInput } from "@/components/password-input"
 import { AuthCard } from "@/components/auth-card"
+import { AuthWordmark } from "@/components/auth-wordmark"
 import { AuthFooter } from "@/components/auth-footer"
 import { SocialLogin } from "@/components/social-login"
 import { AuthVerification, useAuthVerification } from "@/components/auth-verification"
@@ -24,7 +25,7 @@ type PasskeyOptions = { ceremony_token: string; publicKey: Record<string, unknow
 const rememberedEmailKey = "albatextus.remembered-email"
 
 export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
-  const verification = useAuthVerification()
+  const verification = useAuthVerification({ requireAgreement: true })
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [rememberEmail, setRememberEmail] = useState(false)
@@ -104,7 +105,8 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
 
   return (
     <AuthCard
-      title="欢迎回来" titleId="login-title" description="登录你的 AlbaTextus 账户"
+      title="欢迎回来" titleId="login-title"
+      brand={<AuthWordmark verified={Boolean(verification.config?.enabled && verification.ready)} />}
       footer={<AuthFooter returnTo={returnTo} />}
     >
       {error && <Alert id="login-error" variant="destructive" className="mb-5"><AlertCircle aria-hidden="true" /><AlertDescription>{error}</AlertDescription></Alert>}
@@ -138,14 +140,13 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
         </FieldGroup>
       </form>
 
-      <FieldSeparator className="my-6">或通过以下方式登录</FieldSeparator>
-      <div className="flex flex-col gap-3">
-      <SocialLogin returnTo={destination} disabled={pending || !verification.ready} onBusyChange={setSocialBusy} verificationHeaders={verification.headers} onAttemptFailed={verification.reset} />
-      <Button type="button" variant="outline" size="lg" onClick={passkeyLogin} disabled={pending || !verification.ready} className="h-11 w-full">
-        {passkeyBusy ? <Spinner data-icon="inline-start" aria-hidden="true" /> : <KeyRound data-icon="inline-start" aria-hidden="true" />}
-        {passkeyBusy ? "正在验证…" : "使用通行密钥登录"}
-      </Button>
-      </div>
+      <FieldSeparator className="my-6" />
+      <SocialLogin returnTo={destination} disabled={pending || !verification.ready} onBusyChange={setSocialBusy} verificationHeaders={verification.headers} onAttemptFailed={verification.reset}>
+        <Button type="button" variant="outline" size="sm" onClick={passkeyLogin} disabled={pending || !verification.ready} className="h-11 min-w-0 px-1.5 max-[400px]:flex-col max-[400px]:gap-0.5" aria-label={passkeyBusy ? "正在验证通行密钥" : "使用通行密钥登录"}>
+          {passkeyBusy ? <Spinner data-icon="inline-start" aria-hidden="true" /> : <KeyRound data-icon="inline-start" aria-hidden="true" />}
+          <span className="truncate">{passkeyBusy ? "验证中…" : "通行密钥"}</span>
+        </Button>
+      </SocialLogin>
     </AuthCard>
   )
 }

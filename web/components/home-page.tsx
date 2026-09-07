@@ -87,7 +87,7 @@ export function HomePage() {
       <section className="landing-hero home-container" aria-labelledby="home-title">
         <ScrollReveal className="landing-copy">
           <p className="landing-eyebrow"><Sparkles size={14} aria-hidden="true" /> ALBATEXTUS ACCOUNT</p>
-          <h1 id="home-title">一个账户，<br /><span>让连接更简单。</span></h1>
+          <h1 id="home-title">一个账户<br /><span>让连接更简单</span></h1>
           <p className="landing-description">你的数字身份，从这里开始。<br />统一登录、管理资料、安全授权，让每一次连接都轻松自然。</p>
           <div className="landing-benefits"><span><Fingerprint aria-hidden="true" />通行密钥</span><span><Globe2 aria-hidden="true" />统一身份</span><span><ShieldCheck aria-hidden="true" />安全授权</span></div>
         </ScrollReveal>

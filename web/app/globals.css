@@ -149,6 +149,42 @@ body { min-height: 100vh; margin: 0; font-family: Inter, -apple-system, BlinkMac
   color: var(--foreground);
   color-scheme: light;
 }
+/* White surfaces for the login page. */
+.auth-shell-white {
+  --background: #ffffff;
+  --card: #ffffff;
+  --muted: #f1f2f5;
+  --secondary: #f5f6f8;
+  --accent: #f1f2f5;
+  --border: #20253512;
+  --auth-card-shadow: 0 24px 80px #343c6310, 0 2px 8px #343c6305;
+}
+.auth-shell-white .auth-card {
+  max-width: 380px;
+  min-height: 635px;
+  gap: 20px;
+  padding: 24px;
+  transition: padding 640ms cubic-bezier(.4, 0, .2, 1), gap 640ms cubic-bezier(.4, 0, .2, 1);
+}
+.auth-shell-white .auth-card > :is([data-slot="card-header"], [data-slot="card-footer"]) { flex-shrink: 0; }
+.auth-shell-white .auth-card > [data-slot="card-content"] {
+  min-width: 0;
+  flex: 1;
+}
+.auth-shell-white .auth-card [data-slot="field-group"] { gap: 14px; transition: gap 640ms cubic-bezier(.4, 0, .2, 1); }
+.auth-shell-white .auth-card [data-slot="field-separator"] { margin-block: 16px; transition: margin 640ms cubic-bezier(.4, 0, .2, 1); }
+.auth-shell-white .auth-wordmark { margin-bottom: 8px; transition: margin 640ms cubic-bezier(.4, 0, .2, 1); }
+.auth-shell-white .auth-card:has(.verification-gate[data-state="closed"]) { gap: 28px; }
+.auth-shell-white .auth-card:has(.verification-gate[data-state="closed"]) [data-slot="field-group"] { gap: 20px; }
+.auth-shell-white .auth-card:has(.verification-gate[data-state="closed"]) [data-slot="field-separator"] { margin-block: 24px; }
+.auth-shell-white .auth-card:has(.verification-gate[data-state="closed"]) .auth-wordmark { margin-bottom: 20px; }
+@media (min-width: 640px) {
+  .auth-shell-white .auth-card:has(.verification-gate[data-state="closed"]) { padding: 32px; }
+}
+/* Reserve space for compact Turnstile widgets without constraining content. */
+@media (max-width: 379px) {
+  .auth-shell-white .auth-card { min-height: 715px; }
+}
 .auth-shell a, .auth-shell button, .auth-shell input { -webkit-tap-highlight-color: transparent; }
 .auth-shell button:not(:disabled), .auth-shell [role="checkbox"]:not([data-disabled]), .auth-shell label { cursor: pointer; }
 .auth-skip-link {
@@ -177,7 +213,28 @@ body { min-height: 100vh; margin: 0; font-family: Inter, -apple-system, BlinkMac
   font-weight: 650;
   text-decoration: none;
 }
-.auth-brand-mark:focus-visible, .auth-skip-link:focus-visible { outline: 3px solid var(--ring); outline-offset: 4px; }
+.auth-wordmark {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  color: var(--foreground);
+  text-decoration: none;
+}
+.auth-wordmark-text {
+  display: inline-flex;
+  align-items: baseline;
+  font-family: inherit;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -.025em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.auth-wordmark-part { display: inline-block; overflow: hidden; }
+.auth-wordmark:focus-visible, .auth-brand-mark:focus-visible, .auth-skip-link:focus-visible { outline: 3px solid var(--ring); outline-offset: 4px; }
 
 @media (max-width: 520px) {
   .auth-shell { --auth-card-shadow: none; }
@@ -327,6 +384,43 @@ body { min-height: 100vh; margin: 0; font-family: Inter, -apple-system, BlinkMac
   transition: grid-template-rows 420ms var(--ease-out-soft), opacity 220ms ease, visibility 0s 420ms;
 }
 .verification-gate-clip { min-height: 0; overflow: hidden; }
+.verification-gate[data-agreement] .verification-gate-panel {
+  transition: grid-template-rows 640ms cubic-bezier(.4, 0, .2, 1), opacity 400ms ease, visibility 0s;
+}
+.verification-gate[data-agreement][data-state="closed"] .verification-gate-panel {
+  transition-delay: 0s, 0s, 640ms;
+}
+.verification-stage { position: relative; }
+.verification-widget { opacity: 1; visibility: visible; transition: opacity 240ms ease, visibility 0s; }
+.verification-stage[data-agreement-visible="true"] .verification-widget {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 240ms ease, visibility 0s 240ms;
+}
+.verification-agreement {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(.985);
+  transition: opacity 240ms ease, transform 320ms var(--ease-out-soft), visibility 0s 240ms;
+}
+.verification-stage[data-agreement-visible="true"] .verification-agreement {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+  transition: opacity 320ms ease 80ms, transform 400ms var(--ease-out-soft) 80ms, visibility 0s;
+}
+.verification-stage:has([data-widget-size="compact"]) .verification-agreement { width: 150px; margin-inline: auto; }
+.verification-agreement p { margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 18px; text-align: center; }
+.verification-agreement a { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+.verification-agreement a:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* Shared motion stays on composited properties and never moves a focused form. */
 :is(.auth-shell, .center-shell, .center-dialog) [data-slot="button"] {

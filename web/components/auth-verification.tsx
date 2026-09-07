@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import { AlertCircle, RotateCw, Shield, ShieldCheck } from "lucide-react"
 import { api } from "@/lib/api"
 import { loadTurnstile } from "@/lib/turnstile"
@@ -11,12 +12,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 type VerificationConfig = { enabled: boolean; site_key: string; test_mode: boolean; action: string }
 
-export function useAuthVerification() {
+export function useAuthVerification({ requireAgreement = false }: { requireAgreement?: boolean } = {}) {
   const [config, setConfig] = useState<VerificationConfig | null>(null)
   const [token, setToken] = useState("")
   const [error, setError] = useState("")
   const [revision, setRevision] = useState(0)
   const [retry, setRetry] = useState(0)
+  const [agreementAccepted, setAgreementAccepted] = useState(false)
   useEffect(() => {
     const controller = new AbortController()
     setError("")
@@ -29,13 +31,15 @@ export function useAuthVerification() {
       .catch(() => { if (!controller.signal.aborted) setError("无法加载安全验证，请重试。") })
     return () => controller.abort()
   }, [retry])
-  const reset = useCallback(() => { setToken(""); setError(""); setRevision(value => value + 1) }, [])
-  const onToken = useCallback((value: string) => { setToken(value); setError("") }, [])
-  const onError = useCallback((message: string) => { setToken(""); setError(message) }, [])
+  const reset = useCallback(() => { setToken(""); setError(""); setAgreementAccepted(false); setRevision(value => value + 1) }, [])
+  const onToken = useCallback((value: string) => { setToken(value); setError(""); setAgreementAccepted(false) }, [])
+  const onError = useCallback((message: string) => { setToken(""); setError(message); setAgreementAccepted(false) }, [])
   const reload = useCallback(() => { reset(); setRetry(value => value + 1) }, [reset])
-  const ready = Boolean(config && !error && (!config.enabled || token))
+  const humanReady = Boolean(config && !error && (!config.enabled || token))
+  const ready = humanReady && (!requireAgreement || agreementAccepted)
+  const acceptAgreement = () => { if (humanReady) setAgreementAccepted(true) }
   const headers: Record<string, string> = config?.enabled ? { "X-Turnstile-Token": token } : {}
-  return { config, error, revision, reset, onToken, onError, reload, ready, headers }
+  return { config, error, revision, reset, onToken, onError, reload, ready, headers, humanReady, requireAgreement, agreementAccepted, acceptAgreement }
 }
 
 function TurnstileWidget({ config, onToken, onError }: {
@@ -78,40 +82,66 @@ function TurnstileWidget({ config, onToken, onError }: {
     }
   }, [config.site_key, config.action, size, onToken, onError])
 
-  return <div ref={wrapper} className="flex w-full justify-center" role="group" aria-label="Cloudflare Turnstile 安全验证"><div ref={container} className={size === "compact" ? "min-h-36" : "min-h-16 w-full"} /></div>
+  return <div ref={wrapper} className="flex w-full justify-center" data-widget-size={size} role="group" aria-label="Cloudflare Turnstile 安全验证"><div ref={container} className={size === "compact" ? "min-h-36" : "min-h-16 w-full"} /></div>
 }
 
 export function AuthVerification({ verification, disabled = false }: { verification: ReturnType<typeof useAuthVerification>; disabled?: boolean }) {
   const { config, error } = verification
-  const verified = Boolean(config?.enabled && verification.ready)
+  const verified = Boolean(config?.enabled && verification.humanReady)
   const [settled, setSettled] = useState(false)
+  const [closing, setClosing] = useState(false)
   const panel = useRef<HTMLDivElement>(null)
   const summary = useRef<HTMLDivElement>(null)
-  const closed = verified && settled
+  const widget = useRef<HTMLDivElement>(null)
+  const agreementButton = useRef<HTMLButtonElement>(null)
+  const showAgreement = verification.requireAgreement && verification.humanReady && (!config?.enabled || settled)
+  const closed = verification.requireAgreement ? verification.ready && closing : verified && settled
 
   useEffect(() => {
     setSettled(false)
     if (!verified) return
     // Keep the widget mounted: collapsing it must not discard the token or
     // its expiry callback. Leave a moment for the success feedback to register.
-    const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 650
+    const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1200
     const timer = window.setTimeout(() => {
-      if (panel.current?.contains(document.activeElement)) summary.current?.focus({ preventScroll: true })
+      if (!verification.requireAgreement && panel.current?.contains(document.activeElement)) summary.current?.focus({ preventScroll: true })
       setSettled(true)
     }, delay)
     return () => window.clearTimeout(timer)
-  }, [verified])
+  }, [verified, verification.requireAgreement])
 
-  if (config && !config.enabled) return null
-  return <div className="verification-gate" data-state={closed ? "closed" : "open"} data-verified={verified}>
+  useEffect(() => {
+    if (showAgreement && widget.current?.contains(document.activeElement)) agreementButton.current?.focus({ preventScroll: true })
+  }, [showAgreement])
+
+  useEffect(() => {
+    setClosing(false)
+    if (!verification.requireAgreement || !verification.ready) return
+    const timer = window.setTimeout(() => {
+      if (panel.current?.contains(document.activeElement)) summary.current?.focus({ preventScroll: true })
+      setClosing(true)
+    }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 280)
+    return () => window.clearTimeout(timer)
+  }, [verification.requireAgreement, verification.ready])
+
+  if (config && !config.enabled && !verification.requireAgreement) return null
+  return <div className="verification-gate" data-state={closed ? "closed" : "open"} data-verified={verified} data-agreement={verification.requireAgreement || undefined}>
     <div ref={summary} className="verification-gate-summary" tabIndex={-1} role="status" aria-live="polite" aria-atomic="true">
-      <span className="flex min-w-0 items-center gap-2">{verified ? <ShieldCheck className="size-4 shrink-0" aria-hidden="true" /> : <Shield className="size-4 shrink-0" aria-hidden="true" />}<span>{verified ? "已通过安全验证" : error ? "需要重新验证" : "安全验证"}</span></span>
+      <span className="flex min-w-0 items-center gap-2">{verified ? <ShieldCheck className="size-4 shrink-0" aria-hidden="true" /> : <Shield className="size-4 shrink-0" aria-hidden="true" />}<span>{verification.requireAgreement && verification.ready ? "已同意相关条款" : showAgreement ? "请阅读并同意以下条款" : verified ? "已通过安全验证" : error ? "需要重新验证" : config && !config.enabled ? "隐私政策与用户协议" : "安全验证"}</span></span>
       {config?.test_mode && <Badge variant="secondary">测试模式</Badge>}
     </div>
     <div ref={panel} className="verification-gate-panel" aria-hidden={closed || undefined} inert={closed}>
       <div className="verification-gate-clip">
         <div className="flex flex-col gap-3 pt-3">
-          {config ? <TurnstileWidget key={verification.revision} config={config} onToken={verification.onToken} onError={verification.onError} /> : !error && <Skeleton className="h-16 w-full" role="status" aria-label="正在加载安全验证" />}
+          <div className="verification-stage" data-agreement-visible={showAgreement}>
+            <div ref={widget} className="verification-widget" aria-hidden={showAgreement || undefined} inert={showAgreement}>
+              {config?.enabled ? <TurnstileWidget key={verification.revision} config={config} onToken={verification.onToken} onError={verification.onError} /> : !config && !error ? <Skeleton className="h-16 w-full" role="status" aria-label="正在加载安全验证" /> : <div className="h-16" />}
+            </div>
+            {verification.requireAgreement && <div className="verification-agreement" aria-hidden={!showAgreement || undefined} inert={!showAgreement}>
+              <Button ref={agreementButton} type="button" size="sm" className="min-w-28" disabled={disabled || !showAgreement || verification.agreementAccepted} onClick={verification.acceptAgreement}>{verification.agreementAccepted ? "已同意" : "同意并继续"}</Button>
+              <p>同意<Link href="/privacy" target="_blank" rel="noopener noreferrer" aria-label="隐私政策（新窗口）">隐私政策</Link>与<Link href="/terms" target="_blank" rel="noopener noreferrer" aria-label="用户协议（新窗口）">用户协议</Link></p>
+            </div>}
+          </div>
           {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}<Button type="button" variant="link" disabled={disabled} onClick={verification.reload}><RotateCw data-icon="inline-start" />重新验证</Button></AlertDescription></Alert>}
         </div>
       </div>

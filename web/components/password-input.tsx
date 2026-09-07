@@ -12,7 +12,7 @@ export function PasswordInput({ label = "密码", ...props }: PasswordInputProps
   return (
     <InputGroup className="h-11" aria-label={label}>
       <InputGroupInput {...props} type={visible ? "text" : "password"} className="h-full px-3" />
-      <InputGroupAddon align="inline-end">
+      <InputGroupAddon align="inline-end" className="has-[>button]:mr-0">
         <InputGroupButton
           size="icon-sm" className="size-10" variant="ghost"
           aria-label={`${visible ? "隐藏" : "显示"}${label}`} aria-pressed={visible}

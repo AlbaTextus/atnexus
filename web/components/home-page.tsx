@@ -3,12 +3,13 @@
 import Link from "next/link"
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { motion, useInView } from "framer-motion"
-import { ArrowUpRight, Check, Code2, Fingerprint, Github, Globe2, ShieldCheck, Sparkles, UserRound } from "lucide-react"
+import { ArrowUpRight, Check, Code2, Fingerprint, Github, Globe2, Moon, ShieldCheck, Sparkles, Sun, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { CloudflareNetwork } from "@/components/cloudflare-network"
 
 const repository = "https://github.com/AlbaTextus/oauth"
+const colorModeKey = "albatextus-color-mode"
 
 
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)"
@@ -49,6 +50,20 @@ function HomeBrand({ footer = false, collapsed = false }: { footer?: boolean; co
 export function HomePage() {
   const reducedMotion = useSyncExternalStore(subscribeReducedMotion, getReducedMotion, getServerReducedMotion)
   const [brandCollapsed, setBrandCollapsed] = useState(false)
+  const [theme, setTheme] = useState<"light" | "dark">("light")
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(colorModeKey)
+      if (saved === "light" || saved === "dark") setTheme(saved)
+    } catch { /* The switch still works when storage is unavailable. */ }
+  }, [])
+
+  function toggleTheme() {
+    const next = theme === "light" ? "dark" : "light"
+    setTheme(next)
+    try { localStorage.setItem(colorModeKey, next) } catch { /* Keep the choice for this visit. */ }
+  }
 
   useEffect(() => {
     let frame = 0
@@ -71,12 +86,13 @@ export function HomePage() {
   }, [])
 
 
-  return <div className="home-shell home-credit-inspired" data-theme="light" id="top">
+  return <div className="home-shell home-credit-inspired" data-theme={theme} id="top">
     <a href="#home-main" className="home-skip">跳转到主要内容</a>
     <header className="home-header">
       <div className="home-container home-header-inner">
         <HomeBrand collapsed={brandCollapsed} />
         <div className="home-header-actions">
+          <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={theme === "light" ? "切换为深色主题" : "切换为浅色主题"} title={theme === "light" ? "切换为深色主题" : "切换为浅色主题"}>{theme === "light" ? <Moon /> : <Sun />}</Button>
           <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<a href={repository} target="_blank" rel="noopener noreferrer" />} aria-label="GitHub 项目（新窗口）" className="home-repo-link"><Github /></Button>
           <Button nativeButton={false} role="link" render={<Link href="/account" />}>前往用户中心<ArrowUpRight data-icon="inline-end" /></Button>
         </div>
@@ -120,6 +136,25 @@ export function HomePage() {
           <ScrollReveal className="edge-brand-reveal" delay={0.18}>
             <CloudflareNetwork />
           </ScrollReveal>
+        </div>
+      </section>
+      <section className="agi-section home-container" aria-labelledby="agi-title">
+        <ScrollReveal className="agi-heading">
+          <p className="landing-eyebrow">A NEW ERA OF POSSIBILITIES</p>
+          <h2 id="agi-title">欢迎来到 <span>AGI</span> 的时代</h2>
+          <p>由 AGI 强力构成</p>
+        </ScrollReveal>
+        <div className="agi-brands">
+          {[
+            { name: "Claude", image: "/brands/claude.svg" },
+            { name: "OpenAI", image: "/brands/openai.svg" },
+            { name: "Gemini", image: "/brands/gemini.svg" },
+          ].map((brand, index) => <ScrollReveal key={brand.name} delay={index * 0.12}>
+            <div className="agi-brand">
+              <img src={brand.image} alt="" width="64" height="64" loading="lazy" />
+              <span>{brand.name}</span>
+            </div>
+          </ScrollReveal>)}
         </div>
       </section>
     </main>

@@ -904,3 +904,90 @@ svg.lucide-fingerprint { color: #141413; }
 @media (max-width: 400px) { .cf-network-caption { top: 18px; font-size: 11px; gap: 7px; padding-block: 9px; } }
 .edge-cloudflare-logo { display: block; width: 105px; height: auto; margin-bottom: 28px; }
 @media (max-width: 600px) { .edge-cloudflare-logo { width: 85px; margin-bottom: 22px; } }
+
+.agi-section { padding-block: 56px 120px; }
+.agi-heading { text-align: center; }
+.agi-heading .landing-eyebrow { justify-content: center; }
+.agi-heading h2 { margin: 22px 0 18px; color: var(--foreground); font-size: clamp(28px, 3.6vw, 44px); line-height: 1.35; font-weight: 650; letter-spacing: -1px; }
+.agi-heading h2 span { color: #0b57d0; }
+.agi-heading > p:last-child { color: var(--muted-foreground); font-size: 14px; line-height: 1.8; }
+.agi-brands { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 48px; max-width: 760px; margin: 58px auto 0; }
+.agi-brands > div { min-width: 0; }
+.agi-brand { display: flex; flex-direction: column; align-items: center; gap: 23px; padding: 20px 8px; color: #202124; }
+.agi-brand img { display: block; width: 64px; height: 64px; object-fit: contain; }
+.agi-brand > span { position: relative; font-size: 23px; font-weight: 550; letter-spacing: -.5px; }
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .agi-brand img { transition: transform 450ms cubic-bezier(.22,1,.36,1); }
+  .agi-brand:hover img { transform: translateY(-7px) scale(1.04); }
+}
+@media (max-width: 600px) {
+  .agi-section { padding-block: 32px 72px; }
+  .agi-heading h2 { letter-spacing: -.5px; }
+  .agi-heading > p:last-child { font-size: 12px; }
+  .agi-brands { gap: 12px; margin-top: 32px; }
+  .agi-brand { gap: 16px; padding-inline: 0; }
+  .agi-brand img { width: 46px; height: 46px; }
+  .agi-brand > span { font-size: 17px; }
+}
+
+/* Homepage color modes. Account pages keep their own theme. */
+.home-shell[data-theme="dark"] {
+  --background: #141517;
+  --foreground: #eef0f3;
+  --card: #202328;
+  --card-foreground: #eef0f3;
+  --primary: #a8c7fa;
+  --primary-hover: #c4d9fc;
+  --primary-foreground: #102b50;
+  --secondary: #2a3443;
+  --secondary-foreground: #c6dcfa;
+  --muted: #2c3037;
+  --muted-foreground: #b0b6c0;
+  --border: #343940;
+  --ring: #a8c7fa;
+  --link: #a8c7fa;
+  --link-hover: #d1e2ff;
+  background: var(--background);
+  color: var(--foreground);
+  color-scheme: dark;
+}
+.home-shell[data-theme="dark"] .home-header {
+  --background: #141517;
+  --foreground: #eef0f3;
+  --primary: #eef0f3;
+  --primary-hover: #d8dce3;
+  --primary-foreground: #17191d;
+  --muted: #2c3037;
+  --ring: #a8c7fa;
+  background: #141517e6;
+  border-bottom-color: #343940;
+  color: var(--foreground);
+  color-scheme: dark;
+}
+.home-shell[data-theme="dark"] .home-footer { --background: #141517; --foreground: #eef0f3; --muted-foreground: #b0b6c0; --border: #343940; --link: #a8c7fa; --link-hover: #d1e2ff; background: var(--background); }
+.home-shell[data-theme="dark"] .home-footer-bottom { color: #aeb4be; }
+.home-shell[data-theme="dark"] .home-footer-watermark { color: #202226; }
+.home-shell[data-theme="dark"] .landing-eyebrow { color: #a8b9d2; }
+.home-shell[data-theme="dark"] .landing-copy h1 span,
+.home-shell[data-theme="dark"] .agi-heading h2 span { color: #a8c7fa; }
+.home-shell[data-theme="dark"] .landing-glow { background: radial-gradient(ellipse at 65% 25%, #35568b50, transparent 65%), radial-gradient(ellipse at 20% 80%, #3c527240, transparent 65%); }
+.home-shell[data-theme="dark"] .identity-card { background: linear-gradient(135deg, #252c36ed, #1d293bd9); border-color: #455167; box-shadow: 0 20px 55px #00000030; }
+.home-shell[data-theme="dark"] .identity-floating { background: #242a33ed; border-color: #424a58; box-shadow: 0 10px 30px #00000024; }
+.home-shell[data-theme="dark"] .identity-avatar,
+.home-shell[data-theme="dark"] .identity-floating .identity-feature-icon { background: #344156; border-color: #455167; color: #c9dcfa; }
+.home-shell[data-theme="dark"] .identity-connect .identity-feature-icon { background: #253f32; color: #9bd5b1; }
+.home-shell[data-theme="dark"] .identity-person p,
+.home-shell[data-theme="dark"] .identity-floating small,
+.home-shell[data-theme="dark"] .identity-bottom { color: #b7c0cf; }
+.home-shell[data-theme="dark"] .landing-hero svg.lucide-fingerprint { color: #eef0f3; }
+.home-shell[data-theme="dark"] .identity-bottom > svg,
+.home-shell[data-theme="dark"] .identity-passkey > svg,
+.home-shell[data-theme="dark"] .landing-developer-copy li svg,
+.home-shell[data-theme="dark"] .landing-benefits span:nth-child(3) svg { color: #8dccaa; }
+.home-shell[data-theme="dark"] .landing-benefits span:nth-child(2) svg { color: #edc16e; }
+.home-shell[data-theme="dark"] .agi-brand { color: var(--foreground); }
+.home-shell[data-theme="dark"] .agi-brand img[src="/brands/openai.svg"] { filter: invert(1); }
+@media (prefers-reduced-motion: no-preference) {
+  .home-shell, .home-header, .home-footer { transition: background-color 240ms ease, color 240ms ease; }
+}
+@media (max-width: 440px) { .home-header .home-repo-link { display: none; } }

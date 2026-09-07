@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { AlertCircle, ArrowLeft, BookOpen, ChevronRight, FileText, House, LayoutGrid, LogOut, Settings2, ShieldCheck, ShieldX, UserRound } from "lucide-react"
+import { AlertCircle, ArrowLeft, BookOpen, ChevronRight, FileText, House, LayoutGrid, LogOut, Settings2, ShieldCheck, ShieldX, UserRound, Users } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import { isAdminRole, managementError, roleNames } from "@/lib/applications"
 import { cn } from "@/lib/utils"
@@ -30,6 +30,7 @@ const userNavigation = [
   { href: "/account/security", title: "账户安全", icon: ShieldCheck },
 ]
 const adminNavigation = [
+  { href: "/admin/users", title: "用户管理", icon: Users },
   { href: "/admin/applications", title: "应用接入", icon: LayoutGrid },
   { href: "/admin/integration", title: "接入指南", icon: BookOpen },
   { href: "/admin/legal", title: "协议管理", icon: FileText },

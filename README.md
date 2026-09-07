@@ -132,12 +132,15 @@ TURNSTILE_TEST_MODE=true
 
 `GET /api/v1/auth/verification` 只返回公开的 `enabled`、`site_key`、`test_mode`、`action`，不返回 Secret Key。受保护请求通过 `X-Turnstile-Token` 携带组件生成的令牌；通行密钥后续完成请求使用先前签发的一次性 ceremony。错误码为 `turnstile_required`、`turnstile_failed`、`turnstile_unavailable`。部署如有 CSP，需要允许 `https://challenges.cloudflare.com` 的脚本和 iframe。窄屏自动使用 compact 组件；脚本加载失败、验证过期或超时会提示重试。
 
+访问 `/` 进入公开主页，包含登录 / 注册入口、用户中心入口、使用指南和多栏页脚。主页默认深色绿调，支持明暗主题切换并记住当前浏览器的选择；登录后显示个人资料入口和对应的后台导航。主页主题独立于登录页及用户中心，未登录时也可浏览。
+
 登录后可访问：
 
 - `/account`：个人概览和已开放的应用，支持搜索与访问应用主页。
 - `/account/profile`：查看账户信息、修改昵称、选择头像来源；用户不能自行修改邮箱、身份或其他人的资料。
 - `/account/security`：修改登录密码、添加或删除自己的通行密钥。
 - `/admin/applications`：管理员应用列表，支持名称 / Client ID 搜索及启停状态筛选。
+- `/admin/users`：用户管理，支持分页、昵称 / 邮箱 / ID 搜索、角色与状态筛选、新建用户、编辑昵称与角色、启停账户、重置密码和撤销登录。
 - `/admin/applications/new`：管理员创建应用，填写主页、描述、图标 URL 与回调地址。
 - `/admin/applications/:id`：管理员查看接入信息、编辑配置、重置密钥、停用或删除应用。
 - `/admin/integration`：管理员接入指南。
@@ -170,6 +173,24 @@ TURNSTILE_TEST_MODE=true
 当前实现是 OAuth 2.0，不签发 OpenID Connect ID Token；请使用通用 OAuth 客户端，通过用户接口读取身份，不能把访问令牌当作 JWT 解码。中心退出或令牌撤销不会自动清除子系统自己的会话；子系统应在退出时清理自己的会话，并处理令牌失效。
 
 ## API
+
+### 用户管理
+
+以下接口仅接受有效管理员会话，响应均禁止缓存；写入要求 `X-AlbaTextus-Client: account-center`，拒绝跨站请求。Bearer Token 不能用于管理用户。
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET | `/api/v1/admin/users` | 分页列表；参数 `q`、`role`、`status`（`active` / `inactive`）、`page`（默认 1）、`page_size`（默认 20，最多 100），返回 `users`、筛选结果 `total` 及全局 `stats` |
+| POST | `/api/v1/admin/users` | 用 `email`、`password`、`display_name`、`role` 创建已启用用户 |
+| PATCH | `/api/v1/admin/users/:id` | 提交完整的 `display_name`、`role`、`is_active`、`updated_at` 更新资料 |
+| POST | `/api/v1/admin/users/:id/password` | 提交 `new_password`、`updated_at` 重置密码 |
+| POST | `/api/v1/admin/users/:id/revoke-sessions` | 提交 `updated_at` 撤销该用户的登录与 OAuth 授权 |
+
+管理员只能创建和管理 `USER`；超级管理员可以管理所有角色并分配 `USER`、`ADMIN`、`SUPER_ADMIN`。不能修改自己的角色、停用自己，或通过管理接口重置自己的密码和撤销自己的登录；自己的密码通过账户安全页修改。权限在数据库事务内重新校验，避免并发降权后仍使用旧权限，也确保始终保留执行操作的有效超级管理员。
+
+更新时原样提交列表中的 `updated_at`，过期版本返回 `409 user_conflict`；刷新列表后重新编辑。昵称为空表示清除昵称，最多 100 字符；密码为 12–72 UTF-8 字节。邮箱和第三方登录标识不可在管理页面改写，密码哈希不会返回给前端。
+
+改变角色或启停状态、重置密码、撤销登录，会在同一事务内撤销中心会话、OAuth 访问及刷新令牌、未使用授权码，并清除待处理的绑定、授权确认和用户关联的通行密钥挑战。只修改昵称保留登录。账户重新启用后，旧会话和令牌仍失效；通行密钥和第三方账号绑定保留。子系统自己的本地会话仍需由子系统处理令牌失效。用户停用替代账户物理删除，保留身份及关联数据。本功能复用已有数据库字段，无需新增迁移。
 
 ### 应用管理
 

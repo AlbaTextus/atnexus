@@ -1,5 +1,9 @@
-import { redirect } from "next/navigation"
+import type { Metadata } from "next"
+import { HomePage } from "@/components/home-page"
 
-export default function Home() {
-  redirect("/login")
+export const metadata: Metadata = {
+  title: "AlbaTextus · 一个账户，连接每个应用",
+  description: "你的 AlbaTextus 统一账户入口。创建账户、连接应用，在同一处管理个人资料与账户安全。",
 }
+
+export default function Home() { return <HomePage /> }

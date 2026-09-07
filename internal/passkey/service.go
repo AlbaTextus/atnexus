@@ -194,6 +194,9 @@ func (s *Service) Delete(ctx context.Context, userID, credentialID uuid.UUID) er
 }
 
 func (s *Service) loadUser(ctx context.Context, record store.User) (*User, error) {
+	if !record.IsActive {
+		return nil, fmt.Errorf("user account is inactive")
+	}
 	stored, err := s.store.PasskeysByUserID(ctx, record.ID)
 	if err != nil {
 		return nil, err

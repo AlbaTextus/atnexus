@@ -1,7 +1,7 @@
 export type TurnstileOptions = {
   sitekey: string
   action: string
-  theme: "light"
+  theme: "light" | "dark"
   language: "zh-cn"
   size: "flexible" | "compact"
   "response-field": false

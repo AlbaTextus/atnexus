@@ -16,7 +16,7 @@ function show(kind: FeedbackKind, message: string) {
     title: kind === "error" ? "操作失败" : message,
     description: kind === "error" ? message : undefined,
     priority: kind === "error" ? "high" : "low",
-    timeout: kind === "error" ? 6000 : 3500,
+    timeout: kind === "error" ? 3000 : 2000,
   })
 }
 

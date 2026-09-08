@@ -1,15 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { RefreshCw, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { Spinner } from "@/components/ui/spinner"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 
 export function MaintenanceScreen({ unavailable = false }: { unavailable?: boolean }) {
   const [checking, setChecking] = useState(false)
   const [message, setMessage] = useState("")
-  async function check() {
+  const check = useCallback(async () => {
     if (checking) return
     setChecking(true)
     try {
@@ -20,13 +21,19 @@ export function MaintenanceScreen({ unavailable = false }: { unavailable?: boole
       setMessage("仍在维护中。恢复后，此页面会自动带你返回。")
     } catch { setMessage("暂时无法连接服务，请稍后再试。") }
     finally { setChecking(false) }
-  }
+  }, [checking])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => { void check() }, 15000)
+    return () => window.clearInterval(timer)
+  }, [check])
 
   return <div className="home-shell home-credit-inspired maintenance-shell">
     <a className="home-skip" href="#maintenance-content">跳转到主要内容</a>
     <header className="maintenance-header home-container">
       <span className="maintenance-wordmark">ALBATEXTUS</span>
       <span className="maintenance-header-note">每一次连接，都值得等待。</span>
+      <ThemeToggle />
     </header>
     <main id="maintenance-content" tabIndex={-1} className="maintenance-main">
       <Empty className="maintenance-empty">

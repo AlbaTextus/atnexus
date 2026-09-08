@@ -2,6 +2,8 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { ArrowLeft, ArrowUpRight, BookOpen, Compass, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { HomeBrand } from "@/components/home-brand"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 
 export const metadata: Metadata = {
@@ -15,10 +17,9 @@ export default function NotFound() {
       <a href="#not-found-main" className="home-skip">跳转到主要内容</a>
       <header className="home-header">
         <div className="home-container home-header-inner">
-          <Link href="/" className="home-brand" aria-label="ALBATEXTUS 首页">
-            <span className="home-wordmark" aria-hidden="true">ALBATEXTUS</span>
-          </Link>
+          <HomeBrand href="/" />
           <nav aria-label="页面导航" className="home-header-actions">
+            <ThemeToggle />
             <Button variant="ghost" nativeButton={false} role="link" render={<Link href="/wiki" />}>Wiki</Button>
             <Button nativeButton={false} role="link" render={<Link href="/account" />}>用户中心<ArrowUpRight data-icon="inline-end" /></Button>
           </nav>

@@ -17,6 +17,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Skeleton } from "@/components/ui/skeleton"
 import { HomeBrand } from "@/components/home-brand"
 import { MaintenanceControl } from "@/components/maintenance-control"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export type AccountUser = { id: string; numeric_id: number; bio?: string; email: string; email_verified?: boolean; profile_setup_required?: boolean; display_name?: string | null; role: string; level: 1 | 3 | 4; created_at?: string; has_password?: boolean; email_is_alias?: boolean; avatar_source?: string; avatar_url?: string; custom_avatar_url?: string }
 const AccountContext = createContext<{ user: AccountUser; updateUser: (user: AccountUser) => void } | null>(null)
@@ -150,7 +151,7 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
             {admin && <CapsuleNavItem key={areaLink.href} item={areaLink} reducedMotion={reducedMotion} />}
           </nav>
         </LayoutGroup>
-        <div className="center-userbar">{user?.role === "SUPER_ADMIN" && <MaintenanceControl />}<Button variant="ghost" size="icon" aria-label="退出登录" disabled={!user || leaving} onClick={logout}><LogOut /></Button></div>
+        <div className="center-userbar"><ThemeToggle />{user?.role === "SUPER_ADMIN" && <MaintenanceControl />}<Button variant="ghost" size="icon" aria-label="退出登录" disabled={!user || leaving} onClick={logout}><LogOut /></Button></div>
         </div>
       </header>
       <div className="center-workspace">

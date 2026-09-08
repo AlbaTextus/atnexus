@@ -4,6 +4,7 @@ import { Layout, Navbar } from "nextra-theme-docs"
 import { SiteFooter } from "@/components/site-footer"
 import { normalizePageMap } from "nextra/page-map"
 import { WikiSearch } from "@/components/wiki-search"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { WikiBrand, WikiHeader } from "@/components/wiki-header"
 import "./wiki.css"
 
@@ -30,9 +31,9 @@ const pageMap = normalizePageMap([{ data: {
 export default function WikiLayout({ children }: { children: ReactNode }) {
   return <div className="wiki-nextra">
     <Layout pageMap={pageMap}
-      navbar={<WikiHeader><Navbar logoLink={false} logo={<WikiBrand />} className="home-header-inner wiki-navbar-inner"><Link href="/wiki" className="wiki-account-link">Wiki</Link><Link href="/account" className="wiki-account-link">用户中心 ↗</Link></Navbar></WikiHeader>}
+      navbar={<WikiHeader><Navbar logoLink={false} logo={<WikiBrand />} className="home-header-inner wiki-navbar-inner"><ThemeToggle /><Link href="/wiki" className="wiki-account-link">Wiki</Link><Link href="/account" className="wiki-account-link">用户中心 ↗</Link></Navbar></WikiHeader>}
       search={<WikiSearch />} footer={<SiteFooter />}
-      darkMode={false} nextThemes={{ forcedTheme: "light", attribute: "data-wiki-theme" }}
+      darkMode={false} nextThemes={{ attribute: "class", storageKey: "albatextus-color-mode", defaultTheme: "light" }}
       editLink={null} feedback={{ content: null }}
       sidebar={{ defaultMenuCollapseLevel: 2 }} toc={{ title: "在此页中", backToTop: "返回顶部" }}>
       {children}

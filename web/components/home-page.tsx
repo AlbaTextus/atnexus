@@ -3,14 +3,14 @@
 import { Link as TransitionLink } from "next-view-transitions"
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { motion, useInView } from "framer-motion"
-import { ArrowUpRight, Check, Code2, Fingerprint, Github, Globe2, Moon, ShieldCheck, Sparkles, Sun, UserRound } from "lucide-react"
+import { ArrowUpRight, Check, Code2, Fingerprint, Github, Globe2, ShieldCheck, Sparkles, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SiteFooter } from "@/components/site-footer"
 import { CloudflareNetwork } from "@/components/cloudflare-network"
 import { HomeBrand } from "@/components/home-brand"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 const repository = "https://github.com/AlbaTextus/oauth"
-const colorModeKey = "albatextus-color-mode"
 
 
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)"
@@ -38,20 +38,6 @@ export function HomePage() {
   const reducedMotion = useSyncExternalStore(subscribeReducedMotion, getReducedMotion, getServerReducedMotion)
   const [brandCollapsed, setBrandCollapsed] = useState(false)
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
-  const [theme, setTheme] = useState<"light" | "dark">("light")
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(colorModeKey)
-      if (saved === "light" || saved === "dark") setTheme(saved)
-    } catch { /* The switch still works when storage is unavailable. */ }
-  }, [])
-
-  function toggleTheme() {
-    const next = theme === "light" ? "dark" : "light"
-    setTheme(next)
-    try { localStorage.setItem(colorModeKey, next) } catch { /* Keep the choice for this visit. */ }
-  }
 
   useEffect(() => {
     let frame = 0
@@ -75,13 +61,13 @@ export function HomePage() {
   }, [])
 
 
-  return <div className="home-shell home-credit-inspired" data-theme={theme} id="top">
+  return <div className="home-shell home-credit-inspired" id="top">
     <a href="#home-main" className="home-skip">跳转到主要内容</a>
     <header className="home-header" data-collapsed={headerCollapsed}>
       <div className="home-container home-header-inner">
         <HomeBrand collapsed={brandCollapsed} />
         <div className="home-header-actions">
-          <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={theme === "light" ? "切换为深色主题" : "切换为浅色主题"} title={theme === "light" ? "切换为深色主题" : "切换为浅色主题"}>{theme === "light" ? <Moon /> : <Sun />}</Button>
+          <ThemeToggle />
           <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<a href={repository} target="_blank" rel="noopener noreferrer" />} aria-label="GitHub 项目（新窗口）" className="home-repo-link"><Github /></Button>
           <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<TransitionLink href="/wiki" />} aria-label="前往 Wiki" title="前往 Wiki">W</Button>
           <Button nativeButton={false} role="link" render={<TransitionLink href="/account" />}>前往用户中心<ArrowUpRight data-icon="inline-end" /></Button>

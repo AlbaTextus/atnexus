@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { useTheme } from "next-themes"
 import { AlertCircle, RotateCw, Shield, ShieldCheck } from "lucide-react"
 import { api } from "@/lib/api"
 import { loadTurnstile } from "@/lib/turnstile"
@@ -47,6 +48,8 @@ function TurnstileWidget({ config, onToken, onError }: {
   onToken: (token: string) => void
   onError: (message: string) => void
 }) {
+  const { resolvedTheme } = useTheme()
+  const theme = resolvedTheme === "dark" ? "dark" : "light"
   const wrapper = useRef<HTMLDivElement>(null)
   const container = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState<"flexible" | "compact" | null>(null)
@@ -68,7 +71,7 @@ function TurnstileWidget({ config, onToken, onError }: {
     loadTurnstile().then(client => {
       if (disposed) return
       widgetID = client.render(element, {
-        sitekey: config.site_key, action: config.action, theme: "light", language: "zh-cn", size,
+        sitekey: config.site_key, action: config.action, theme, language: "zh-cn", size,
         "response-field": false, "refresh-expired": "auto",
         callback: value => { if (!disposed) onToken(value) },
         "expired-callback": () => { if (!disposed) onError("安全验证已过期，正在重新验证。") },
@@ -80,7 +83,7 @@ function TurnstileWidget({ config, onToken, onError }: {
       disposed = true
       if (widgetID !== undefined) window.turnstile?.remove(widgetID)
     }
-  }, [config.site_key, config.action, size, onToken, onError])
+  }, [config.site_key, config.action, size, theme, onToken, onError])
 
   return <div ref={wrapper} className="flex w-full justify-center" data-widget-size={size} role="group" aria-label="Cloudflare Turnstile 安全验证"><div ref={container} className={size === "compact" ? "min-h-36" : "min-h-16 w-full"} /></div>
 }

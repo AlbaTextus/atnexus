@@ -1,5 +1,3 @@
-"use client"
+import { redirectToAccount } from "@/lib/account-session"
 
-import { AccountOverview } from "@/components/account-overview"
-
-export default function AccountPage() { return <AccountOverview /> }
+export default async function AccountPage() { return redirectToAccount() }

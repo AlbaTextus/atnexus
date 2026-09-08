@@ -1,2 +1,2 @@
 import { redirect } from "next/navigation"
-export default function IntegrationPage() { redirect("/admin/integration") }
+export default function IntegrationPage() { redirect("/wiki/integration") }

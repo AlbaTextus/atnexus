@@ -1,5 +1,7 @@
 import type { Metadata } from "next"
 import type React from "react"
+import { ToastProvider } from "@/components/ui/toast"
+import { ViewTransitions } from "next-view-transitions"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -9,8 +11,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
-      <body>{children}</body>
-    </html>
+    <ViewTransitions><html lang="zh-CN" suppressHydrationWarning>
+      <body><ToastProvider>{children}</ToastProvider></body>
+    </html></ViewTransitions>
   )
 }

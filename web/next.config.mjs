@@ -3,6 +3,12 @@ const backend = process.env.OAUTH_BACKEND_URL || "http://localhost:8080"
 
 const nextConfig = {
   distDir: process.env.NEXT_OUTPUT_DIR || ".next",
+  async redirects() {
+    return [
+      { source: "/admin/integration", destination: "/wiki/integration", permanent: false },
+      { source: "/account/integration", destination: "/wiki/integration", permanent: false },
+    ]
+  },
   async headers() {
     return [{ source: "/consent", headers: [
       { key: "X-Frame-Options", value: "DENY" },

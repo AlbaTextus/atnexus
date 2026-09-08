@@ -15,15 +15,18 @@ var (
 )
 
 type User struct {
-	ID           uuid.UUID
-	Email        string
-	PasswordHash string
-	DisplayName  *string
-	AvatarSource string
-	AvatarURL    string
-	Role         string
-	IsActive     bool
-	CreatedAt    time.Time
+	Bio             string
+	NumericID       int
+	ID              uuid.UUID
+	Email           string
+	PasswordHash    string
+	DisplayName     *string
+	AvatarSource    string
+	AvatarURL       string
+	CustomAvatarURL string
+	Role            string
+	IsActive        bool
+	CreatedAt       time.Time
 }
 
 type Session struct {

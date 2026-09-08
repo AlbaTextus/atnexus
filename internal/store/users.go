@@ -44,7 +44,7 @@ type UserManagementStore interface {
 
 func scanManagedUser(row pgx.Row) (ManagedUser, error) {
 	var u ManagedUser
-	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role, &u.IsActive, &u.CreatedAt, &u.AvatarSource, &u.AvatarURL, &u.UpdatedAt)
+	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role, &u.IsActive, &u.CreatedAt, &u.AvatarSource, &u.AvatarURL, &u.CustomAvatarURL, &u.NumericID, &u.Bio, &u.UpdatedAt)
 	return u, err
 }
 

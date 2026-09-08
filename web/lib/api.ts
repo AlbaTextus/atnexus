@@ -9,7 +9,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     credentials: "include",
     ...init,
-    headers: { "X-AlbaTextus-Client": "account-center", ...(init?.body ? { "Content-Type": "application/json" } : {}), ...init?.headers },
+    headers: { "X-AlbaTextus-Client": "account-center", ...(init?.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...init?.headers },
   })
   const contentType = response.headers.get("content-type") || ""
   const payload = contentType.includes("json") ? await response.json() : null

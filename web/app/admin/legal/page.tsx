@@ -1,3 +1,5 @@
-import { LegalEditor } from "@/components/legal-editor"
+import { redirect } from "next/navigation"
 
-export default function LegalManagementPage() { return <LegalEditor /> }
+export default function LegalManagementPage() {
+  redirect("/wiki")
+}

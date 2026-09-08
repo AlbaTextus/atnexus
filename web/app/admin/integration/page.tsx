@@ -1,3 +1,3 @@
-import { IntegrationGuide } from "@/components/integration-guide"
+import { redirect } from "next/navigation"
 
-export default function IntegrationPage() { return <IntegrationGuide /> }
+export default function IntegrationPage() { redirect("/wiki/integration") }

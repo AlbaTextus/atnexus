@@ -1,126 +1,160 @@
-# AlbaTextus OAuth
+# ALBATEXTUS
 
-一个可运行的 OAuth 2.0 授权服务，使用 Go、PostgreSQL 和 Prisma schema。当前包含：
+**一个账户，让连接更简单。**
 
-- 授权码模式（Authorization Code）与 S256 PKCE
-- 刷新令牌轮换（Refresh Token Rotation）
-- 客户端凭证模式（Client Credentials）
-- 令牌撤销、令牌自省、Bearer 资源保护
-- 用户注册、登录会话和 `/api/v1/me`
-- 用户角色（`USER`、`ADMIN`、`SUPER_ADMIN`）及开发管理员初始化
-- 独立 Next.js + shadcn/ui 认证前端：淡金色背景与居中白色卡片的邮箱登录、注册页面，支持密码显隐、中文错误提示及移动端适配
-- 通行密钥（WebAuthn/Passkey）注册、无用户名登录和账户管理
-- 用户中心：可用应用入口、个人资料、密码修改、通行密钥管理
-- 第三方登录：GitHub、LINUX DO Connect、可配置 OAuth 服务；账号绑定/解绑与首次设置密码
-- 管理员后台：OAuth 应用接入、最低访问角色、启停控制、客户端密钥生成与重置、接入指南
-- Prisma migration/schema 作为数据库结构的唯一来源
+AlbaTextus 是面向社区应用的账户中心与 OAuth 2.0 授权服务。用户可以管理个人资料、登录方式和应用授权；管理员可以管理用户、接入应用及公开协议。
 
-## 为什么运行时使用 pgx
+后端使用 Go，前端使用 Next.js、React 和 shadcn/ui，数据存储于 PostgreSQL。Prisma 负责数据库结构与迁移，Go 运行时通过 pgx 访问数据库。
 
-Prisma 官方没有 Go Client，社区的 Prisma Go Client 已停止维护。本服务使用 Prisma 管理 schema、迁移和 Studio，Go 运行时使用官方 PostgreSQL 驱动 pgx；这样不会将生产服务绑定到废弃的生成器，同时数据库模型仍由 Prisma 维护。
+[快速开始](#快速开始) · [登录与账户](#登录与账户) · [应用接入](#应用接入) · [配置与部署](#配置与部署) · [API](#api) · [开发](#开发)
+
+## 功能
+
+| 模块 | 当前能力 |
+| --- | --- |
+| 账户认证 | 邮箱或登录标识与密码登录、用户注册、会话管理、记住邮箱 |
+| 第三方登录 | GitHub、LINUX DO Connect、自定义 OAuth 平台，支持绑定与解绑 |
+| 通行密钥 | WebAuthn / Passkey 注册、无用户名登录、凭据管理 |
+| 人机验证 | Cloudflare Turnstile，服务端验证令牌 |
+| 个人中心 | 个人资料、昵称、平台头像来源、密码及登录方式管理 |
+| OAuth 服务 | 授权码、S256 PKCE、刷新令牌轮换、客户端凭证、令牌撤销与自省 |
+| 授权确认 | 展示应用与申请权限，用户明确允许后才签发授权码 |
+| 管理后台 | 应用接入、客户端密钥、最低访问角色、用户管理、协议编辑 |
+
+本项目提供 OAuth 2.0 服务，**不签发 OpenID Connect ID Token**。访问令牌是不透明字符串；应用通过 `/api/v1/me` 获取用户身份，不应将令牌当作 JWT 解码。
 
 ## 快速开始
 
-需要 Go 1.25+、Node.js 20+ 和 PostgreSQL。复制环境文件后启动数据库并执行迁移：
+以下命令在仓库根目录执行。需要 Go 1.25+、Node.js（建议 22+）、pnpm 和 PostgreSQL。仓库通过 `packageManager` 固定 pnpm 版本；Docker Compose 使用 PostgreSQL 16。
+
+### 1. 准备环境
 
 ```bash
 cp .env.example .env
-node -e "const fs=require('fs'); fs.writeFileSync('.env', fs.readFileSync('.env','utf8').replace(/^CLIENT_SECRET_ENCRYPTION_KEY=$/m, 'CLIENT_SECRET_ENCRYPTION_KEY=' + require('crypto').randomBytes(32).toString('hex')))"
-pnpm install
+pnpm install --frozen-lockfile
+```
+
+PowerShell 可用 `Copy-Item .env.example .env` 复制配置。已有 `.env` 时直接编辑，不要覆盖现有凭据。
+
+生成一次客户端密钥加密用的随机密钥：
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+将输出填入根目录 `.env` 的 `CLIENT_SECRET_ENCRYPTION_KEY`。它必须是 32 字节密钥的 64 位十六进制编码，后续启动应复用同一个值。
+
+本地关键配置如下，其余配置见 [.env.example](.env.example)：
+
+```dotenv
+DATABASE_URL=postgresql://oauth:oauth@localhost:5432/oauth?sslmode=disable
+ISSUER_URL=http://localhost:3000
+AUTH_UI_URL=http://localhost:3000
+COOKIE_SECURE=false
+WEBAUTHN_RP_ID=localhost
+WEBAUTHN_RP_ORIGINS=http://localhost:3000
+```
+
+### 2. 初始化数据库
+
+已有 PostgreSQL 时，将 `DATABASE_URL` 改为实际地址。也可以使用仓库提供的数据库容器：
+
+```bash
+docker compose up -d postgres
+```
+
+数据库就绪后执行：
+
+```bash
 pnpm db:deploy
-go run ./cmd/seed
+pnpm db:seed
+```
+
+`db:deploy` 应用全部已提交的迁移。`db:seed` 是开发初始化命令，会创建或更新以下账户和示例客户端：
+
+| 项目 | 默认值 |
+| --- | --- |
+| 管理员邮箱 | `admin@example.com` |
+| 管理员密码 | `Admin123!ChangeMe` |
+| 管理员角色 | `ADMIN` |
+| 示例 Client ID | `albatextus-web` |
+| 示例 Client Secret | `development-secret-change-me` |
+| 示例回调 | `http://localhost:3000/auth/callback` |
+
+可用 `SEED_ADMIN_EMAIL`、`SEED_ADMIN_PASSWORD`、`SEED_ADMIN_NAME`、`SEED_CLIENT_ID`、`SEED_CLIENT_SECRET`、`SEED_CLIENT_REDIRECT_URIS` 覆盖默认值。Seed 会输出开发凭据，也会更新已有记录；不要把它作为每次部署必跑的迁移步骤。
+
+示例回调只是登记值，本项目没有实现 `/auth/callback` 应用页面，实际接入时需替换。
+
+### 3. 启动服务
+
+终端一启动 Go API：
+
+```bash
 go run ./cmd/server
 ```
 
-`pnpm db:seed` 会初始化开发管理员（可通过 `SEED_ADMIN_EMAIL`、`SEED_ADMIN_PASSWORD` 等环境变量覆盖）：
-
-```text
-email:    admin@example.com
-password: Admin123!ChangeMe
-role:     ADMIN
-```
-
-`ADMIN`、`SUPER_ADMIN` 可以进入管理后台，管理全部 OAuth 应用，包括历史 seed 应用。`USER` 只能使用个人用户中心；即使历史应用的 `owner_id` 指向该用户，也不能查看、创建、编辑、停用、删除应用或重置客户端密钥。
-
-另开一个终端启动认证前端（默认 `http://localhost:3000`；根目录 `pnpm install` 已会安装 workspace 依赖）：
+终端二启动前端：
 
 ```bash
 pnpm web:dev
 ```
 
-浏览器访问 `http://localhost:3000/login`。前端通过 Next rewrites 将 `/api`、`/oauth` 和 `.well-known` 请求转发到 Go 服务的 `http://localhost:8080`；这样登录会话和 OAuth 授权可以在同一个浏览器域名下工作。
+访问 [首页](http://localhost:3000/)、[登录页](http://localhost:3000/login) 或 [用户中心](http://localhost:3000/account)。Go API 默认监听 `8080`，健康检查为 [http://localhost:8080/healthz](http://localhost:8080/healthz)。
 
-登录页以邮箱和密码为主要入口，保留通行密钥登录。“记住邮箱”只在登录成功后保存邮箱，不保存密码；取消勾选会立即清除已记住的邮箱。注册和登录页面切换时会保留 OAuth 回跳参数。
+浏览器统一通过 `localhost:3000` 访问：Next.js 将 `/api/*`、`/oauth/*` 和 `/.well-known/*` 转发至 Go 服务，使页面与登录会话保持同源。不要混用 `localhost` 和 `127.0.0.1`，否则 Cookie 和 Passkey 的来源校验可能不一致。
 
-本地开发统一使用 `http://localhost:3000`，并将 `ISSUER_URL`、`AUTH_UI_URL`、`WEBAUTHN_RP_ORIGINS` 设置为该地址，`WEBAUTHN_RP_ID=localhost`。通行密钥的 RP ID 必须是域名；不要用 `127.0.0.1` 替代 `localhost`。应用管理页显示的接口地址来自 `ISSUER_URL`。
+## 登录与账户
 
-可设置 `NEXT_OUTPUT_DIR=release`，将前端构建产物放入 `web/release/`。使用该设置构建后，运行 `pnpm web:start` 时也需设置相同的环境变量。
+### 登录流程
 
-没有本地 PostgreSQL 时可以使用 Docker Compose（本机需安装 Docker）。首次启动先迁移数据库，再启动 Go 与 Next.js 服务：
+登录页采用纯白卡片，顶部 `ALBATEXTUS` 字标在完成验证与协议确认后收拢为 `AT`。GitHub、LINUX DO 和通行密钥入口与密码登录共用验证状态。
 
-```bash
-docker compose up -d postgres
-pnpm db:deploy
-pnpm db:seed
-docker compose up --build
-```
+启用 Turnstile 时，流程为：
 
-Compose 会启动 PostgreSQL、Go API（8080）和认证前端（3000）。生产环境应将 `pnpm db:deploy` 接入独立的 migration job。
+1. 完成 Cloudflare 人机验证，保留片刻成功反馈。
+2. 原验证区域显示「同意并继续」，下方提供隐私政策与用户协议链接。
+3. 点击同意后收起验证区域，允许密码、第三方或通行密钥登录。
 
-## 用户中心与子系统接入
+未启用 Turnstile 时，登录页仍要求点击协议确认。验证过期或登录尝试失败后，需要重新完成对应步骤。协议链接在新窗口打开，避免丢失正在填写的表单。
 
-### 本地图床
+这里的协议确认是登录页的交互门槛，当前没有独立的服务端协议签署记录；它与 OAuth 应用授权确认是两个不同流程。
 
-相邻的 `../imgbed` 图床可通过 `go run ./cmd/register-imgbed` 注册为 **AlbaTextus 图床**（Client ID：`albatextus-imgbed`）。此命令复用已注册图床密钥，将凭据写入 `../imgbed/.dev.vars`，不打印密钥，不重新 seed 用户或其他应用。默认主页为 `http://127.0.0.1:8080`，回调为 `/api/auth/oauth/callback`，授权范围 `profile email`，仅允许授权码登录。
+“记住邮箱”只在登录成功后保存邮箱或登录标识，不保存密码；取消勾选会清除已保存的值。
 
-联调时在本项目执行 `go build -o release/oauth-imgbed.exe ./cmd/server`，再在图床目录运行 `.\deploy\start-local.ps1`。该脚本使用 OAuth API 的 `127.0.0.1:8081` 和账号中心前端的 `localhost:3000`，避免与图床的 8080 端口冲突。图床以中心 `id` 建立会话，`USER` 对应普通上传用户，`ADMIN` / `SUPER_ADMIN` 对应图床管理员。
+### 第三方登录
 
-### 第三方账号登录
+在根目录 `.env` 配置凭据后重启 Go 服务。平台是否开放由后端返回；未配置的平台入口不可点击。
 
-执行最新 `pnpm db:deploy` 后，在 `.env` 配置第三方凭据并重启 Go 服务。登录页、注册页和账户安全页共用服务端提供的平台状态；未配置的平台显示为“暂未开放”，不会发起无效跳转。凭据只在 Go 服务中使用，不要配置为 `NEXT_PUBLIC_*`。
-
-GitHub：在 **Settings → Developer settings → OAuth Apps** 创建 OAuth App，填写：
-
-- Homepage URL：`http://localhost:3000`
-- Authorization callback URL：`http://localhost:3000/api/v1/auth/providers/github/callback`
-- `.env`：`GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET`
-
-LINUX DO：在 [Linux DO Connect](https://connect.linux.do/) 创建应用，把授权回调地址设为 `http://localhost:3000/api/v1/auth/providers/linuxdo/callback`，将 Client ID、Client Secret 填入 `.env` 的 `LINUXDO_CLIENT_ID`、`LINUXDO_CLIENT_SECRET`。授权、令牌和用户接口已固定为 `https://connect.linux.do/oauth2/authorize`、`https://connect.linux.do/oauth2/token`、`https://connect.linux.do/api/user`，与公开 Discovery 一致。使用 `openid profile email` 和 S256 PKCE。
-
-其他 OAuth：设置 `CUSTOM_OAUTH_NAME`、`CUSTOM_OAUTH_CLIENT_ID`、`CUSTOM_OAUTH_CLIENT_SECRET`，以及授权、令牌、用户信息三个 URL。回调为 `http://localhost:3000/api/v1/auth/providers/custom/callback`。协议要求授权码模式、S256 PKCE、令牌请求使用 `client_secret_post`，用户信息接口接受 Bearer Token 并返回 JSON。字段映射默认 `sub`、`email`、`email_verified`（布尔值）、`name`，可在 `.env` 中修改，支持 `data.id` 等点分路径；`sub` 必须是平台稳定账号 ID，不能使用可修改的昵称或邮箱。生产环境将地址替换为 `AUTH_UI_URL` 的实际 HTTPS 域名。已有绑定后不要将同一 custom 配置切换到不同身份平台。
-
-例如 Google 可使用授权地址 `https://accounts.google.com/o/oauth2/v2/auth`、令牌地址 `https://oauth2.googleapis.com/token`、用户信息地址 `https://openidconnect.googleapis.com/v1/userinfo`，scope 使用默认 `openid,profile,email`。此处通过 OAuth 访问令牌调用用户信息接口，不读取或信任未验证的 ID Token。
-
-GitHub 和通用平台首次登录要求平台提供已验证的邮箱，并创建 `USER` 账户。相同邮箱不会自动合并或提升角色：先登录原账户，再到 **账户安全 → 第三方账号** 绑定。绑定要求授权回调仍在发起时的同一登录会话；同一平台账号只能绑定一个本地用户。没有已验证邮箱的通用平台账号可绑定已有用户，但不能直接注册。取消授权、状态过期、邮箱冲突均显示中文提示，子系统的授权回跳参数会保留。
-
-LINUX DO 的 Discovery 没有声明 `email_verified`。因此新用户按稳定的 `id`（兼容 `sub`）创建独立账户，内部使用 `@accounts.albatextus.invalid` 保留域的专属登录标识，不把平台返回的邮箱当作已验证邮箱，也不会匹配已有邮箱用户。个人资料页将其标为“登录标识”，`/api/v1/me` 中 `email_is_alias=true` 表明它不是收件邮箱。设置密码后也可用该标识登录；应用应优先使用用户 `id` 识别身份。
-
-第三方创建的账户最初没有密码，可在账户安全中设置首个密码；完成后撤销旧会话和授权并重新登录。解绑前必须设置密码。第三方访问令牌只在服务端取用户信息时短暂使用，不入库；授权状态绑定当前浏览器、10 分钟有效且只能消费一次，PKCE verifier 加密存储。
-
-| 方法 | 接口 | 用途 |
+| 平台 | 必要配置 | 本地回调地址 |
 | --- | --- | --- |
-| GET | `/api/v1/auth/providers` | 平台名称与是否开放，不包含凭据 |
-| POST | `/api/v1/auth/providers/:provider/start` | 开始登录；`link: true` 表示绑定当前登录账户 |
-| GET | `/api/v1/auth/providers/:provider/callback` | 平台授权回调 |
-| GET | `/api/v1/account/identities` | 当前用户绑定的第三方账号 |
-| DELETE | `/api/v1/account/identities/:provider` | 解绑当前用户的账号 |
-| PATCH | `/api/v1/account/avatar` | 选择当前用户的头像来源，提交 `source` |
+| GitHub OAuth App | `GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET` | `http://localhost:3000/api/v1/auth/providers/github/callback` |
+| [LINUX DO Connect](https://connect.linux.do/) | `LINUXDO_CLIENT_ID`、`LINUXDO_CLIENT_SECRET` | `http://localhost:3000/api/v1/auth/providers/linuxdo/callback` |
+| 自定义 OAuth | `CUSTOM_OAUTH_CLIENT_ID`、`CUSTOM_OAUTH_CLIENT_SECRET` 及端点 URL | `http://localhost:3000/api/v1/auth/providers/custom/callback` |
 
-第三方登录或绑定时会同步平台头像：GitHub 使用 `avatar_url`，LINUX DO 支持 `avatar_url`、`avatar_template`（替换尺寸及补全站点地址）和 `picture`。自定义 OAuth 默认读取 `picture`，可以用 `CUSTOM_OAUTH_AVATAR_FIELD` 指定嵌套字段，例如 `profile.photo`。头像地址仅允许公开 HTTPS 地址，平台令牌不会拼入图片链接；图片由浏览器加载，失败时显示默认头像。
+自定义平台需设置 `CUSTOM_OAUTH_AUTHORIZATION_URL`、`CUSTOM_OAUTH_TOKEN_URL`、`CUSTOM_OAUTH_USERINFO_URL`，支持授权码、S256 PKCE 和 `client_secret_post`。用户信息接口须接受 Bearer Token 并返回 JSON。默认字段为 `sub`、`email`、`email_verified`、`name`、`picture`，可通过 `CUSTOM_OAUTH_*_FIELD` 修改，支持 `data.id` 等点分路径。
 
-个人资料页支持 `auto`（最先绑定且提供头像的平台）、`default`（昵称默认头像）或某个已绑定的平台 ID。每次登录会更新对应平台头像，但保留用户选定的来源。解绑选中的平台后恢复自动选择，无可用头像时回退到默认头像。`/api/v1/me` 返回 `avatar_source`、`avatar_url` 及同值的 `picture`，供子系统显示；绑定列表包含各平台的 `avatar_url`。升级执行 `pnpm db:deploy` 应用 `20260906020000_provider_avatars`，历史第三方账号下次通过该平台登录后同步头像。
+平台稳定 ID 用于识别用户；相同邮箱不会自动合并账户或提升角色。已有账户应先登录，再到「账户安全」绑定第三方账号。
 
-邮箱绑定与验证码暂缓；自定义头像上传将在对接图床后提供。
+- GitHub 和自定义平台创建新账户时需要已验证邮箱。
+- LINUX DO 使用稳定的用户 ID 创建独立账户，内部登录标识属于 `@accounts.albatextus.invalid` 保留域；`email_is_alias=true` 表示它不是收件邮箱。
+- 第三方创建的账户可设置首个密码；解绑第三方账号前需要设置密码。
+- 平台登录会同步头像，个人资料页可选择自动、默认或某个已绑定平台的头像来源。
 
-修改请求及开始登录需要 `X-AlbaTextus-Client: account-center`，拒绝跨站请求。回调验证浏览器 Cookie、state 和 PKCE，并只返回受限的本地页面或子系统授权接口。所有响应禁止缓存。
+第三方凭据仅供 Go 服务使用，不要放入 `NEXT_PUBLIC_*`。正式回调地址应使用 `AUTH_UI_URL` 对应的 HTTPS 域名。已有绑定后，不应把同一个自定义平台配置改指向另一套身份系统。
 
-### Cloudflare Turnstile 安全验证
+### 自定义头像与图床
 
-登录及注册页面共用 Turnstile 验证组件。服务端在邮箱登录、注册、第三方登录发起、通行密钥登录挑战创建之前调用 Cloudflare Siteverify；缺少、伪造、过期、重复使用的令牌会被拒绝，验证服务不可用时也不会放行。已登录用户绑定第三方账号继续使用原有会话校验；OAuth 子系统换取令牌和已有会话的单点登录不弹出额外验证。
+选图后会弹出裁剪窗口，可拖动图片、缩放并查看圆形头像范围，支持触屏和方向键调整。确认裁剪后可重新裁剪；取消会保留已有预览，点击「保存头像」才会上传到图床。
 
-在根目录 `.env` 配置 `TURNSTILE_SITE_KEY` 和 `TURNSTILE_SECRET_KEY`。两项均为空时关闭；只配置一项会拒绝启动。`TURNSTILE_ALLOWED_HOSTNAMES` 是逗号分隔的精确域名，默认使用 `AUTH_UI_URL` 的主机名，不包含协议、端口或路径。正式环境会校验 Siteverify 返回的域名、`action=authenticate` 和 5 分钟有效期；同一个令牌只能使用一次，失败重试时前端重新创建验证组件。
+在「个人资料 → 我的头像」选择「自定义上传」，选图预览后点击「保存头像」。支持 PNG、JPEG、WebP、GIF，最大 5 MB、1600 万像素；静态图片生成最大 512 × 512 的 PNG，GIF 逐帧裁剪并保留动画、帧间隔和循环次数。GIF 最多 200 帧，各帧完整画面合计不超过 4000 万像素，裁剪结果也不超过 5 MB。裁剪预览接口只返回图片，点击保存才上传图床并更新账户。头像保存在图床的 `user/avatars/<用户 ID>` 分类下，用户中心、授权确认页和 OAuth 用户资料同步使用保存后的地址。切换到平台或默认头像会保留已上传的自定义头像，方便再次选择。
 
-本地可以使用 [Cloudflare 官方测试密钥](https://developers.cloudflare.com/turnstile/troubleshooting/testing/)：
+Go 服务的 `.env` 需配置 `IMGBED_URL`（图床根地址）和 `IMGBED_API_TOKEN`（图床管理后台创建的、仅有 `upload` 权限的 API Token），配置后重启 API。令牌只供服务端使用，不要放入 `NEXT_PUBLIC_*`。生产图床地址须为 HTTPS，本地开发允许回环 HTTP。升级时先执行 `pnpm db:deploy` 应用头像字段迁移。
+
+### Turnstile
+
+设置 `TURNSTILE_SITE_KEY` 和 `TURNSTILE_SECRET_KEY` 启用验证；两项均为空时关闭，只填写一项会拒绝启动。`TURNSTILE_ALLOWED_HOSTNAMES` 为逗号分隔的精确域名，默认取 `AUTH_UI_URL` 的主机名，不含协议、端口或路径。
+
+本地联调可使用 [Cloudflare 官方测试密钥](https://developers.cloudflare.com/turnstile/troubleshooting/testing/)：
 
 ```dotenv
 TURNSTILE_SITE_KEY=1x00000000000000000000AA
@@ -128,154 +162,242 @@ TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
 TURNSTILE_TEST_MODE=true
 ```
 
-测试模式显示标记，只用于联调，不提供真实机器人防护；`APP_ENV=production` 会拒绝测试模式和官方测试密钥。正式使用时替换为自己的密钥，设置 `TURNSTILE_TEST_MODE=false`，并在 Cloudflare 控制台配置站点允许的域名。Secret Key 仅由 Go 服务读取，无需设置 `NEXT_PUBLIC_*`，修改后重启 Go 服务即可。
+测试模式不提供真实机器人防护。生产环境需换成自己的密钥并关闭测试模式；`APP_ENV=production` 会拒绝测试模式和官方测试密钥。
 
-`GET /api/v1/auth/verification` 只返回公开的 `enabled`、`site_key`、`test_mode`、`action`，不返回 Secret Key。受保护请求通过 `X-Turnstile-Token` 携带组件生成的令牌；通行密钥后续完成请求使用先前签发的一次性 ceremony。错误码为 `turnstile_required`、`turnstile_failed`、`turnstile_unavailable`。部署如有 CSP，需要允许 `https://challenges.cloudflare.com` 的脚本和 iframe。窄屏自动使用 compact 组件；脚本加载失败、验证过期或超时会提示重试。
+Go 服务在注册、密码登录、第三方登录发起、通行密钥登录挑战创建前调用 Siteverify。受保护请求通过 `X-Turnstile-Token` 携带令牌；正式验证检查域名、`action=authenticate`、时效和重复使用。验证服务不可用时不会放行。已登录用户绑定账号及 OAuth 应用换取令牌不额外触发这一验证。
 
-访问 `/` 进入公开主页，包含登录 / 注册入口、用户中心入口、使用指南和多栏页脚。主页、登录页及用户中心采用从 Anthropic 官网采样的配色：主体背景 `#F0EEE6`、浅色表面 `#FAF9F5`、卡片 `#E3DACC`、文字与主按钮 `#141413`，少量点缀使用 `#C6613F`。主页默认浅色，可切换深色并记住当前浏览器的选择；登录后显示个人资料入口和对应的后台导航。主页的明暗切换独立于登录页及用户中心，未登录时也可浏览。
+### 页面与权限
 
-登录后可访问：
+用户中心以数字用户 ID 作为路径：`/account/{numeric_id}`，个人资料为 `/account/{numeric_id}/profile`，账户安全为 `/account/{numeric_id}/security`。服务端按登录会话校验路径中的 ID，其他账户（包括管理员）访问这些私人页面返回 404。管理员通过独立的管理后台管理账户。
 
-- `/account`：个人概览和已开放的应用，支持搜索与访问应用主页。
-- `/account/profile`：查看账户信息、修改昵称、选择头像来源；用户不能自行修改邮箱、身份或其他人的资料。
-- `/account/security`：修改登录密码、添加或删除自己的通行密钥。
-- `/admin/applications`：管理员应用列表，支持名称 / Client ID 搜索及启停状态筛选。
-- `/admin/users`：用户管理，支持分页、昵称 / 邮箱 / ID 搜索、角色与状态筛选、新建用户、编辑昵称与角色、启停账户、重置密码和撤销登录。
-- `/admin/applications/new`：管理员创建应用，填写主页、描述、图标 URL 与回调地址。
-- `/admin/applications/:id`：管理员查看接入信息、编辑配置、重置密钥、停用或删除应用。
-- `/admin/integration`：管理员接入指南。
-- `/admin/legal`：管理员编辑隐私政策与用户协议，支持 Markdown 实时预览、分栏及单独编辑/预览视图。
+旧入口 `/account`、`/account/profile`、`/account/security` 会跳转到当前登录用户的数字 ID 路径；未登录先进入登录页。数字 ID 用于页面路由，OAuth 的稳定内部账户标识继续使用原 UUID。
 
-协议正文保存到 `legal_documents`，由 `20260906030000_legal_documents` 迁移创建并保留原有两份协议的内容。管理员可以修改标题、简介和 Markdown 正文（最多 100,000 字符），点击“保存并同步”后 `/privacy`、`/terms` 读取最新版本。切换协议会保留当前编辑页内的草稿；未保存内容不会出现在公开页面。管理接口为 `GET/PUT /api/v1/admin/legal/:slug`，仅允许管理员会话，写入需携带 `X-AlbaTextus-Client: account-center`；`slug` 仅支持 `privacy` 与 `terms`。公开接口 `GET /api/v1/legal/:slug` 无需登录，各接口均禁止缓存。
+| 页面 | 用途 |
+| --- | --- |
+| `/` | 公开主页、社区与接入资源入口 |
+| `/login`、`/register` | 登录与注册 |
+| `/account` | 个人资料概览 |
+| `/account/profile` | 修改昵称、选择头像来源 |
+| `/account/security` | 密码、通行密钥与第三方账号管理 |
+| `/admin/applications` | 应用列表、创建、启停、配置与密钥管理 |
+| `/admin/users` | 用户搜索、角色与状态管理、密码重置、撤销登录 |
+| `/wiki/integration` | 公开应用接入指南、服务端点与接入约定 |
+| `/admin/integration`、`/account/integration` | 跳转到 Wiki 接入指南 |
+| `/admin/legal` | 跳转到 Wiki |
+| `/wiki/privacy`、`/wiki/terms` | 公开协议正文；`/privacy`、`/terms` 跳转到对应 Wiki 页面 |
+| `/consent` | OAuth 应用授权确认 |
 
-写入时提交读取到的 `revision`，并发修改会返回 `409 legal_conflict`，避免覆盖其他管理员更新。预览与公开页共用 Markdown 渲染组件，支持 GFM 表格、任务列表、删除线等；忽略原始 HTML，过滤不安全链接，不执行脚本。正文中的图片从 HTTPS 或本站相对地址加载，不通过服务端代理抓取。
+账户采用四级等级：1 级普通用户（`USER`）、2 级预留、3 级管理员（`ADMIN`）、4 级超级管理员（`SUPER_ADMIN`）。2 级暂不对应角色，也不能分配或设置为应用访问门槛。用户接口保留 `role`，同时返回由角色确定的数字 `level`（1、3、4）；现有账户自动按角色对应等级，无需数据库迁移。普通用户管理自己的账户；3 级管理员可管理应用及协议，但用户管理仅限 1 级普通用户；4 级超级管理员可管理全部角色。管理操作禁止修改自己的角色、停用自己，或通过后台重置自己的密码和撤销自己的登录。
 
-普通用户的导航不显示后台入口；直接访问后台也不会加载管理内容，管理 API 返回 `403 admin_required`。旧 `/account/applications`、`/account/integration` 及其子路径重定向到对应后台地址。
+修改密码、变更角色、停用账户或撤销登录会使相关中心会话与 OAuth 凭据失效。子系统自己建立的本地会话需要由子系统处理失效与退出。
 
-用户中心只列出已启用、支持授权码登录且满足当前用户最低角色要求的应用，不返回客户端密钥、回调配置等管理字段。点击“打开应用”访问子系统主页，OAuth 跳转与 PKCE 参数由子系统生成。未配置主页的历史应用显示待配置提示。
+## 应用接入
 
-修改密码需要验证当前密码；成功后撤销该用户已有中心会话、OAuth 令牌和未使用的授权码，并要求重新登录。通行密钥保留。新增的用户中心功能沿用现有数据库字段，无需额外迁移。
+### 登记客户端
 
-新增数据库列通过 `20260905000000_application_management` 迁移提供。升级已有实例执行 `pnpm db:deploy` 即可；迁移保留原应用，未指定归属的历史应用仅管理员可管理，不需要重新 seed。
+在 `/admin/applications/new` 创建应用，填写名称、主页、回调地址、描述和最低访问角色。回调地址精确匹配，不支持通配符；生产使用 HTTPS，本地回环地址允许 HTTP。
 
-创建时选择服务端应用或公开客户端，创建后类型不可修改。服务端应用的 Client Secret 默认遮罩显示，管理员点击眼睛可查看、隐藏，也可直接复制；重新打开页面后仍可查看。数据库保留 bcrypt 哈希用于客户端认证，并通过 AES-256-GCM 加密保存可查看的副本；密文绑定应用 ID，明文只通过专用管理员接口按需读取，不在列表或详情接口中返回。公开客户端不使用 Secret，必须提供 S256 PKCE。新应用默认允许 `authorization_code`、`refresh_token`，权限为 `profile`、`email`。
+- **服务端应用**使用 Client ID 和 Client Secret。密钥只应保存在应用服务端。
+- **公开客户端**没有 Client Secret，授权请求必须使用 S256 PKCE。
 
-升级此功能需执行 `pnpm db:deploy`，并为 Go 服务及 seed 配置 `CLIENT_SECRET_ENCRYPTION_KEY`（32 字节随机值的 64 位十六进制编码，可用 `.env.example` 中的命令生成）。该配置应保持稳定，与数据库一起妥善备份；所有实例使用同一密钥，不要在每次启动时重新生成。已有应用仅保存哈希时无法还原旧密钥，页面会提示重置后查看；升级不会自动重置或使旧凭据失效。
+新建应用默认允许 `authorization_code` 和 `refresh_token`，提供 `profile`、`email` 权限。客户端类型创建后不可修改。客户端凭证模式需应用自身已配置允许 `client_credentials`；该模式代表应用，不代表登录用户。
 
-最低访问角色按 `USER < ADMIN < SUPER_ADMIN` 校验。修改回调地址、最低角色或启停状态，以及重置密钥，会撤销该应用已有令牌和未使用的授权码；修改名称、描述、图标不会撤销授权。删除应用同时删除相关授权数据。
+### 授权码流程
 
-子系统先生成随机 `state` 与 PKCE 参数，跳转授权接口。未登录时先登录账户中心，随后进入 `/consent` 授权确认页，展示后台登记的应用名称、图标、主页、简介、最低角色、当前账户与申请的权限。每次授权都需点击“允许并继续”才会签发授权码；点击“拒绝”会向已验证的回调地址返回 `error=access_denied` 和原始 `state`，不签发授权码。已有中心登录会话可以复用，仍需确认本次应用授权。
+1. 应用生成随机 `state`、`code_verifier`，保存到自己的会话。
+2. 计算 `code_challenge = BASE64URL(SHA256(code_verifier))`，去掉末尾的 `=`。
+3. 浏览器跳转至授权端点；账户中心完成登录后展示应用授权确认页。
+4. 用户允许后，中心将 `code` 与原始 `state` 返回应用登记的回调地址。拒绝则返回 `error=access_denied`。
+5. 应用验证 `state`，用授权码和原始 `code_verifier` 换取令牌。
+6. 应用携带访问令牌请求用户信息，以稳定的 `id` / `sub` 建立本地会话。
 
-授权请求由 `20260906040000_oauth_consent` 迁移提供存储，10 分钟有效，绑定发起时的用户和登录会话，且只能处理一次。读取确认信息使用 `GET /api/v1/oauth/consent?request=...`；提交使用 `POST /api/v1/oauth/consent`，JSON 为 `request_token` 和 `decision`（`allow` / `deny`），并携带 `X-AlbaTextus-Client: account-center`。回调地址、scope、state 与 PKCE 均从服务端保存的原始请求读取。应用配置变更、会话失效或请求过期时需从应用重新发起。确认页禁止被嵌入 iframe，避免被其他页面诱导点击。
+授权请求示意（各参数均需正确 URL 编码）：
 
-回调验证 `state` 后，用授权码交换令牌，再携带 Bearer Token 请求 `/api/v1/me`，以返回的 `id` 建立自己的用户会话。子系统用户信息始终包含 `id` / `sub`；申请 `profile` 才返回昵称、头像、角色和创建时间，申请 `email` 才返回邮箱及登录标识说明，不再返回密码状态等中心内部字段。子系统应按实际需要申请权限。只有开启 `refresh_token` 的应用才签发刷新令牌，确认页会展示对应的保持登录权限。
+```text
+http://localhost:3000/oauth/authorize
+  ?response_type=code
+  &client_id=YOUR_CLIENT_ID
+  &redirect_uri=YOUR_REGISTERED_CALLBACK
+  &scope=profile%20email
+  &state=YOUR_RANDOM_STATE
+  &code_challenge=YOUR_S256_CHALLENGE
+  &code_challenge_method=S256
+```
 
-当前实现是 OAuth 2.0，不签发 OpenID Connect ID Token；请使用通用 OAuth 客户端，通过用户接口读取身份，不能把访问令牌当作 JWT 解码。中心退出或令牌撤销不会自动清除子系统自己的会话；子系统应在退出时清理自己的会话，并处理令牌失效。
+以下是服务端客户端的 Bash / curl 示例，将占位值替换为应用实际值：
+
+```bash
+curl http://localhost:3000/oauth/token \
+  --user 'YOUR_CLIENT_ID:YOUR_CLIENT_SECRET' \
+  --data-urlencode 'grant_type=authorization_code' \
+  --data-urlencode 'code=AUTHORIZATION_CODE' \
+  --data-urlencode 'redirect_uri=YOUR_REGISTERED_CALLBACK' \
+  --data-urlencode 'code_verifier=YOUR_ORIGINAL_VERIFIER'
+
+curl http://localhost:3000/api/v1/me \
+  --header 'Authorization: Bearer YOUR_ACCESS_TOKEN'
+```
+
+公开客户端省略 `--user`，改为提交 `client_id`，并保留 `code_verifier`。授权确认请求约 10 分钟有效，绑定当前用户与登录会话，只能处理一次；每次应用授权都需要用户确认。
+
+用户信息始终包含 `id` / `sub`。申请 `profile` 才返回昵称、头像、角色等资料，申请 `email` 才返回邮箱及登录标识说明。请按需申请权限。
+
+### 刷新、撤销与自省
+
+```bash
+curl http://localhost:3000/oauth/token \
+  --user 'YOUR_CLIENT_ID:YOUR_CLIENT_SECRET' \
+  --data-urlencode 'grant_type=refresh_token' \
+  --data-urlencode 'refresh_token=YOUR_REFRESH_TOKEN'
+```
+
+刷新令牌会轮换，成功后需同时保存新的访问令牌和刷新令牌。只有允许 `refresh_token` 的应用才会获得刷新令牌。撤销使用 `POST /oauth/revoke`，查询令牌状态使用 `POST /oauth/introspect`；两者均提交 `token` 并进行客户端认证。
+
+服务元数据位于 `/.well-known/oauth-authorization-server`。客户端密钥重置、回调地址或最低角色变更、应用启停等操作会撤销相关已有令牌与未使用的授权码。
+
+## 配置与部署
+
+### 关键环境变量
+
+Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先。前端的 `OAUTH_BACKEND_URL` 和 `NEXT_OUTPUT_DIR` 需单独传给 Next.js 进程。
+
+| 变量 | 用途 |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL 连接地址，必填 |
+| `CLIENT_SECRET_ENCRYPTION_KEY` | 客户端密钥与 PKCE verifier 加密密钥，必填并保持稳定 |
+| `APP_ENV` | 本地为 `development`，生产为 `production` |
+| `HTTP_ADDR` | Go 监听地址，默认 `:8080` |
+| `ISSUER_URL` | 对外 OAuth 地址；本地应为 `http://localhost:3000` |
+| `AUTH_UI_URL` | 认证前端对外地址 |
+| `COOKIE_SECURE` | HTTPS 部署设为 `true` |
+| `SESSION_TTL` | 中心会话有效期，默认 `24h` |
+| `AUTHORIZATION_CODE_TTL` | 授权码有效期，默认 `5m` |
+| `WEBAUTHN_RP_ID` | Passkey 所属域名，不带协议和端口 |
+| `WEBAUTHN_RP_ORIGINS` | 允许的完整前端 Origin，逗号分隔 |
+| `PASSKEY_CHALLENGE_TTL` | Passkey 挑战有效期，默认 `5m` |
+| `OAUTH_BACKEND_URL` | Next.js 转发到的 Go 地址，默认 `http://localhost:8080` |
+| `NEXT_OUTPUT_DIR` | Next.js 构建目录，相对于 `web/`，默认 `.next` |
+
+其他配置见 [.env.example](.env.example) 和 [配置实现](internal/config/config.go)。修改代理后端地址时，生产前端需要重新构建，以更新 rewrites。
+
+### Docker Compose
+
+完成快速开始中的环境配置、数据库迁移和初始化后，可以由 Compose 启动完整服务：
+
+```bash
+docker compose up --build -d
+```
+
+当前 [docker-compose.yml](docker-compose.yml) 是本地开发配置，固定使用本地地址和开发环境，并不自动执行迁移。Go 容器只接收 `environment` 中列出的变量：**目前未透传 `TURNSTILE_*` 和 `CUSTOM_OAUTH_AVATAR_FIELD`**，使用这些功能时需在 Compose 配置或覆盖文件中补充。只修改根目录 `.env` 不会把未列出的变量自动注入容器。
+
+### 构建与运行
+
+将前端构建放在仓库的 `release/` 下；构建和启动必须使用同一个 `NEXT_OUTPUT_DIR`。
+
+Bash：
+
+```bash
+NEXT_OUTPUT_DIR=../release/web pnpm web:build
+NEXT_OUTPUT_DIR=../release/web pnpm web:start
+```
+
+PowerShell：
+
+```powershell
+$env:NEXT_OUTPUT_DIR = '../release/web'
+pnpm web:build
+pnpm web:start
+```
+
+Go 服务可用 `go build -o release/oauth ./cmd/server` 构建，Windows 可将输出命名为 `release/oauth.exe`。运行时提供 `.env` 或进程环境变量。已有实例升级只需应用新迁移并更新服务，不需要重复 seed。
+
+正式部署应使用同源 HTTPS 入口，正确设置 `ISSUER_URL`、`AUTH_UI_URL`、`WEBAUTHN_RP_ID`、`WEBAUTHN_RP_ORIGINS` 和 `COOKIE_SECURE=true`。反向代理保留 `/api/`、`/oauth/`、`/.well-known/` 的转发；健康检查直接请求 Go 的 `/healthz`。启用 CSP 时，为 Turnstile 放行 `https://challenges.cloudflare.com` 的脚本与 iframe。
+
+数据库迁移应作为独立发布步骤执行。加密密钥须与数据库一起备份、多实例保持一致；已有客户端只有哈希而没有加密副本时，需重置后才能在后台查看明文。不要在每次部署时重新生成加密密钥，也不要在生产使用 seed 的默认凭据。
 
 ## API
 
-### 用户管理
+完整路由以 [internal/httpapi/api.go](internal/httpapi/api.go) 为准。以下路径中的 `{id}`、`{provider}` 为参数；协议 `{slug}` 仅支持 `privacy`、`terms`。
 
-以下接口仅接受有效管理员会话，响应均禁止缓存；写入要求 `X-AlbaTextus-Client: account-center`，拒绝跨站请求。Bearer Token 不能用于管理用户。
-
-| 方法 | 路径 | 用途 |
-| --- | --- | --- |
-| GET | `/api/v1/admin/users` | 分页列表；参数 `q`、`role`、`status`（`active` / `inactive`）、`page`（默认 1）、`page_size`（默认 20，最多 100），返回 `users`、筛选结果 `total` 及全局 `stats` |
-| POST | `/api/v1/admin/users` | 用 `email`、`password`、`display_name`、`role` 创建已启用用户 |
-| PATCH | `/api/v1/admin/users/:id` | 提交完整的 `display_name`、`role`、`is_active`、`updated_at` 更新资料 |
-| POST | `/api/v1/admin/users/:id/password` | 提交 `new_password`、`updated_at` 重置密码 |
-| POST | `/api/v1/admin/users/:id/revoke-sessions` | 提交 `updated_at` 撤销该用户的登录与 OAuth 授权 |
-
-管理员只能创建和管理 `USER`；超级管理员可以管理所有角色并分配 `USER`、`ADMIN`、`SUPER_ADMIN`。不能修改自己的角色、停用自己，或通过管理接口重置自己的密码和撤销自己的登录；自己的密码通过账户安全页修改。权限在数据库事务内重新校验，避免并发降权后仍使用旧权限，也确保始终保留执行操作的有效超级管理员。
-
-更新时原样提交列表中的 `updated_at`，过期版本返回 `409 user_conflict`；刷新列表后重新编辑。昵称为空表示清除昵称，最多 100 字符；密码为 12–72 UTF-8 字节。邮箱和第三方登录标识不可在管理页面改写，密码哈希不会返回给前端。
-
-改变角色或启停状态、重置密码、撤销登录，会在同一事务内撤销中心会话、OAuth 访问及刷新令牌、未使用授权码，并清除待处理的绑定、授权确认和用户关联的通行密钥挑战。只修改昵称保留登录。账户重新启用后，旧会话和令牌仍失效；通行密钥和第三方账号绑定保留。子系统自己的本地会话仍需由子系统处理令牌失效。用户停用替代账户物理删除，保留身份及关联数据。本功能复用已有数据库字段，无需新增迁移。
-
-### 应用管理
-
-以下接口要求有效的管理员登录会话；普通用户（包括历史应用所有者）统一返回 403。修改请求还需携带 `X-AlbaTextus-Client: account-center`。Bearer Token 不能用于管理应用。响应均为 `Cache-Control: no-store`。
+### OAuth 与公开接口
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| GET / POST | `/api/v1/applications` | 列表 / 创建 |
-| GET / PUT / DELETE | `/api/v1/applications/:id` | 详情 / 完整更新 / 删除 |
-| POST | `/api/v1/applications/:id/secret` | 重置机密客户端密钥 |
-| GET | `/api/v1/applications/:id/secret` | 管理员查看密钥；同样要求 `X-AlbaTextus-Client` 请求头，拒绝跨站请求 |
+| GET | `/healthz` | Go 与数据库健康检查 |
+| GET | `/.well-known/oauth-authorization-server` | OAuth 元数据 |
+| GET | `/oauth/authorize` | 发起授权码流程 |
+| POST | `/oauth/token` | 换取、刷新令牌或使用客户端凭证 |
+| POST | `/oauth/revoke` | 撤销令牌 |
+| POST | `/oauth/introspect` | 查询令牌状态 |
+| GET | `/api/v1/auth/providers` | 第三方平台开放状态 |
+| GET | `/api/v1/auth/verification` | Turnstile 公开配置 |
+| GET | `/api/v1/legal/{slug}` | 公开协议正文 |
 
-创建和更新使用 JSON 字段 `name`、`homepage_url`、`description`、`icon_url`、`redirect_uris`（1–10 个）、`minimum_role`、`is_active`、`is_public`。主页与图标、回调需使用 HTTPS，本地回环地址允许 HTTP；不接受通配符、用户凭据或锚点。列表与详情不会返回客户端密钥。
-
-### 个人账户
-
-以下接口只操作当前登录用户，使用中心会话，响应为 `Cache-Control: no-store`。修改请求同样要求 `X-AlbaTextus-Client: account-center`。
+### 认证与个人账户
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| GET | `/api/v1/account/applications` | 返回满足访问条件的应用展示信息 |
-| PATCH | `/api/v1/account/profile` | 更新自己的 `display_name`（1–100 个字符） |
-| POST | `/api/v1/account/password` | 用 `current_password` 验证后设置 `new_password`（12–72 UTF-8 字节） |
+| POST | `/api/v1/users` | 注册 |
+| POST | `/api/v1/sessions` | 密码登录 |
+| DELETE | `/api/v1/sessions/current` | 退出当前会话 |
+| GET | `/api/v1/me` | 当前账户或 Bearer 用户身份 |
+| POST | `/api/v1/auth/providers/{provider}/start` | 开始第三方登录或绑定 |
+| GET | `/api/v1/auth/providers/{provider}/callback` | 第三方回调 |
+| GET / DELETE | `/api/v1/account/identities` / `/api/v1/account/identities/{provider}` | 列出或解绑第三方账号 |
+| GET | `/api/v1/account/applications` | 当前用户可访问的应用信息 |
+| PATCH | `/api/v1/account/profile` | 更新昵称 |
+| PATCH | `/api/v1/account/avatar` | 更改头像来源 |
+| POST | `/api/v1/account/password` | 设置或修改密码 |
+| POST | `/api/v1/passkeys/registration/options`、`/api/v1/passkeys/registration/finish` | 注册通行密钥 |
+| POST | `/api/v1/passkeys/login/options`、`/api/v1/passkeys/login/finish` | 通行密钥登录 |
+| GET / DELETE | `/api/v1/passkeys` / `/api/v1/passkeys/{id}` | 列出或删除通行密钥 |
+| GET / POST | `/api/v1/oauth/consent` | 读取与提交应用授权确认 |
 
-### 用户会话
+账户管理接口使用中心登录会话。第三方登录发起、账户修改、应用授权决定等请求需携带 `X-AlbaTextus-Client: account-center`；Passkey 完成接口使用 `X-WebAuthn-Ceremony`。开启 Turnstile 后，注册与登录发起还需有效的 `X-Turnstile-Token`。
 
-```bash
-curl -X POST http://localhost:8080/api/v1/users \
-  -H 'content-type: application/json' \
-  -d '{"email":"alice@example.com","password":"correct horse battery staple"}'
+### 管理接口
 
-curl -c cookies.txt -X POST http://localhost:8080/api/v1/sessions \
-  -H 'content-type: application/json' \
-  -d '{"email":"alice@example.com","password":"correct horse battery staple"}'
-```
+管理接口要求管理员会话，不能用应用的 Bearer Token 替代。写入及读取客户端密钥需要 `X-AlbaTextus-Client: account-center`，并接受来源校验。
 
-### 授权码 + PKCE
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET / POST | `/api/v1/applications` | 应用列表 / 创建 |
+| GET / PUT / DELETE | `/api/v1/applications/{id}` | 应用详情 / 更新 / 删除 |
+| GET / POST | `/api/v1/applications/{id}/secret` | 查看 / 重置客户端密钥 |
+| GET / POST | `/api/v1/admin/users` | 用户列表 / 创建 |
+| PATCH | `/api/v1/admin/users/{id}` | 修改昵称、角色与启停状态 |
+| POST | `/api/v1/admin/users/{id}/password` | 重置用户密码 |
+| POST | `/api/v1/admin/users/{id}/revoke-sessions` | 撤销用户登录与授权 |
+| GET / PUT | `/api/v1/admin/legal/{slug}` | 读取 / 更新协议 |
 
-先登录并保存 cookie。`code_challenge` 是 `base64url(sha256(code_verifier))`，不带 `=`：
+用户列表支持 `q`、`role`、`status`、`page`、`page_size`；更新用户需提交读到的 `updated_at`。协议以 Markdown 保存，更新需提交 `revision`。版本冲突会返回 `409`，应重新读取后编辑。
+
+## 开发
 
 ```text
-GET /oauth/authorize?response_type=code&client_id=albatextus-web&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fauth%2Fcallback&scope=profile%20email&state=xyz&code_challenge=...&code_challenge_method=S256
+cmd/                  服务入口、开发 seed 与本地图床接入工具
+internal/             配置、HTTP API、OAuth、Passkey、第三方登录、存储
+prisma/               数据库 schema 与迁移
+web/app/              Next.js 页面与全局样式
+web/components/       账户、管理后台与基础 UI 组件
+web/lib/              前端 API 与共享逻辑
+temps/                本地临时脚本、检查与日志
+release/              本地构建与发布产物
 ```
 
-服务会把 `code` 和 `state` 302 回调到已注册的 redirect URI，然后交换：
+| 命令 | 用途 |
+| --- | --- |
+| `pnpm web:dev` | 前端开发服务 |
+| `pnpm web:typecheck` | TypeScript 类型检查 |
+| `pnpm db:validate` | 校验 Prisma schema |
+| `pnpm db:format` | 格式化 Prisma schema |
+| `pnpm db:migrate` | 在开发数据库创建、应用迁移 |
+| `pnpm db:deploy` | 应用已提交的迁移 |
+| `pnpm db:studio` | 打开数据库管理界面 |
+| `go test ./...` | 运行 Go 测试 |
 
-```bash
-curl -X POST http://localhost:8080/oauth/token \
-  -u albatextus-web:development-secret-change-me \
-  -d grant_type=authorization_code -d code=... \
-  -d redirect_uri=http://localhost:3000/auth/callback -d code_verifier=...
-```
+Prisma schema 与迁移是数据库结构的来源；Go 服务没有 Prisma Client，也不会在启动时自动建表。首次检查前端或更换构建目录时，先完成一次前端构建，生成 Next.js 路由类型。
 
-刷新令牌：
+相邻的 AlbaTextus 图床可通过 `go run ./cmd/register-imgbed` 联调注册。该工具会登记客户端并写入相邻图床的本地配置，运行前请核对 [工具源码](cmd/register-imgbed/main.go) 中的目录、端口与回调约定。
 
-```bash
-curl -X POST http://localhost:8080/oauth/token \
-  -u albatextus-web:development-secret-change-me \
-  -d grant_type=refresh_token -d refresh_token=...
-```
-
-资源请求：
-
-```bash
-curl http://localhost:8080/api/v1/me -H 'Authorization: Bearer ACCESS_TOKEN'
-```
-
-元数据位于 `/.well-known/oauth-authorization-server`。撤销和自省分别使用 `/oauth/revoke`、`/oauth/introspect`，均要求客户端认证。
-
-### 通行密钥
-
-登录后打开 `/account/security`，点击“添加通行密钥”，浏览器会调用系统的指纹、Face ID、Windows Hello 或设备 PIN。登录页的“使用通行密钥登录”使用 discoverable credential，不需要先输入邮箱。
-
-对应 API：
-
-- `POST /api/v1/passkeys/registration/options`（登录会话）
-- `POST /api/v1/passkeys/registration/finish`（`X-WebAuthn-Ceremony` 请求头）
-- `POST /api/v1/passkeys/login/options`
-- `POST /api/v1/passkeys/login/finish`（`X-WebAuthn-Ceremony` 请求头）
-- `GET/DELETE /api/v1/passkeys`、`/api/v1/passkeys/:id`（登录会话）
-
-## 生产注意事项
-
-- 生产环境必须使用 HTTPS、`COOKIE_SECURE=true`，并将 `ISSUER_URL` 设置为外部 HTTPS 地址。
-- `WEBAUTHN_RP_ID` 必须是前端域名（不带协议和端口），`WEBAUTHN_RP_ORIGINS` 填写允许的完整前端 Origin；本地开发默认分别为 `localhost` 和 `http://localhost:3000`。
-- 不要使用示例客户端 secret；通过 secret manager 注入 `SEED_CLIENT_SECRET`，并限制 redirect URI 为精确匹配。
-- 默认密码哈希为 bcrypt，密码最少 12 个字符；访问令牌和授权码只以 SHA-256 摘要存储。
-- 应将 `pnpm db:deploy` 放入发布流水线，并定期清理过期的 authorization codes、sessions 和 tokens。
+目前未提供邮箱验证码绑定、OIDC ID Token 或跨子系统统一登出。功能问题和接入反馈可提交到 [GitHub Issues](https://github.com/AlbaTextus/oauth/issues)。

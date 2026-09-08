@@ -1,14 +1,15 @@
 "use client"
 
+import { useFeedback, feedback } from "@/lib/feedback"
+
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState, type FormEvent } from "react"
 import { AlertCircle, ArrowLeft, Check, Code2, LockKeyhole, Save, Settings2, Trash2 } from "lucide-react"
 import { api } from "@/lib/api"
-import { type Application, type OAuthMetadata, managementError } from "@/lib/applications"
+import { type Application, type OAuthMetadata, managementError, roleNames } from "@/lib/applications"
 import { CopyField } from "@/components/copy-field"
 import { ClientSecretField } from "@/components/client-secret-field"
-import { ApplicationPreview } from "@/components/application-preview"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -34,13 +35,13 @@ export function ApplicationEditor({ id }: { id?: string }) {
   const [metadata, setMetadata] = useState<OAuthMetadata | null>(null)
   const [loading, setLoading] = useState(Boolean(id))
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState("")
-  const [notice, setNotice] = useState("")
+  const [error, setError] = useFeedback("error")
+  const [notice, setNotice] = useFeedback("success")
   const [secret, setSecret] = useState("")
   const [secretOpen, setSecretOpen] = useState(false)
   const [secretRevision, setSecretRevision] = useState(0)
   const [confirm, setConfirm] = useState<"delete" | "rotate" | null>(null)
-  const [confirmError, setConfirmError] = useState("")
+  const [confirmError, setConfirmError] = useFeedback("error")
   const [deleteName, setDeleteName] = useState("")
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved)
 
@@ -72,7 +73,7 @@ export function ApplicationEditor({ id }: { id?: string }) {
         setApp(value); setDraft(toDraft(value)); setSaved(toDraft(value)); setNotice("应用配置已保存。")
       } else {
         const value = await api<{ application: Application; client_secret: string }>("/api/v1/applications", { method: "POST", body: JSON.stringify(payload) })
-        setApp(value.application); setDraft(toDraft(value.application)); setSaved(toDraft(value.application))
+        feedback.success("应用已创建"); setApp(value.application); setDraft(toDraft(value.application)); setSaved(toDraft(value.application))
         if (value.client_secret) { setSecret(value.client_secret); setSecretOpen(true) }
         else router.replace(`/admin/applications/${value.application.id}`)
       }
@@ -84,10 +85,10 @@ export function ApplicationEditor({ id }: { id?: string }) {
     setBusy(true); setConfirmError("")
     try {
       if (confirm === "delete") {
-        await api(`/api/v1/applications/${app.id}`, { method: "DELETE" }); router.replace("/admin/applications")
+        await api(`/api/v1/applications/${app.id}`, { method: "DELETE" }); feedback.success("应用已删除"); router.replace("/admin/applications")
       } else {
         const result = await api<{ client_secret: string }>(`/api/v1/applications/${app.id}/secret`, { method: "POST" })
-        setSecret(result.client_secret); setSecretRevision(value => value + 1); setApp({ ...app, secret_available: true }); setSecretOpen(true)
+        feedback.success("应用密钥已重置"); setSecret(result.client_secret); setSecretRevision(value => value + 1); setApp({ ...app, secret_available: true }); setSecretOpen(true)
       }
       setConfirm(null)
     } catch (reason) { setConfirmError(managementError(reason)) } finally { setBusy(false) }
@@ -108,7 +109,7 @@ export function ApplicationEditor({ id }: { id?: string }) {
         <CopyField label="Client ID" value={app.id} />
         {app.is_public ? <Field><FieldLabel>Client Secret</FieldLabel><FieldDescription>公开客户端使用 S256 PKCE，无需保存客户端密钥。</FieldDescription></Field> : <ClientSecretField key={`${app.id}:${secretRevision}`} applicationId={app.id} available={app.secret_available} busy={busy} onRotate={() => { setConfirm("rotate"); setConfirmError("") }} />}
         {metadata ? <><CopyField label="Authorization Endpoint" value={metadata.authorization_endpoint} /><CopyField label="Token Endpoint" value={metadata.token_endpoint} /><CopyField label="User Endpoint" value={metadata.userinfo_endpoint} /></> : <Alert><AlertCircle /><AlertDescription>接口地址暂时加载失败。<Button variant="link" onClick={() => { void api<OAuthMetadata>("/.well-known/oauth-authorization-server").then(setMetadata).catch(reason => setError(managementError(reason))) }}>重新加载</Button></AlertDescription></Alert>}<div className="flex flex-wrap gap-2">{app.allowed_scopes.map(scope => <Badge key={scope} variant="secondary">{scope}</Badge>)}<Badge variant="outline">Authorization Code + PKCE</Badge></div></FieldGroup></CardContent></Card>}
-      <div className="application-editor-layout">
+      <div className="flex flex-col">
       <form onSubmit={submit} aria-busy={busy} className="min-w-0">
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Settings2 size={18} />应用信息</CardTitle><CardDescription>填写对用户展示的信息与授权回调地址。</CardDescription></CardHeader><CardContent><FieldGroup>
           <Field data-disabled={busy}><FieldLabel htmlFor="app-name">应用名称</FieldLabel><Input id="app-name" name="name" value={draft.name} onChange={e => change("name",e.target.value)} required maxLength={100} disabled={busy} placeholder="例如：AlbaTextus 文档" className="h-11" /></Field>
@@ -117,12 +118,11 @@ export function ApplicationEditor({ id }: { id?: string }) {
           <Field data-disabled={busy}><FieldLabel htmlFor="app-callbacks">回调地址</FieldLabel><Textarea id="app-callbacks" name="redirect_uris" value={draft.callbacks} onChange={e => change("callbacks",e.target.value)} required disabled={busy} placeholder="https://your-app.example.com/auth/callback" className="min-h-24" aria-describedby="callback-help" /><FieldDescription id="callback-help">每行一个地址，最多 10 个。需精确匹配，不支持通配符；本地开发可使用 localhost 的 HTTP 地址。</FieldDescription></Field>
           <Field data-disabled={busy}><FieldLabel htmlFor="app-icon">应用图标 <span className="text-muted-foreground">（选填）</span></FieldLabel><Input id="app-icon" name="icon_url" type="url" value={draft.icon_url} onChange={e => change("icon_url",e.target.value)} maxLength={2048} disabled={busy} placeholder="https://your-app.example.com/logo.png" className="h-11" /></Field>
           <Field data-disabled={busy}><FieldLabel id="app-type-label">应用类型</FieldLabel>{app ? <div><Badge variant="secondary">{app.is_public ? <Code2 data-icon="inline-start" /> : <LockKeyhole data-icon="inline-start" />}{app.is_public ? "公开客户端 · PKCE" : "服务端应用"}</Badge></div> : <ToggleGroup aria-labelledby="app-type-label" value={[draft.is_public ? "public" : "confidential"]} onValueChange={values => { if (values[0]) change("is_public",values[0] === "public") }} disabled={busy || Boolean(app)} variant="outline" spacing={0} className="max-w-full flex-wrap"><ToggleGroupItem value="confidential"><LockKeyhole />服务端应用</ToggleGroupItem><ToggleGroupItem value="public"><Code2 />公开客户端</ToggleGroupItem></ToggleGroup>}<FieldDescription>{draft.is_public ? "适用于纯前端或原生应用，必须使用 S256 PKCE。" : "适用于有后端的子系统，Client Secret 仅保存在服务端。"} 创建后不可更改。</FieldDescription></Field>
-          <Field data-disabled={busy}><FieldLabel id="app-role-label">最低访问角色</FieldLabel><ToggleGroup aria-labelledby="app-role-label" value={[draft.minimum_role]} onValueChange={values => { if (values[0]) change("minimum_role",values[0]) }} disabled={busy} variant="outline" spacing={0} className="max-w-full flex-wrap"><ToggleGroupItem value="USER">普通用户</ToggleGroupItem><ToggleGroupItem value="ADMIN">管理员</ToggleGroupItem><ToggleGroupItem value="SUPER_ADMIN">超级管理员</ToggleGroupItem></ToggleGroup><FieldDescription>只有达到该角色的账户才能登录此应用。</FieldDescription></Field>
+          <Field data-disabled={busy}><FieldLabel id="app-role-label">最低访问等级</FieldLabel><ToggleGroup aria-labelledby="app-role-label" value={[draft.minimum_role]} onValueChange={values => { if (values[0]) change("minimum_role",values[0]) }} disabled={busy} variant="outline" spacing={0} className="max-w-full flex-wrap"><ToggleGroupItem value="USER">{roleNames.USER}</ToggleGroupItem><ToggleGroupItem value="ADMIN">{roleNames.ADMIN}</ToggleGroupItem><ToggleGroupItem value="SUPER_ADMIN">{roleNames.SUPER_ADMIN}</ToggleGroupItem></ToggleGroup><FieldDescription>只有达到该等级的账户才能登录此应用；2 级暂未开放。</FieldDescription></Field>
           <Field orientation="horizontal" data-disabled={busy}><FieldContent><FieldLabel htmlFor="app-active">启用应用</FieldLabel><FieldDescription>停用后将阻止登录，并撤销已有授权。</FieldDescription></FieldContent><Switch id="app-active" checked={draft.is_active} onCheckedChange={value => change("is_active",value)} disabled={busy} /></Field>
           {app && <p className="text-xs text-muted-foreground">修改回调地址、访问角色或启停状态会撤销已有授权，子系统需要重新登录。</p>}
         </FieldGroup></CardContent><CardFooter className="flex-wrap gap-3"><Button type="submit" size="lg" disabled={busy || Boolean(app && !dirty)}>{busy ? <Spinner data-icon="inline-start" aria-hidden="true" /> : <Save data-icon="inline-start" />}{app ? "保存修改" : "创建应用"}</Button><Button type="button" variant="outline" disabled={busy || !dirty} onClick={() => { setDraft(saved); setError(""); setNotice("") }}>取消修改</Button>{app && <Button type="button" variant="destructive" disabled={busy} className="ml-auto" onClick={() => { setConfirm("delete"); setConfirmError(""); setDeleteName("") }}><Trash2 data-icon="inline-start" />删除应用</Button>}</CardFooter></Card>
       </form>
-      <ApplicationPreview draft={draft} />
       </div>
     </>}
     <Dialog open={secretOpen} onOpenChange={open => { if (!open) closeSecret() }}><DialogContent className="center-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"><DialogHeader><DialogTitle>Client Secret 已生成</DialogTitle><DialogDescription>管理员可随时在接入信息中查看或复制密钥。请将它配置到子系统服务端。</DialogDescription></DialogHeader><FieldGroup>{app && <CopyField label="Client ID" value={app.id} />}<CopyField key={secretRevision} label="Client Secret" value={secret} secret /></FieldGroup><DialogFooter><Button onClick={closeSecret}>完成</Button></DialogFooter></DialogContent></Dialog>

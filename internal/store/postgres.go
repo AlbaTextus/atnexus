@@ -40,13 +40,13 @@ func isUniqueViolation(err error) bool {
 // Resolve the selected avatar at read time so refreshed provider images and
 // unlinked identities are reflected in every login and profile response.
 const userColumns = `users.id,users.email,users.password_hash,users.display_name,users.role,users.is_active,users.created_at,
- users.avatar_source,COALESCE((SELECT avatar_url FROM external_identities
+ users.avatar_source,CASE WHEN users.avatar_source='custom' THEN users.custom_avatar_url ELSE COALESCE((SELECT avatar_url FROM external_identities
  WHERE user_id=users.id AND avatar_url<>'' AND (users.avatar_source='auto' OR provider=users.avatar_source)
- ORDER BY created_at,id LIMIT 1),'')`
+ ORDER BY created_at,id LIMIT 1),'') END,users.custom_avatar_url,users.numeric_id,users.bio`
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role, &u.IsActive, &u.CreatedAt, &u.AvatarSource, &u.AvatarURL)
+	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role, &u.IsActive, &u.CreatedAt, &u.AvatarSource, &u.AvatarURL, &u.CustomAvatarURL, &u.NumericID, &u.Bio)
 	return u, err
 }
 

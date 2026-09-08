@@ -83,7 +83,10 @@ func (a *API) Router() http.Handler {
 	r.Delete("/api/v1/account/identities/{provider}", a.unlinkExternalIdentity)
 	r.Get("/api/v1/account/applications", a.availableApplications)
 	r.Patch("/api/v1/account/profile", a.updateProfile)
+	r.Patch("/api/v1/account/bio", a.updateBio)
 	r.Patch("/api/v1/account/avatar", a.updateAvatar)
+	r.Post("/api/v1/account/avatar", a.uploadAvatar)
+	r.Post("/api/v1/account/avatar/preview", a.previewAvatarGIF)
 	r.Post("/api/v1/account/password", a.changePassword)
 	r.Get("/api/v1/applications", a.listApplications)
 	r.Post("/api/v1/applications", a.createApplication)
@@ -526,7 +529,7 @@ func passkeyView(credential store.PasskeyCredential) map[string]any {
 }
 
 func userView(user store.User) map[string]any {
-	return map[string]any{"id": user.ID, "email": user.Email, "display_name": user.DisplayName, "role": user.Role, "created_at": user.CreatedAt, "has_password": user.PasswordHash != "", "email_is_alias": strings.HasSuffix(user.Email, "@accounts.albatextus.invalid"), "avatar_source": user.AvatarSource, "avatar_url": user.AvatarURL, "picture": user.AvatarURL}
+	return map[string]any{"id": user.ID, "bio": user.Bio, "numeric_id": user.NumericID, "email": user.Email, "display_name": user.DisplayName, "role": user.Role, "level": store.RoleLevel(user.Role), "created_at": user.CreatedAt, "has_password": user.PasswordHash != "", "email_is_alias": strings.HasSuffix(user.Email, "@accounts.albatextus.invalid"), "avatar_source": user.AvatarSource, "avatar_url": user.AvatarURL, "picture": user.AvatarURL, "custom_avatar_url": user.CustomAvatarURL}
 }
 
 func clientCredentials(r *http.Request) (string, string) {

@@ -1,3 +1,3 @@
-import { AccountProfile } from "@/components/account-profile"
+import { redirectToAccount } from "@/lib/account-session"
 
-export default function ProfilePage() { return <AccountProfile /> }
+export default async function ProfilePage() { return redirectToAccount("/profile") }

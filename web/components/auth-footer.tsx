@@ -7,7 +7,8 @@ export function authHref(path: "/login" | "/register" | "/privacy" | "/terms", r
   const query = new URLSearchParams()
   if (returnTo) query.set("return_to", safeReturnTo(returnTo))
   if ((path === "/privacy" || path === "/terms") && from === "register") query.set("from", "register")
-  return path + (query.size ? `?${query}` : "")
+  const destination = path === "/privacy" || path === "/terms" ? `/wiki${path}` : path
+  return destination + (query.size ? `?${query}` : "")
 }
 
 export function AuthFooter({ returnTo, from = "login" }: { returnTo?: string | null; from?: "login" | "register" }) {

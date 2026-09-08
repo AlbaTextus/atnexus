@@ -1,5 +1,7 @@
 "use client"
 
+import { useFeedback, feedback } from "@/lib/feedback"
+
 import { useState, type FormEvent } from "react"
 import { AlertCircle, Check, KeyRound } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
@@ -20,7 +22,7 @@ export function ChangePassword() {
   const [confirmation, setConfirmation] = useState("")
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
-  const [error, setError] = useState("")
+  const [error, setError] = useFeedback("error")
   const [invalid, setInvalid] = useState("")
   function resetError() { setError(""); setInvalid("") }
   async function submit(event: FormEvent) {
@@ -31,7 +33,7 @@ export function ChangePassword() {
     const length = new TextEncoder().encode(password).length
     if (length < 12 || length > 72) { setError("新密码需为 12–72 字节；中文等字符会占用多个字节。"); setInvalid("password"); return }
     setBusy(true)
-    try { await api("/api/v1/account/password", { method: "POST", body: JSON.stringify({ current_password: current, new_password: password }) }); setCurrent(""); setPassword(""); setConfirmation(""); setDone(true) }
+    try { await api("/api/v1/account/password", { method: "POST", body: JSON.stringify({ current_password: current, new_password: password }) }); setCurrent(""); setPassword(""); setConfirmation(""); setDone(true); feedback.success("密码已更新，请重新登录") }
     catch (reason) { setError(managementError(reason)); if (reason instanceof ApiError && reason.code === "incorrect_password") setInvalid("current") } finally { setBusy(false) }
   }
   return <form onSubmit={submit} aria-busy={busy}><Card>

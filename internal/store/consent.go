@@ -71,11 +71,7 @@ func (p *Postgres) CompleteConsentRequest(ctx context.Context, request ConsentRe
 	if err := tx.QueryRow(ctx, `SELECT updated_at,is_active,minimum_role FROM oauth_clients WHERE id=$1 FOR SHARE`, request.ClientID).Scan(&version, &active, &minimum); err != nil || !active {
 		return ErrConsentChanged
 	}
-	ranks := map[string]int{"USER": 1, "ADMIN": 2, "SUPER_ADMIN": 3}
-	if minimum == "" {
-		minimum = "USER"
-	}
-	if !version.Equal(request.ClientVersion) || ranks[minimum] == 0 || ranks[role] < ranks[minimum] {
+	if !version.Equal(request.ClientVersion) || !MeetsMinimumRole(role, minimum) {
 		return ErrConsentChanged
 	}
 	var sessionID uuid.UUID

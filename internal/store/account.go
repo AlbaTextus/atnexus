@@ -52,10 +52,10 @@ func (p *Postgres) AvailableApplications(ctx context.Context, role string) ([]Av
 }
 
 func (p *Postgres) UpdateProfile(ctx context.Context, id uuid.UUID, name *string) (User, error) {
-	user, err := scanUser(p.pool.QueryRow(ctx, `UPDATE users SET display_name=$2,updated_at=NOW() WHERE id=$1 AND is_active=true
+	user, err := scanUser(p.pool.QueryRow(ctx, `UPDATE users SET display_name=$2,updated_at=NOW() WHERE id=$1 AND is_active=true AND role IN ('ADMIN','SUPER_ADMIN')
 	 RETURNING `+userColumns, id, name))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return User{}, ErrNotFound
+		return User{}, ErrUserForbidden
 	}
 	return user, err
 }

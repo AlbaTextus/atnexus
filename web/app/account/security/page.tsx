@@ -1,3 +1,3 @@
-import { Account } from "@/components/account"
+import { redirectToAccount } from "@/lib/account-session"
 
-export default function SecurityPage() { return <Account /> }
+export default async function SecurityPage() { return redirectToAccount("/security") }

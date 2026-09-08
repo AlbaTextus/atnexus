@@ -96,6 +96,27 @@ func (m *memoryStore) RevokeToken(context.Context, string, string) error { retur
 
 func testConfig() config.Config { return config.Config{AuthorizationCodeTTL: 5 * time.Minute} }
 
+func TestMinimumRoleHierarchy(t *testing.T) {
+	roles := []string{"USER", "ADMIN", "SUPER_ADMIN", "LEVEL_2", ""}
+	allowed := map[string]map[string]bool{
+		"USER":        {"": true, "USER": true},
+		"ADMIN":       {"": true, "USER": true, "ADMIN": true},
+		"SUPER_ADMIN": {"": true, "USER": true, "ADMIN": true, "SUPER_ADMIN": true},
+	}
+	for _, role := range roles {
+		for _, minimum := range roles {
+			for _, active := range []bool{true, false} {
+				st := &memoryStore{user: store.User{ID: uuid.New(), Role: role, IsActive: active}}
+				svc := NewService(st, testConfig())
+				err := svc.checkMinimumRole(context.Background(), store.Client{MinimumRole: minimum}, st.user.ID)
+				if (err == nil) != (active && allowed[role][minimum]) {
+					t.Errorf("role=%q minimum=%q active=%t: unexpected result %v", role, minimum, active, err)
+				}
+			}
+		}
+	}
+}
+
 func TestCreateAuthorizationCodeRequiresPKCEForPublicClient(t *testing.T) {
 	st := &memoryStore{client: store.Client{ID: "public", IsActive: true, RedirectURIs: []string{"http://localhost/callback"}, AllowedGrantTypes: []string{"authorization_code"}, AllowedScopes: []string{"openid"}}}
 	svc := NewService(st, testConfig())

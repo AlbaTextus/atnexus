@@ -1,5 +1,7 @@
 "use client"
 
+import { useFeedback } from "@/lib/feedback"
+
 import { useEffect, useRef, useState } from "react"
 import { AlertCircle, Check, Link2, Unlink } from "lucide-react"
 import { api } from "@/lib/api"
@@ -22,8 +24,8 @@ export function LinkedAccounts() {
   const [identities, setIdentities] = useState<ExternalIdentity[]>([])
   const [hasPassword, setHasPassword] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [notice, setNotice] = useState("")
+  const [error, setError] = useFeedback("error")
+  const [notice, setNotice] = useFeedback("success")
   const [busy, setBusy] = useState("")
   const [unlinking, setUnlinking] = useState<LoginProvider | null>(null)
   const callbackHandled = useRef(false)

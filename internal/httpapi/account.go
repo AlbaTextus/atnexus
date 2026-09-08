@@ -76,6 +76,10 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !isAdmin(user) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "profile_edit_forbidden", "error_description": "昵称仅限管理员及以上修改。"})
+		return
+	}
 	var input struct {
 		DisplayName string `json:"display_name"`
 	}
@@ -92,6 +96,10 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	updated, err := st.UpdateProfile(r.Context(), user.ID, &name)
+	if errors.Is(err, store.ErrUserForbidden) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "profile_edit_forbidden", "error_description": "昵称仅限管理员及以上修改。"})
+		return
+	}
 	if err != nil {
 		a.applicationError(w, err)
 		return

@@ -1,5 +1,7 @@
 "use client"
 
+import { useFeedback } from "@/lib/feedback"
+
 import { useState, type FormEvent } from "react"
 import { AlertCircle, Check, KeyRound, LogOut, UserPlus } from "lucide-react"
 import { api } from "@/lib/api"
@@ -32,8 +34,8 @@ export function UserManagementDialog({ action, onClose, onSaved }: {
   const [active, setActive] = useState(target?.is_active ?? true)
   const [password, setPassword] = useState("")
   const [confirmation, setConfirmation] = useState("")
-  const [error, setError] = useState("")
-  const [passwordError, setPasswordError] = useState("")
+  const [error, setError] = useFeedback("error")
+  const [passwordError, setPasswordError] = useFeedback("error")
   const [busy, setBusy] = useState(false)
   const roles = actor.role === "SUPER_ADMIN" ? ["USER", "ADMIN", "SUPER_ADMIN"] : ["USER"]
   const needsPassword = action.kind === "create" || action.kind === "password"
@@ -83,7 +85,7 @@ export function UserManagementDialog({ action, onClose, onSaved }: {
           {action.kind === "create" && <Field data-disabled={busy}><FieldLabel htmlFor="managed-email">邮箱</FieldLabel><Input id="managed-email" type="email" autoComplete="off" required maxLength={320} disabled={busy} value={email} onChange={event => setEmail(event.target.value)} placeholder="name@example.com" /></Field>}
           {(action.kind === "create" || action.kind === "edit") && <>
             <Field data-disabled={busy}><FieldLabel htmlFor="managed-name">昵称</FieldLabel><Input id="managed-name" maxLength={100} disabled={busy} value={name} onChange={event => setName(event.target.value)} placeholder="可选，最多 100 个字符" /></Field>
-            <Field data-disabled={busy || self}><FieldLabel id="managed-role-label">用户角色</FieldLabel>{roles.length > 1 ? <ToggleGroup aria-labelledby="managed-role-label" variant="outline" spacing={0} value={[role]} disabled={busy || self} onValueChange={values => { if (values[0]) setRole(values[0]) }}><ToggleGroupItem value="USER">普通用户</ToggleGroupItem><ToggleGroupItem value="ADMIN">管理员</ToggleGroupItem><ToggleGroupItem value="SUPER_ADMIN">超级管理员</ToggleGroupItem></ToggleGroup> : <p className="text-sm">{roleNames[role]}</p>}<FieldDescription>{self ? "不能修改自己的角色或停用自己的账户。" : actor.role === "SUPER_ADMIN" ? "管理员可管理普通用户；超级管理员可管理所有角色。" : "管理员只能创建和管理普通用户，角色调整由超级管理员完成。"}</FieldDescription></Field>
+            <Field data-disabled={busy || self}><FieldLabel id="managed-role-label">用户等级</FieldLabel>{roles.length > 1 ? <ToggleGroup aria-labelledby="managed-role-label" variant="outline" spacing={0} value={[role]} disabled={busy || self} onValueChange={values => { if (values[0]) setRole(values[0]) }}><ToggleGroupItem value="USER">{roleNames.USER}</ToggleGroupItem><ToggleGroupItem value="ADMIN">{roleNames.ADMIN}</ToggleGroupItem><ToggleGroupItem value="SUPER_ADMIN">{roleNames.SUPER_ADMIN}</ToggleGroupItem></ToggleGroup> : <p className="text-sm">{roleNames[role]}</p>}<FieldDescription>{self ? "不能修改自己的角色或停用自己的账户。" : actor.role === "SUPER_ADMIN" ? "管理员可管理普通用户；超级管理员可管理所有角色。" : "管理员只能创建和管理普通用户，角色调整由超级管理员完成。"}</FieldDescription></Field>
             {action.kind === "edit" && <Field data-disabled={busy || self}><FieldLabel id="managed-status-label">账户状态</FieldLabel><ToggleGroup aria-labelledby="managed-status-label" variant="outline" spacing={0} value={[active ? "active" : "inactive"]} disabled={busy || self} onValueChange={values => { if (values[0]) setActive(values[0] === "active") }}><ToggleGroupItem value="active">启用</ToggleGroupItem><ToggleGroupItem value="inactive">停用</ToggleGroupItem></ToggleGroup><FieldDescription>停用后，邮箱、第三方账号与通行密钥均无法登录。</FieldDescription></Field>}
           </>}
           {needsPassword && <>

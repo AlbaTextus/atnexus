@@ -1,5 +1,7 @@
 "use client"
 
+import { useFeedback, redirectWithFeedback } from "@/lib/feedback"
+
 import { useEffect, useState, type FormEvent } from "react"
 import { AlertCircle, KeyRound } from "lucide-react"
 import { browserSupportsWebAuthn, startAuthentication } from "@simplewebauthn/browser"
@@ -31,7 +33,7 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
   const [rememberEmail, setRememberEmail] = useState(false)
   const [busy, setBusy] = useState(false)
   const [passkeyBusy, setPasskeyBusy] = useState(false)
-  const [error, setError] = useState(externalLoginError(oauthError || null))
+  const [error, setError] = useFeedback("error", externalLoginError(oauthError || null))
   const [socialBusy, setSocialBusy] = useState(false)
   const destination = safeReturnTo(returnTo)
   const pending = busy || passkeyBusy || socialBusy
@@ -71,7 +73,7 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
         if (rememberEmail) localStorage.setItem(rememberedEmailKey, normalizedEmail)
         else localStorage.removeItem(rememberedEmailKey)
       } catch { /* A storage preference must not prevent a successful login. */ }
-      window.location.href = destination
+      redirectWithFeedback(destination, "登录成功")
     } catch (reason) {
       setError(authErrorMessage(reason, "暂时无法登录，请稍后重试。"))
       verification.reset()
@@ -95,7 +97,7 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
         body: JSON.stringify(assertion),
         headers: { "X-WebAuthn-Ceremony": ceremony.ceremony_token },
       })
-      window.location.href = destination
+      redirectWithFeedback(destination, "登录成功")
     } catch (reason) {
       setError(authErrorMessage(reason, "通行密钥登录失败，请重试或使用邮箱登录。"))
       verification.reset()

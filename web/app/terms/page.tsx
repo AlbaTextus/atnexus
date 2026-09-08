@@ -1,9 +1,10 @@
-import type { Metadata } from "next"
-import { LegalPage, type LegalPageParams } from "@/components/legal-page"
+import { redirect } from "next/navigation"
+import type { LegalPageParams } from "@/components/legal-page"
 
-export const metadata: Metadata = { title: "用户协议 · AlbaTextus 账户" }
-
-export default async function TermsPage({ searchParams }: LegalPageParams) {
+export default async function LegacyLegalPage({ searchParams }: LegalPageParams) {
   const params = await searchParams
-  return <LegalPage slug="terms" returnTo={params.return_to} from={params.from} />
+  const query = new URLSearchParams()
+  if (params.return_to) query.set("return_to", params.return_to)
+  if (params.from) query.set("from", params.from)
+  redirect("/wiki/terms" + (query.size ? `?${query}` : ""))
 }

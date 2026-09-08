@@ -1,12 +1,14 @@
 "use client"
 
 import Link from "next/link"
+import { Link as TransitionLink } from "next-view-transitions"
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { motion, useInView } from "framer-motion"
 import { ArrowUpRight, Check, Code2, Fingerprint, Github, Globe2, Moon, ShieldCheck, Sparkles, Sun, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { CloudflareNetwork } from "@/components/cloudflare-network"
+import { HomeBrand } from "@/components/home-brand"
 
 const repository = "https://github.com/AlbaTextus/oauth"
 const colorModeKey = "albatextus-color-mode"
@@ -33,23 +35,10 @@ function ScrollReveal({ children, className, delay = 0 }: { children: ReactNode;
     onFocusCapture={() => setFocused(true)}>{children}</motion.div>
 }
 
-function HomeBrand({ footer = false, collapsed = false }: { footer?: boolean; collapsed?: boolean }) {
-  const reducedMotion = useSyncExternalStore(subscribeReducedMotion, getReducedMotion, getServerReducedMotion)
-  const compact = !footer && collapsed
-  const transition = { duration: reducedMotion ? 0 : 0.56, ease: [0.22, 1, 0.36, 1] as const }
-  return <Link href={footer ? "/" : "#top"} aria-label="AlbaTextus 首页" className="home-brand" data-collapsed={compact}>
-    <span className="home-wordmark" aria-hidden="true">
-      <span>A</span>
-      <motion.span className="home-wordmark-part" initial={false} animate={{ width: compact ? 0 : "auto", opacity: compact ? 0 : 1 }} transition={transition}>{footer ? "LBA" : "lba"}</motion.span>
-      <span>T</span>
-      <motion.span className="home-wordmark-part" initial={false} animate={{ width: compact ? 0 : "auto", opacity: compact ? 0 : 1 }} transition={transition}>{footer ? "EXTUS" : "extus"}</motion.span>
-    </span>
-  </Link>
-}
-
 export function HomePage() {
   const reducedMotion = useSyncExternalStore(subscribeReducedMotion, getReducedMotion, getServerReducedMotion)
   const [brandCollapsed, setBrandCollapsed] = useState(false)
+  const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [theme, setTheme] = useState<"light" | "dark">("light")
 
   useEffect(() => {
@@ -71,6 +60,7 @@ export function HomePage() {
       frame = 0
       // Separate thresholds prevent flicker when scrolling around the boundary.
       setBrandCollapsed(current => window.scrollY > 80 ? true : window.scrollY < 20 ? false : current)
+      setHeaderCollapsed(current => window.scrollY > 320 ? true : window.scrollY < 260 ? false : current)
     }
     function scheduleUpdate() { if (!frame) frame = window.requestAnimationFrame(updateSection) }
     updateSection()
@@ -88,13 +78,14 @@ export function HomePage() {
 
   return <div className="home-shell home-credit-inspired" data-theme={theme} id="top">
     <a href="#home-main" className="home-skip">跳转到主要内容</a>
-    <header className="home-header">
+    <header className="home-header" data-collapsed={headerCollapsed}>
       <div className="home-container home-header-inner">
         <HomeBrand collapsed={brandCollapsed} />
         <div className="home-header-actions">
           <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={theme === "light" ? "切换为深色主题" : "切换为浅色主题"} title={theme === "light" ? "切换为深色主题" : "切换为浅色主题"}>{theme === "light" ? <Moon /> : <Sun />}</Button>
           <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<a href={repository} target="_blank" rel="noopener noreferrer" />} aria-label="GitHub 项目（新窗口）" className="home-repo-link"><Github /></Button>
-          <Button nativeButton={false} role="link" render={<Link href="/account" />}>前往用户中心<ArrowUpRight data-icon="inline-end" /></Button>
+          <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<TransitionLink href="/wiki" />} aria-label="前往 Wiki" title="前往 Wiki">W</Button>
+          <Button nativeButton={false} role="link" render={<TransitionLink href="/account" />}>前往用户中心<ArrowUpRight data-icon="inline-end" /></Button>
         </div>
       </div>
     </header>
@@ -151,8 +142,7 @@ export function HomePage() {
             { name: "Gemini", image: "/brands/gemini.svg" },
           ].map((brand, index) => <ScrollReveal key={brand.name} delay={index * 0.12}>
             <div className="agi-brand">
-              <img src={brand.image} alt="" width="64" height="64" loading="lazy" />
-              <span>{brand.name}</span>
+              <img src={brand.image} alt={brand.name} width="64" height="64" loading="lazy" />
             </div>
           </ScrollReveal>)}
         </div>
@@ -163,11 +153,11 @@ export function HomePage() {
       <div className="home-container">
         <div className="home-footer-grid">
           <div className="home-footer-brand"><HomeBrand footer /></div>
-          <nav aria-label="服务与文档" className="home-footer-column"><h2>服务与文档</h2><Link href="/account">用户中心</Link><a href={repository + "/blob/main/README.md"} target="_blank" rel="noopener noreferrer">接入文档</a><a href="/.well-known/oauth-authorization-server" target="_blank" rel="noopener noreferrer">OAuth 元数据</a></nav>
+          <nav aria-label="社区项目" className="home-footer-column home-footer-projects"><h2>社区项目</h2>{["credit", "forum", "imgbed", "ouath", "staus", "wiki"].map(project => <a key={project} href={`https://github.com/AlbaTextus/${project}`} target="_blank" rel="noopener noreferrer">{project}</a>)}</nav>
           <nav aria-label="项目与社区" className="home-footer-column"><h2>项目与社区</h2><a href={repository} target="_blank" rel="noopener noreferrer">GitHub 源代码</a><a href={repository + "/issues"} target="_blank" rel="noopener noreferrer">问题反馈</a><a href={repository + "/commits/main"} target="_blank" rel="noopener noreferrer">更新记录</a></nav>
         </div>
         <Separator />
-        <div className="home-footer-bottom"><p>© {new Date().getFullYear()} AlbaTextus. All rights reserved.</p><nav className="home-footer-legal" aria-label="法律信息"><Link href="/privacy">隐私政策</Link><Link href="/terms">服务条款</Link></nav></div>
+        <div className="home-footer-bottom"><p>© {new Date().getFullYear()} AlbaTextus. All rights reserved.</p><nav className="home-footer-legal" aria-label="法律信息"><Link href="/wiki/privacy">隐私政策</Link><Link href="/wiki/terms">服务条款</Link></nav></div>
         <div className="home-footer-watermark" aria-hidden="true">ALBATEXTUS</div>
       </div>
     </footer>

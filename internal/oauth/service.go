@@ -327,12 +327,7 @@ func (s *Service) authenticateClient(ctx context.Context, id, secret string, req
 
 func (s *Service) checkMinimumRole(ctx context.Context, client store.Client, userID uuid.UUID) *Error {
 	user, err := s.store.UserByID(ctx, userID)
-	ranks := map[string]int{"USER": 1, "ADMIN": 2, "SUPER_ADMIN": 3}
-	minimum := client.MinimumRole
-	if minimum == "" {
-		minimum = "USER"
-	}
-	if err != nil || !user.IsActive || ranks[minimum] == 0 || ranks[user.Role] < ranks[minimum] {
+	if err != nil || !user.IsActive || !store.MeetsMinimumRole(user.Role, client.MinimumRole) {
 		return oauthError("access_denied", "your account does not meet this application's minimum role", 403)
 	}
 	return nil

@@ -1,5 +1,7 @@
 "use client"
 
+import { useFeedback, markExternalLogin } from "@/lib/feedback"
+
 import { useEffect, useState, type ReactNode } from "react"
 import { AlertCircle } from "lucide-react"
 import { api } from "@/lib/api"
@@ -17,7 +19,7 @@ export function SocialLogin({ returnTo, disabled = false, onBusyChange, verifica
   const [providers, setProviders] = useState<LoginProvider[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState("")
-  const [error, setError] = useState("")
+  const [error, setError] = useFeedback("error")
   const [retry, setRetry] = useState(0)
   useEffect(() => {
     const controller = new AbortController()
@@ -31,7 +33,7 @@ export function SocialLogin({ returnTo, disabled = false, onBusyChange, verifica
     setBusy(provider.id); setError(""); onBusyChange?.(true)
     try {
       const result = await api<{ authorization_url: string }>(`/api/v1/auth/providers/${provider.id}/start`, { method: "POST", body: JSON.stringify({ return_to: returnTo }), headers: verificationHeaders })
-      window.location.assign(result.authorization_url)
+      markExternalLogin(); window.location.assign(result.authorization_url)
     } catch (reason) { setError(authErrorMessage(reason, managementError(reason))); setBusy(""); onBusyChange?.(false); onAttemptFailed?.() }
   }
 

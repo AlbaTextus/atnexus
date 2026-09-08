@@ -1,14 +1,16 @@
 "use client"
 
+import { useFeedback, feedback } from "@/lib/feedback"
+
 import { useEffect, useState } from "react"
 import { startRegistration } from "@simplewebauthn/browser"
-import { AlertCircle, Fingerprint, KeyRound, Plus, ShieldCheck, Trash2 } from "lucide-react"
+import { AlertCircle, Fingerprint, KeyRound, Plus, Trash2 } from "lucide-react"
 import { api } from "@/lib/api"
 import { managementError } from "@/lib/applications"
 import { ChangePassword } from "@/components/change-password"
+import { AccountEmail } from "@/components/account-email"
 import { LinkedAccounts } from "@/components/linked-accounts"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -26,9 +28,9 @@ export function Account() {
   const [name, setName] = useState("我的通行密钥")
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState("")
+  const [error, setError] = useFeedback("error")
   const [deleting, setDeleting] = useState<Passkey | null>(null)
-  const [deleteError, setDeleteError] = useState("")
+  const [deleteError, setDeleteError] = useFeedback("error")
 
   async function load() {
     setLoading(true)
@@ -43,19 +45,19 @@ export function Account() {
       const ceremony = await api<PasskeyOptions>("/api/v1/passkeys/registration/options", { method: "POST" })
       const credential = await startRegistration({ optionsJSON: ceremony.publicKey as never })
       await api<Passkey>("/api/v1/passkeys/registration/finish", { method: "POST", body: JSON.stringify(credential), headers: { "X-WebAuthn-Ceremony": ceremony.ceremony_token, "X-Passkey-Name": encodeURIComponent(name.trim() || "我的通行密钥") } })
-      setName("我的通行密钥"); await load()
+      feedback.success("通行密钥已添加"); setName("我的通行密钥"); await load()
     } catch (reason) { setError(reason instanceof Error && reason.name === "NotAllowedError" ? "通行密钥设置已取消或超时，请重试。" : managementError(reason)) } finally { setBusy(false) }
   }
 
   async function removePasskey() {
     if (!deleting) return
     setBusy(true); setDeleteError("")
-    try { await api(`/api/v1/passkeys/${deleting.id}`, { method: "DELETE" }); setDeleting(null); await load() }
+    try { await api(`/api/v1/passkeys/${deleting.id}`, { method: "DELETE" }); setDeleting(null); feedback.success("通行密钥已删除"); await load() }
     catch (reason) { setDeleteError(managementError(reason)) } finally { setBusy(false) }
   }
 
-  return <div className="flex max-w-3xl flex-col gap-7">
-    <div className="center-page-heading"><div><p className="center-eyebrow">YOUR ACCOUNT</p><h1>账户安全</h1><p>管理你的统一身份与登录方式，安全连接每个子系统。</p></div><Badge variant="success"><ShieldCheck data-icon="inline-start" />账户正常</Badge></div>
+  return <div className="mx-auto flex w-full max-w-3xl flex-col gap-7">
+    <AccountEmail />
     <ChangePassword />
     <LinkedAccounts />
     <Card><CardHeader><CardTitle className="flex items-center gap-2"><Fingerprint size={18} />通行密钥</CardTitle><CardDescription>使用指纹、面容或设备 PIN 登录，无需输入密码。</CardDescription></CardHeader><CardContent className="flex flex-col gap-5">

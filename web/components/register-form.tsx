@@ -1,5 +1,7 @@
 "use client"
 
+import { useFeedback, feedback, redirectWithFeedback } from "@/lib/feedback"
+
 import { useState, type FormEvent } from "react"
 import { AlertCircle } from "lucide-react"
 import { PasswordInput } from "@/components/password-input"
@@ -24,7 +26,7 @@ export function RegisterForm({ returnTo }: RegisterFormProps) {
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState("")
+  const [error, setError] = useFeedback("error")
   const [confirmError, setConfirmError] = useState(false)
   const destination = safeReturnTo(returnTo)
 
@@ -34,7 +36,7 @@ export function RegisterForm({ returnTo }: RegisterFormProps) {
     setError("")
     setConfirmError(false)
     if (password !== confirm) {
-      setConfirmError(true)
+      setConfirmError(true); feedback.error("两次输入的密码不一致。")
       document.getElementById("confirm")?.focus()
       return
     }
@@ -52,7 +54,7 @@ export function RegisterForm({ returnTo }: RegisterFormProps) {
     setBusy(true)
     try {
       await api("/api/v1/users", { method: "POST", body: JSON.stringify({ email: email.trim(), password, display_name: name.trim() }), headers: verification.headers })
-      window.location.href = destination
+      redirectWithFeedback(destination, "注册成功")
     } catch (reason) {
       setError(authErrorMessage(reason, "暂时无法创建账户，请稍后重试。"))
       verification.reset()

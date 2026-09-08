@@ -1,5 +1,7 @@
 "use client"
 
+import { useFeedback, feedback } from "@/lib/feedback"
+
 import { useEffect, useId, useRef, useState } from "react"
 import { Check, Copy, Eye, EyeOff, RotateCw } from "lucide-react"
 import { api } from "@/lib/api"
@@ -19,7 +21,7 @@ export function ClientSecretField({ applicationId, available, busy, onRotate }: 
   const [secret, setSecret] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [error, setError] = useState("")
+  const [error, setError] = useFeedback("error")
   const request = useRef<AbortController | null>(null)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -41,7 +43,7 @@ export function ClientSecretField({ applicationId, available, busy, onRotate }: 
         try {
           await navigator.clipboard.writeText(result.client_secret)
           if (controller.signal.aborted) return
-          setCopied(true)
+          setCopied(true); feedback.success("密钥已复制")
           if (copyTimer.current) clearTimeout(copyTimer.current)
           copyTimer.current = setTimeout(() => setCopied(false), 2000)
         } catch { setError("复制失败，请显示密钥后选中内容手动复制。") }

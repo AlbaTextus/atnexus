@@ -19,6 +19,8 @@ model User {
   numericId    Int                 @unique @default(autoincrement()) @map("numeric_id")
   id           String              @id @default(uuid()) @db.Uuid
   email        String              @unique @db.VarChar(320)
+  emailVerified Boolean            @default(false) @map("email_verified")
+  profileSetupRequired Boolean     @default(false) @map("profile_setup_required")
   passwordHash String              @map("password_hash") @db.VarChar(255)
   displayName  String?             @map("display_name") @db.VarChar(100)
   avatarSource String              @default("auto") @map("avatar_source") @db.VarChar(40)
@@ -38,6 +40,31 @@ model User {
   consentRequests OAuthConsentRequest[]
 
   @@map("users")
+}
+
+model EmailChallenge {
+  id            String   @id @db.Uuid
+  purpose       String   @db.VarChar(20)
+  email         String   @db.VarChar(320)
+  actor         String   @db.VarChar(128)
+  previousEmail String   @default("") @map("previous_email") @db.VarChar(320)
+  codeHash      String   @map("code_hash") @db.Char(64)
+  attempts      Int      @default(0)
+  ready         Boolean  @default(false)
+  expiresAt     DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@unique([purpose, email, actor])
+  @@index([expiresAt])
+  @@map("email_challenges")
+}
+
+model EmailRateLimit {
+  key       String   @id @db.Char(64)
+  count     Int
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@index([expiresAt])
+  @@map("email_rate_limits")
 }
 
 model ExternalIdentity {
@@ -106,6 +133,15 @@ model WebAuthnCeremony {
   @@index([userId])
   @@index([expiresAt])
   @@map("webauthn_ceremonies")
+}
+
+model SiteMaintenance {
+  id        Int      @id @default(1)
+  enabled   Boolean  @default(false)
+  updatedBy String?  @map("updated_by") @db.Uuid
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("site_maintenance")
 }
 
 model UserSession {

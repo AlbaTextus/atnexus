@@ -10,7 +10,7 @@ import (
 func (a *API) authVerification(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	c := a.cfg.Turnstile
-	writeJSON(w, 200, map[string]any{"enabled": c.Enabled(), "site_key": c.SiteKey, "test_mode": c.TestMode, "action": turnstile.Action})
+	writeJSON(w, 200, map[string]any{"enabled": c.Enabled(), "site_key": c.SiteKey, "test_mode": c.TestMode, "action": turnstile.Action, "email_enabled": a.cfg.SMTP.Enabled()})
 }
 
 func (a *API) verifyHuman(w http.ResponseWriter, r *http.Request) bool {

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/AlbaTextus/oauth/internal/config"
+	"github.com/AlbaTextus/oauth/internal/email"
 	"github.com/AlbaTextus/oauth/internal/federation"
 	"github.com/AlbaTextus/oauth/internal/oauth"
 	"github.com/AlbaTextus/oauth/internal/passkey"
@@ -33,6 +34,7 @@ type API struct {
 	clientSecrets *security.SecretCipher
 	federation    *federation.Service
 	turnstile     *turnstile.Service
+	mailer        email.Sender
 }
 
 func New(cfg config.Config, st store.Store, logger *slog.Logger) (*API, error) {
@@ -55,15 +57,20 @@ func New(cfg config.Config, st store.Store, logger *slog.Logger) (*API, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &API{cfg: cfg, store: st, oauth: oauth.NewService(st, cfg), passkey: passkeyService, log: logger, clientSecrets: clientSecrets, federation: federatedLogin, turnstile: humanVerification}, nil
+	return &API{cfg: cfg, store: st, oauth: oauth.NewService(st, cfg), passkey: passkeyService, log: logger, clientSecrets: clientSecrets, federation: federatedLogin, turnstile: humanVerification, mailer: email.New(cfg.SMTP)}, nil
 }
 
 func (a *API) Router() http.Handler {
 	r := chi.NewRouter()
-	r.Use(a.requestID, a.securityHeaders, a.recoverer, a.accessLog, a.timeout)
+	r.Use(a.requestID, a.securityHeaders, a.recoverer, a.accessLog, a.timeout, a.maintenanceGate)
+	r.Get("/api/v1/maintenance", a.getMaintenance)
+	r.Put("/api/v1/admin/maintenance", a.setMaintenance)
 	r.Get("/healthz", a.health)
 	r.Get("/.well-known/oauth-authorization-server", a.metadata)
 	r.Post("/api/v1/users", a.register)
+	r.Post("/api/v1/auth/email/code", a.sendRegistrationCode)
+	r.Post("/api/v1/account/email/code", a.sendAccountEmailCode)
+	r.Post("/api/v1/account/email", a.confirmAccountEmail)
 	r.Post("/api/v1/sessions", a.login)
 	r.Delete("/api/v1/sessions/current", a.logout)
 	r.Get("/api/v1/me", a.me)
@@ -83,6 +90,7 @@ func (a *API) Router() http.Handler {
 	r.Delete("/api/v1/account/identities/{provider}", a.unlinkExternalIdentity)
 	r.Get("/api/v1/account/applications", a.availableApplications)
 	r.Patch("/api/v1/account/profile", a.updateProfile)
+	r.Post("/api/v1/account/setup", a.completeProfileSetup)
 	r.Patch("/api/v1/account/bio", a.updateBio)
 	r.Patch("/api/v1/account/avatar", a.updateAvatar)
 	r.Post("/api/v1/account/avatar", a.uploadAvatar)
@@ -92,6 +100,7 @@ func (a *API) Router() http.Handler {
 	r.Post("/api/v1/applications", a.createApplication)
 	r.Get("/api/v1/applications/{id}", a.getApplication)
 	r.Put("/api/v1/applications/{id}", a.updateApplication)
+	r.Patch("/api/v1/applications/{id}/status", a.updateApplicationStatus)
 	r.Delete("/api/v1/applications/{id}", a.deleteApplication)
 	r.Post("/api/v1/applications/{id}/secret", a.rotateApplicationSecret)
 	r.Get("/api/v1/applications/{id}/secret", a.getApplicationSecret)
@@ -180,6 +189,8 @@ type userInput struct {
 	Email       string `json:"email"`
 	Password    string `json:"password"`
 	DisplayName string `json:"display_name"`
+	EmailCode   string `json:"email_code"`
+	ChallengeID string `json:"challenge_id"`
 }
 
 func (a *API) register(w http.ResponseWriter, r *http.Request) {
@@ -191,9 +202,18 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"error": "invalid_request", "error_description": "request body must be valid JSON"})
 		return
 	}
-	email, password, displayName, valid := validateUserInput(in)
+	email, password, _, valid := validateUserInput(in)
 	if !valid {
 		writeJSON(w, 400, map[string]any{"error": "invalid_request", "error_description": "email and a password of 12-72 characters are required"})
+		return
+	}
+	st, ok := a.emailStore(w)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(in.ChallengeID)
+	if err != nil {
+		a.emailError(w, store.ErrEmailCode)
 		return
 	}
 	hash, err := security.HashPassword(password, a.cfg.BCryptCost)
@@ -201,14 +221,15 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]string{"error": "server_error"})
 		return
 	}
-	u, err := a.store.CreateUser(r.Context(), email, hash, displayName)
-	if errors.Is(err, store.ErrAlreadyExists) {
-		writeJSON(w, 409, map[string]any{"error": "email_exists"})
+	u, err := st.CompleteEmailVerification(r.Context(), store.EmailCompletion{
+		EmailChallenge: store.EmailChallenge{ID: id, Purpose: "register", Email: email, Actor: "register", CodeHash: security.EmailCodeHash(a.cfg.ClientSecretEncryptionKey, id.String(), in.EmailCode)},
+		PasswordHash:   hash,
+	})
+	if err != nil {
+		a.emailError(w, err)
 		return
 	}
-	if err != nil {
-		a.log.Error("register user", "error", err)
-		writeJSON(w, 500, map[string]string{"error": "server_error"})
+	if !a.allowMaintenanceLogin(w, r, u) {
 		return
 	}
 	if err := a.issueSession(w, r.Context(), u); err != nil {
@@ -233,6 +254,9 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	u, err := a.store.UserByEmail(r.Context(), email)
 	if err != nil || !u.IsActive || !security.CheckPassword(u.PasswordHash, in.Password) {
 		writeJSON(w, 401, map[string]any{"error": "invalid_credentials"})
+		return
+	}
+	if !a.allowMaintenanceLogin(w, r, u) {
 		return
 	}
 	if err := a.issueSession(w, r.Context(), u); err != nil {
@@ -280,6 +304,10 @@ func (a *API) authorize(w http.ResponseWriter, r *http.Request) {
 		loginURL := a.cfg.AuthUIURL + "/login?return_to=" + url.QueryEscape(r.URL.RequestURI())
 		w.Header().Set("Cache-Control", "no-store")
 		http.Redirect(w, r, loginURL, http.StatusFound)
+		return
+	}
+	if u.ProfileSetupRequired {
+		http.Redirect(w, r, a.cfg.AuthUIURL+"/welcome?return_to="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
 		return
 	}
 	client, err := a.oauth.ValidateConsent(r.Context(), u.ID, in)
@@ -473,6 +501,9 @@ func (a *API) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_passkey"})
 		return
 	}
+	if !a.allowMaintenanceLogin(w, r, user) {
+		return
+	}
 	if err := a.issueSession(w, r.Context(), user); err != nil {
 		a.log.Error("create passkey login session", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
@@ -529,7 +560,7 @@ func passkeyView(credential store.PasskeyCredential) map[string]any {
 }
 
 func userView(user store.User) map[string]any {
-	return map[string]any{"id": user.ID, "bio": user.Bio, "numeric_id": user.NumericID, "email": user.Email, "display_name": user.DisplayName, "role": user.Role, "level": store.RoleLevel(user.Role), "created_at": user.CreatedAt, "has_password": user.PasswordHash != "", "email_is_alias": strings.HasSuffix(user.Email, "@accounts.albatextus.invalid"), "avatar_source": user.AvatarSource, "avatar_url": user.AvatarURL, "picture": user.AvatarURL, "custom_avatar_url": user.CustomAvatarURL}
+	return map[string]any{"id": user.ID, "bio": user.Bio, "numeric_id": user.NumericID, "email": user.Email, "email_verified": user.EmailVerified, "profile_setup_required": user.ProfileSetupRequired, "display_name": user.DisplayName, "role": user.Role, "level": store.RoleLevel(user.Role), "created_at": user.CreatedAt, "has_password": user.PasswordHash != "", "email_is_alias": strings.HasSuffix(user.Email, "@accounts.albatextus.invalid"), "avatar_source": user.AvatarSource, "avatar_url": user.AvatarURL, "picture": user.AvatarURL, "custom_avatar_url": user.CustomAvatarURL}
 }
 
 func clientCredentials(r *http.Request) (string, string) {
@@ -553,7 +584,7 @@ func validateState(state string) *oauth.Error {
 }
 func validateUserInput(in userInput) (string, string, *string, bool) {
 	email := normalizeEmail(in.Email)
-	if !strings.Contains(email, "@") || strings.HasSuffix(email, ".invalid") || len(email) > 320 || len(in.Password) < 12 || len(in.Password) > 72 {
+	if !validEmail(email) || len(in.Password) < 12 || len(in.Password) > 72 {
 		return "", "", nil, false
 	}
 	var display *string

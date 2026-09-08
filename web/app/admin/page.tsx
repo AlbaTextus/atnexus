@@ -1,3 +1,3 @@
 import { redirect } from "next/navigation"
 
-export default function AdminPage() { redirect("/admin/applications") }
+export default function AdminPage() { redirect("/admin/users") }

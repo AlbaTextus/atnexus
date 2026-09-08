@@ -6,7 +6,7 @@ import { Search } from "lucide-react"
 import { integrationContent, integrationDescription, integrationTitle } from "@/lib/wiki-integration"
 import { communitySearchPages } from "@/lib/wiki-community"
 
-const pages = [{ title: "欢迎来到 AlbaTextus", href: "/wiki", content: "账户 用户中心 个人资料 头像 简介 登录 安全 通行密钥" }, ...communitySearchPages, { title: integrationTitle, href: "/wiki/integration", content: `${integrationDescription} ${integrationContent}` }, { title: "隐私政策", href: "/wiki/privacy", content: "隐私 数据 个人信息" }, { title: "用户协议", href: "/wiki/terms", content: "条款 服务 协议" }]
+const pages = [{ title: "欢迎来到 ALBATEXTUS", href: "/wiki", content: "账户 用户中心 个人资料 头像 简介 登录 安全 通行密钥" }, ...communitySearchPages, { title: integrationTitle, href: "/wiki/integration", content: `${integrationDescription} ${integrationContent}` }, { title: "隐私政策", href: "/wiki/privacy", content: "隐私 数据 个人信息" }, { title: "用户协议", href: "/wiki/terms", content: "条款 服务 协议" }]
 export function WikiSearch() {
   const id = useId()
   const [query, setQuery] = useState("")

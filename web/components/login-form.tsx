@@ -3,6 +3,7 @@
 import { useFeedback, redirectWithFeedback } from "@/lib/feedback"
 
 import { useEffect, useState, type FormEvent } from "react"
+import Link from "next/link"
 import { AlertCircle, KeyRound } from "lucide-react"
 import { browserSupportsWebAuthn, startAuthentication } from "@simplewebauthn/browser"
 import { PasswordInput } from "@/components/password-input"
@@ -20,14 +21,15 @@ import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { api, safeReturnTo } from "@/lib/api"
 import { authErrorMessage } from "@/lib/auth-errors"
+import { profileSetupPath } from "@/lib/profile-setup"
 
-type LoginFormProps = { returnTo: string | null; oauthError?: string | null }
-type UserResponse = { id: string; email: string; display_name?: string | null }
+type LoginFormProps = { returnTo: string | null; oauthError?: string | null; maintenance?: boolean }
+type UserResponse = { id: string; email: string; display_name?: string | null; profile_setup_required?: boolean }
 type PasskeyOptions = { ceremony_token: string; publicKey: Record<string, unknown> }
 const rememberedEmailKey = "albatextus.remembered-email"
 
-export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
-  const verification = useAuthVerification({ requireAgreement: true })
+export function LoginForm({ returnTo, oauthError, maintenance = false }: LoginFormProps) {
+  const verification = useAuthVerification()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [rememberEmail, setRememberEmail] = useState(false)
@@ -64,7 +66,7 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
     setError("")
     try {
       const normalizedEmail = email.trim()
-      await api<UserResponse>("/api/v1/sessions", {
+      const user = await api<UserResponse>("/api/v1/sessions", {
         method: "POST",
         body: JSON.stringify({ email: normalizedEmail, password }),
         headers: verification.headers,
@@ -73,7 +75,7 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
         if (rememberEmail) localStorage.setItem(rememberedEmailKey, normalizedEmail)
         else localStorage.removeItem(rememberedEmailKey)
       } catch { /* A storage preference must not prevent a successful login. */ }
-      redirectWithFeedback(destination, "登录成功")
+      redirectWithFeedback(user.profile_setup_required ? profileSetupPath(destination) : destination, "登录成功")
     } catch (reason) {
       setError(authErrorMessage(reason, "暂时无法登录，请稍后重试。"))
       verification.reset()
@@ -92,12 +94,12 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
     try {
       const ceremony = await api<PasskeyOptions>("/api/v1/passkeys/login/options", { method: "POST", headers: verification.headers })
       const assertion = await startAuthentication({ optionsJSON: ceremony.publicKey as never })
-      await api<UserResponse>("/api/v1/passkeys/login/finish", {
+      const user = await api<UserResponse>("/api/v1/passkeys/login/finish", {
         method: "POST",
         body: JSON.stringify(assertion),
         headers: { "X-WebAuthn-Ceremony": ceremony.ceremony_token },
       })
-      redirectWithFeedback(destination, "登录成功")
+      redirectWithFeedback(user.profile_setup_required ? profileSetupPath(destination) : destination, "登录成功")
     } catch (reason) {
       setError(authErrorMessage(reason, "通行密钥登录失败，请重试或使用邮箱登录。"))
       verification.reset()
@@ -107,9 +109,10 @@ export function LoginForm({ returnTo, oauthError }: LoginFormProps) {
 
   return (
     <AuthCard
-      title="欢迎回来" titleId="login-title"
+      title={maintenance ? "超级管理员登录" : "欢迎回来"} titleId="login-title"
+      description={maintenance ? "维护期间，仅超级管理员可通过已配置的登录方式进入。" : undefined}
       brand={<AuthWordmark verified={Boolean(verification.config?.enabled && verification.ready)} />}
-      footer={<AuthFooter returnTo={returnTo} />}
+      footer={maintenance ? <Button variant="link" nativeButton={false} role="link" render={<Link href="/maintenance" />}>返回维护页</Button> : <AuthFooter returnTo={returnTo} />}
     >
       {error && <Alert id="login-error" variant="destructive" className="mb-5"><AlertCircle aria-hidden="true" /><AlertDescription>{error}</AlertDescription></Alert>}
 

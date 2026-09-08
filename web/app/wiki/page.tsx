@@ -1,19 +1,19 @@
 import type { Metadata } from "next"
 import { WikiDocument } from "@/components/wiki-document"
 
-export const metadata: Metadata = { title: "欢迎来到 AlbaTextus · Wiki" }
+export const metadata: Metadata = { title: "欢迎来到 ALBATEXTUS · Wiki" }
 const content = `## 欢迎 👋
 
-这里是 **AlbaTextus Wiki**，记录账户使用方式、应用接入说明，以及与你相关的政策和协议。
+这里是 **ALBATEXTUS Wiki**，记录账户使用方式、应用接入说明，以及与你相关的政策和协议。
 
 ## 社区概览
 
-- [社区介绍](/wiki/community)：认识 AlbaTextus，了解社区定位、交流方式与参与入口。
+- [社区介绍](/wiki/community)：认识 ALBATEXTUS，了解社区定位、交流方式与参与入口。
 - [等级介绍](/wiki/community/levels)：查看账户等级、管理权限和应用访问门槛。
 
 ## 开始使用
 
-通过 [用户中心](/account) 查看身份信息、编辑个人简介、管理头像和登录方式。一个 AlbaTextus 账户，让不同应用之间的连接更简单。
+通过 [用户中心](/account) 查看身份信息、编辑个人简介、管理头像和登录方式。一个 ALBATEXTUS 账户，让不同应用之间的连接更简单。
 
 ### 个人资料
 
@@ -35,4 +35,4 @@ const content = `## 欢迎 👋
 ## 关于此 Wiki
 
 文档界面采用与 [LINUX DO WIKI](https://github.com/chenyme/LINUX-DO-WIKI) 相同的 Nextra 文档主题，感谢开源社区。`
-export default function WikiPage() { return <WikiDocument title="欢迎来到 AlbaTextus" description="账户、连接与社区的使用指南。" content={content} /> }
+export default function WikiPage() { return <WikiDocument title="欢迎来到 ALBATEXTUS" description="账户、连接与社区的使用指南。" content={content} /> }

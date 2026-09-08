@@ -18,12 +18,12 @@ export function HomeBrand({ footer = false, collapsed = false, href }: { footer?
   const compact = !footer && collapsed
   const transition = { duration: reducedMotion ? 0 : 0.56, ease: [0.22, 1, 0.36, 1] as const }
   const BrandLink = href === "/" ? TransitionLink : Link
-  return <BrandLink href={href ?? (footer ? "/" : "#top")} aria-label="AlbaTextus 首页" className="home-brand" data-collapsed={compact}>
+  return <BrandLink href={href ?? (footer ? "/" : "#top")} aria-label="ALBATEXTUS 首页" className="home-brand" data-collapsed={compact}>
     <span className="home-wordmark" aria-hidden="true">
       <span>A</span>
-      <motion.span className="home-wordmark-part" initial={false} animate={{ width: compact ? 0 : "auto", opacity: compact ? 0 : 1 }} transition={transition}>{footer ? "LBA" : "lba"}</motion.span>
+      <motion.span className="home-wordmark-part" initial={false} animate={{ width: compact ? 0 : "auto", opacity: compact ? 0 : 1 }} transition={transition}>LBA</motion.span>
       <span>T</span>
-      <motion.span className="home-wordmark-part" initial={false} animate={{ width: compact ? 0 : "auto", opacity: compact ? 0 : 1 }} transition={transition}>{footer ? "EXTUS" : "extus"}</motion.span>
+      <motion.span className="home-wordmark-part" initial={false} animate={{ width: compact ? 0 : "auto", opacity: compact ? 0 : 1 }} transition={transition}>EXTUS</motion.span>
     </span>
   </BrandLink>
 }

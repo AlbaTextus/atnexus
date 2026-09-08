@@ -14,6 +14,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const contentType = response.headers.get("content-type") || ""
   const payload = contentType.includes("json") ? await response.json() : null
   if (!response.ok) {
+    if (payload?.error === "maintenance" && typeof window !== "undefined" && !window.location.pathname.startsWith("/maintenance")) {
+      window.location.replace("/maintenance")
+    }
     const message = payload?.error_description || payload?.error || "请求失败"
     throw new ApiError(response.status, payload?.error || "request_failed", message)
   }

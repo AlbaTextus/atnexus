@@ -220,6 +220,7 @@ func consentUserInfo(user store.User, scopes []string) map[string]any {
 	}
 	if slices.Contains(scopes, "email") {
 		view["email"] = user.Email
+		view["email_verified"] = user.EmailVerified
 		view["email_is_alias"] = strings.HasSuffix(user.Email, "@accounts.albatextus.invalid")
 	}
 	return view

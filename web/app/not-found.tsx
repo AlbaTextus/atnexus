@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 
 export const metadata: Metadata = {
-  title: "页面未找到 · AlbaTextus",
-  description: "这一页暂时走丢了。返回 AlbaTextus 首页，或前往用户中心。",
+  title: "页面未找到 · ALBATEXTUS",
+  description: "这一页暂时走丢了。返回 ALBATEXTUS 首页，或前往用户中心。",
 }
 
 export default function NotFound() {
@@ -15,8 +15,8 @@ export default function NotFound() {
       <a href="#not-found-main" className="home-skip">跳转到主要内容</a>
       <header className="home-header">
         <div className="home-container home-header-inner">
-          <Link href="/" className="home-brand" aria-label="AlbaTextus 首页">
-            <span className="home-wordmark" aria-hidden="true">AlbaTextus</span>
+          <Link href="/" className="home-brand" aria-label="ALBATEXTUS 首页">
+            <span className="home-wordmark" aria-hidden="true">ALBATEXTUS</span>
           </Link>
           <nav aria-label="页面导航" className="home-header-actions">
             <Button variant="ghost" nativeButton={false} role="link" render={<Link href="/wiki" />}>Wiki</Button>
@@ -64,7 +64,7 @@ export default function NotFound() {
       </main>
 
       <footer className="not-found-footer home-container">
-        <p>© {new Date().getFullYear()} AlbaTextus</p>
+        <p>© {new Date().getFullYear()} ALBATEXTUS</p>
         <p>每一次连接，都有归处。</p>
         <nav aria-label="法律信息"><Link href="/wiki/privacy">隐私政策</Link><Link href="/wiki/terms">服务条款</Link></nav>
       </footer>

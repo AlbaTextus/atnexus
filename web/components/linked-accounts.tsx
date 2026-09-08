@@ -68,7 +68,7 @@ export function LinkedAccounts() {
   }
 
   return <Card>
-    <CardHeader><CardTitle className="flex items-center gap-2"><Link2 size={18} />第三方账号</CardTitle><CardDescription>绑定后，可使用第三方账号登录同一个 AlbaTextus 账户。</CardDescription></CardHeader>
+    <CardHeader><CardTitle className="flex items-center gap-2"><Link2 size={18} />第三方账号</CardTitle><CardDescription>绑定后，可使用第三方账号登录同一个 ALBATEXTUS 账户。</CardDescription></CardHeader>
     <CardContent className="flex flex-col gap-4">
       {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}<Button variant="link" disabled={Boolean(busy)} onClick={() => { setError(""); void load() }}>重新加载</Button></AlertDescription></Alert>}
       {notice && <Alert><Check /><AlertDescription role="status">{notice}</AlertDescription></Alert>}

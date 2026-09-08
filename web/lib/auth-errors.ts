@@ -1,6 +1,14 @@
 import { ApiError } from "@/lib/api"
 
 const messages: Record<string, string> = {
+  maintenance: "网站维护中，目前仅超级管理员可以登录。",
+  maintenance_unavailable: "暂时无法确认服务状态，请稍后重试。",
+  email_unavailable: "邮箱服务暂不可用，请稍后重试。",
+  invalid_email: "请填写有效的收件邮箱。",
+  invalid_email_code: "验证码错误、已过期或尝试次数过多，请重新获取。",
+  email_rate_limited: "发送过于频繁，请至少等待 60 秒；达到每小时上限时需稍后再试。",
+  incorrect_password: "当前密码不正确。",
+  account_changed: "账户信息已变更，请刷新页面或重新登录后重试。",
   turnstile_required: "请先完成安全验证。",
   turnstile_failed: "安全验证未通过或已过期，请重新验证。",
   turnstile_unavailable: "安全验证服务暂时不可用，请稍后重试。",

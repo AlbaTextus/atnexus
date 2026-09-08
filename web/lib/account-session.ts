@@ -4,6 +4,7 @@ import { cache } from "react"
 import { cookies } from "next/headers"
 import { notFound, redirect } from "next/navigation"
 import type { AccountUser } from "@/components/account-shell"
+import { profileSetupPath } from "@/lib/profile-setup"
 
 const currentAccount = cache(async (): Promise<AccountUser | null> => {
   const cookieJar = await cookies()
@@ -13,13 +14,15 @@ const currentAccount = cache(async (): Promise<AccountUser | null> => {
     signal: AbortSignal.timeout(10000),
   })
   if (response.status === 401) return null
+  if (response.status === 503) redirect("/maintenance")
   if (!response.ok) throw new Error("暂时无法加载账户，请稍后重试。")
   return response.json()
 })
 
-export async function requireAccount(returnTo = "/account") {
+export async function requireAccount(returnTo = "/account", allowIncomplete = false) {
   const user = await currentAccount()
   if (!user) redirect(`/login?return_to=${encodeURIComponent(returnTo)}`)
+  if (user.profile_setup_required && !allowIncomplete) redirect(profileSetupPath(returnTo))
   return user
 }
 

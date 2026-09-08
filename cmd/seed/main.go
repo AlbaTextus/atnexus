@@ -31,7 +31,7 @@ func main() {
 		panic(err)
 	}
 	clientID := getenv("SEED_CLIENT_ID", "albatextus-web")
-	name := getenv("SEED_CLIENT_NAME", "AlbaTextus Web")
+	name := getenv("SEED_CLIENT_NAME", "ALBATEXTUS Web")
 	secret := getenv("SEED_CLIENT_SECRET", "development-secret-change-me")
 	secretHash, err := security.HashPassword(secret, 12)
 	if err != nil {

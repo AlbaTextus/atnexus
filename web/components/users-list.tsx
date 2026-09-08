@@ -53,7 +53,7 @@ export function UsersList() {
   function clearFilters() { setSearch(""); setQuery(""); setStatus("all"); setRole("all"); setPage(1) }
   function openAction(value: UserAction) { setNotice(""); setAction(value) }
 
-  return <div className="flex flex-col gap-7">
+  return <div className="users-list-page flex flex-1 flex-col gap-7">
     {notice && <Alert role="status"><Check /><AlertDescription>{notice}</AlertDescription></Alert>}
     {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error} <Button variant="link" onClick={() => setReload(value => value + 1)}>重新加载</Button></AlertDescription></Alert>}
     <div className="user-stats grid grid-cols-3 gap-3 sm:gap-4">
@@ -68,7 +68,7 @@ export function UsersList() {
     </div>
     {loading ? <div className="flex flex-col gap-4" aria-label="正在加载用户"><Skeleton className="h-36 w-full" /><Skeleton className="h-36 w-full" /><Skeleton className="h-36 w-full" /></div> : result && <>
       {result.users.length ? <div className="flex flex-col gap-3">{result.users.map(user => <UserDetailsRow key={user.id} user={user} onSaved={message => { setNotice(message); setReload(value => value + 1) }} />)}</div> : <Empty className="min-h-64"><EmptyHeader><EmptyMedia variant="icon"><Users /></EmptyMedia><EmptyTitle>没有找到匹配的用户</EmptyTitle><EmptyDescription>试试其他搜索词，或调整角色与状态筛选。</EmptyDescription></EmptyHeader><EmptyContent><Button variant="outline" onClick={clearFilters}>清除筛选</Button></EmptyContent></Empty>}
-      <nav aria-label="用户列表分页" className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-muted-foreground" aria-live="polite">共 {result.total} 位用户 · 第 {page} / {pages} 页</p><div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(value => value - 1)}><ChevronLeft data-icon="inline-start" />上一页</Button><Button variant="outline" size="sm" disabled={page >= pages} onClick={() => setPage(value => value + 1)}>下一页<ChevronRight data-icon="inline-end" /></Button></div></nav>
+      <nav aria-label="用户列表分页" className="mt-auto flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-muted-foreground" aria-live="polite">共 {result.total} 位用户 · 第 {page} / {pages} 页</p><div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(value => value - 1)}><ChevronLeft data-icon="inline-start" />上一页</Button><Button variant="outline" size="sm" disabled={page >= pages} onClick={() => setPage(value => value + 1)}>下一页<ChevronRight data-icon="inline-end" /></Button></div></nav>
     </>}
     {action && <UserManagementDialog action={action} onClose={() => setAction(null)} onSaved={message => { setAction(null); setNotice(message); setReload(value => value + 1) }} />}
   </div>

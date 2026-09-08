@@ -1,9 +1,9 @@
 export const communityIntroduction = {
   title: "社区介绍",
-  description: "认识 AlbaTextus，从一个账户开始连接社区。",
-  content: `## 欢迎来到 AlbaTextus
+  description: "认识 ALBATEXTUS，从一个账户开始连接社区。",
+  content: `## 欢迎来到 ALBATEXTUS
 
-**AlbaTextus** 围绕社区成员与应用，提供统一的账户、身份和授权入口。我们希望让每个人都能更方便地使用社区服务，也让开发者能够把自己的应用连接进来。
+**ALBATEXTUS** 围绕社区成员与应用，提供统一的账户、身份和授权入口。我们希望让每个人都能更方便地使用社区服务，也让开发者能够把自己的应用连接进来。
 
 > 一个账户，让连接更简单。
 
@@ -13,11 +13,11 @@ export const communityIntroduction = {
 
 | 项目 | 说明 |
 | --- | --- |
-| 社区名称 | AlbaTextus |
+| 社区名称 | ALBATEXTUS |
 | 社区首页 | [返回首页](/) |
 | 账户入口 | [用户中心](/account) |
-| 文档入口 | [AlbaTextus Wiki](/wiki) |
-| 开源项目 | [GitHub · AlbaTextus](https://github.com/AlbaTextus) |
+| 文档入口 | [ALBATEXTUS Wiki](/wiki) |
+| 开源项目 | [GitHub · ALBATEXTUS](https://github.com/AlbaTextus) |
 
 ## 我们希望怎样交流
 
@@ -59,7 +59,7 @@ export const communityLevels = {
   description: "了解账户等级、管理权限，以及应用的访问门槛。",
   content: `## 账户等级是什么
 
-AlbaTextus 的账户等级对应账户在统一登录系统中的**角色与权限**。你可以在 [用户中心](/account) 查看自己的等级。
+ALBATEXTUS 的账户等级对应账户在统一登录系统中的**角色与权限**。你可以在 [用户中心](/account) 查看自己的等级。
 
 目前账户使用四级编号，其中 **2 级预留**。已开放的等级为 **1 级、3 级和 4 级**，分别对应普通用户、管理员与超级管理员。
 

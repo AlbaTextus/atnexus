@@ -89,6 +89,9 @@ func (a *API) startExternalLogin(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
+		if !a.allowMaintenanceLogin(w, r, user) {
+			return
+		}
 		cookie, _ := r.Cookie(a.cfg.SessionCookieName)
 		flow.UserID = &user.ID
 		flow.SessionHash = security.HashToken(cookie.Value)
@@ -109,6 +112,9 @@ func (a *API) startExternalLogin(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) externalLoginError(w http.ResponseWriter, r *http.Request, flow store.ExternalLoginFlow, code string) {
 	path := "/login"
+	if maintenance, err := a.maintenanceState(r.Context()); err != nil || maintenance.Enabled {
+		path = "/maintenance/login"
+	}
 	query := url.Values{"oauth_error": {code}}
 	if flow.UserID != nil {
 		path = "/account/security"
@@ -178,6 +184,10 @@ func (a *API) externalLoginCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if !a.maintenanceIdentityAllowed(r.Context(), identity, flow.UserID) {
+		http.Redirect(w, r, a.cfg.AuthUIURL+"/maintenance", http.StatusSeeOther)
+		return
+	}
 	user, err := st.ResolveExternalIdentity(r.Context(), identity, flow.UserID)
 	if err != nil {
 		message := "login_failed"
@@ -198,11 +208,20 @@ func (a *API) externalLoginCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, a.cfg.AuthUIURL+"/account/security?oauth_linked=1", http.StatusSeeOther)
 		return
 	}
+	maintenance, stateErr := a.maintenanceState(r.Context())
+	if stateErr != nil || (maintenance.Enabled && user.Role != "SUPER_ADMIN") {
+		http.Redirect(w, r, a.cfg.AuthUIURL+"/maintenance", http.StatusSeeOther)
+		return
+	}
 	if err := a.issueSession(w, r.Context(), user); err != nil {
 		a.externalLoginError(w, r, flow, "login_failed")
 		return
 	}
-	http.Redirect(w, r, a.cfg.AuthUIURL+safeLoginReturn(flow.ReturnTo), http.StatusSeeOther)
+	destination := safeLoginReturn(flow.ReturnTo)
+	if user.ProfileSetupRequired {
+		destination = "/welcome?return_to=" + url.QueryEscape(destination)
+	}
+	http.Redirect(w, r, a.cfg.AuthUIURL+destination, http.StatusSeeOther)
 }
 
 func (a *API) externalIdentities(w http.ResponseWriter, r *http.Request) {

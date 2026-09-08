@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 
-type VerificationConfig = { enabled: boolean; site_key: string; test_mode: boolean; action: string }
+type VerificationConfig = { enabled: boolean; site_key: string; test_mode: boolean; action: string; email_enabled: boolean }
 
 export function useAuthVerification({ requireAgreement = false }: { requireAgreement?: boolean } = {}) {
   const [config, setConfig] = useState<VerificationConfig | null>(null)
@@ -139,7 +139,7 @@ export function AuthVerification({ verification, disabled = false }: { verificat
             </div>
             {verification.requireAgreement && <div className="verification-agreement" aria-hidden={!showAgreement || undefined} inert={!showAgreement}>
               <Button ref={agreementButton} type="button" size="sm" className="min-w-28" disabled={disabled || !showAgreement || verification.agreementAccepted} onClick={verification.acceptAgreement}>{verification.agreementAccepted ? "已同意" : "同意并继续"}</Button>
-              <p>同意<Link href="/wiki/privacy" target="_blank" rel="noopener noreferrer" aria-label="隐私政策（新窗口）">隐私政策</Link>与<Link href="/wiki/terms" target="_blank" rel="noopener noreferrer" aria-label="用户协议（新窗口）">用户协议</Link></p>
+              <p><Link href="/wiki/privacy" target="_blank" rel="noopener noreferrer" aria-label="隐私政策（新窗口）">隐私政策</Link>与<Link href="/wiki/terms" target="_blank" rel="noopener noreferrer" aria-label="用户协议（新窗口）">用户协议</Link></p>
             </div>}
           </div>
           {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}<Button type="button" variant="link" disabled={disabled} onClick={verification.reload}><RotateCw data-icon="inline-start" />重新验证</Button></AlertDescription></Alert>}

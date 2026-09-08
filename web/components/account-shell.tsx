@@ -9,14 +9,16 @@ import { LayoutGroup, motion, useAnimationControls, useReducedMotion } from "fra
 import { AlertCircle, House, LayoutGrid, LogOut, Settings2, ShieldCheck, ShieldX, UserRound, Users, type LucideIcon } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import { isAdminRole, managementError } from "@/lib/applications"
+import { profileSetupPath } from "@/lib/profile-setup"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { HomeBrand } from "@/components/home-brand"
+import { MaintenanceControl } from "@/components/maintenance-control"
 
-export type AccountUser = { id: string; numeric_id: number; bio?: string; email: string; display_name?: string | null; role: string; level: 1 | 3 | 4; created_at?: string; has_password?: boolean; email_is_alias?: boolean; avatar_source?: string; avatar_url?: string; custom_avatar_url?: string }
+export type AccountUser = { id: string; numeric_id: number; bio?: string; email: string; email_verified?: boolean; profile_setup_required?: boolean; display_name?: string | null; role: string; level: 1 | 3 | 4; created_at?: string; has_password?: boolean; email_is_alias?: boolean; avatar_source?: string; avatar_url?: string; custom_avatar_url?: string }
 const AccountContext = createContext<{ user: AccountUser; updateUser: (user: AccountUser) => void } | null>(null)
 function useAccountContext() {
   const context = useContext(AccountContext)
@@ -99,7 +101,7 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
   const title = area === "admin" && !denied ? "管理后台" : "用户中心"
   const areaLink: NavigationItem = area === "admin"
     ? { href: accountPath, title: "用户中心", icon: House }
-    : { href: "/admin/applications", title: "管理后台", icon: Settings2 }
+    : { href: "/admin/users", title: "管理后台", icon: Settings2 }
 
   useEffect(() => {
     if (!user || denied) return
@@ -117,7 +119,11 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
 
   useEffect(() => {
     let cancelled = false
-    api<AccountUser>("/api/v1/me").then(value => { if (!cancelled) setUser(value) }).catch(reason => {
+    api<AccountUser>("/api/v1/me").then(value => {
+      if (cancelled) return
+      if (value.profile_setup_required) { window.location.replace(profileSetupPath(window.location.pathname + window.location.search)); return }
+      setUser(value)
+    }).catch(reason => {
       if (cancelled) return
       if (reason instanceof ApiError && reason.status === 401) {
         window.location.href = `/login?return_to=${encodeURIComponent(window.location.pathname)}`
@@ -144,7 +150,7 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
             {admin && <CapsuleNavItem key={areaLink.href} item={areaLink} reducedMotion={reducedMotion} />}
           </nav>
         </LayoutGroup>
-        <div className="center-userbar"><Button variant="ghost" size="icon" aria-label="退出登录" disabled={!user || leaving} onClick={logout}><LogOut /></Button></div>
+        <div className="center-userbar">{user?.role === "SUPER_ADMIN" && <MaintenanceControl />}<Button variant="ghost" size="icon" aria-label="退出登录" disabled={!user || leaving} onClick={logout}><LogOut /></Button></div>
         </div>
       </header>
       <div className="center-workspace">

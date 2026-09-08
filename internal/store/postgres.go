@@ -42,11 +42,11 @@ func isUniqueViolation(err error) bool {
 const userColumns = `users.id,users.email,users.password_hash,users.display_name,users.role,users.is_active,users.created_at,
  users.avatar_source,CASE WHEN users.avatar_source='custom' THEN users.custom_avatar_url ELSE COALESCE((SELECT avatar_url FROM external_identities
  WHERE user_id=users.id AND avatar_url<>'' AND (users.avatar_source='auto' OR provider=users.avatar_source)
- ORDER BY created_at,id LIMIT 1),'') END,users.custom_avatar_url,users.numeric_id,users.bio`
+ ORDER BY created_at,id LIMIT 1),'') END,users.custom_avatar_url,users.numeric_id,users.bio,users.email_verified,users.profile_setup_required`
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role, &u.IsActive, &u.CreatedAt, &u.AvatarSource, &u.AvatarURL, &u.CustomAvatarURL, &u.NumericID, &u.Bio)
+	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role, &u.IsActive, &u.CreatedAt, &u.AvatarSource, &u.AvatarURL, &u.CustomAvatarURL, &u.NumericID, &u.Bio, &u.EmailVerified, &u.ProfileSetupRequired)
 	return u, err
 }
 

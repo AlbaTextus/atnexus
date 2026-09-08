@@ -33,6 +33,7 @@ type Config struct {
 	Turnstile                 Turnstile
 	ImgbedURL                 string
 	ImgbedAPIToken            string
+	SMTP                      SMTP
 }
 
 func Load() (Config, error) {
@@ -49,7 +50,7 @@ func Load() (Config, error) {
 		BCryptCost:                getInt("BCRYPT_COST", 12),
 		SessionCookieName:         getenv("SESSION_COOKIE_NAME", "albatextus_session"),
 		WebAuthnRPID:              getenv("WEBAUTHN_RP_ID", "localhost"),
-		WebAuthnRPName:            getenv("WEBAUTHN_RP_NAME", "AlbaTextus"),
+		WebAuthnRPName:            getenv("WEBAUTHN_RP_NAME", "ALBATEXTUS"),
 		WebAuthnRPOrigins:         getList("WEBAUTHN_RP_ORIGINS", "http://localhost:3000"),
 		PasskeyChallengeTTL:       getDuration("PASSKEY_CHALLENGE_TTL", 5*time.Minute),
 		ClientSecretEncryptionKey: strings.TrimSpace(os.Getenv("CLIENT_SECRET_ENCRYPTION_KEY")),
@@ -58,6 +59,13 @@ func Load() (Config, error) {
 		ImgbedAPIToken:            strings.TrimSpace(os.Getenv("IMGBED_API_TOKEN")),
 	}
 	var err error
+	if strings.EqualFold(c.WebAuthnRPName, "ALBATEXTUS") {
+		c.WebAuthnRPName = "ALBATEXTUS"
+	}
+	c.SMTP, err = loadSMTP()
+	if err != nil {
+		return Config{}, err
+	}
 	if err := validateImgbed(c); err != nil {
 		return Config{}, err
 	}

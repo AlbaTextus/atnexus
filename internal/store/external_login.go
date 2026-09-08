@@ -127,7 +127,7 @@ func (p *Postgres) ResolveExternalIdentity(ctx context.Context, identity Externa
 			return User{}, ErrEmailLinkRequired
 		}
 		name := identity.DisplayName
-		user, err = scanUser(tx.QueryRow(ctx, `INSERT INTO users (id,email,password_hash,display_name,role,is_active,created_at,updated_at) VALUES ($1,$2,'',$3,'USER',true,NOW(),NOW()) RETURNING `+userColumns, uuid.New(), identity.Email, &name))
+		user, err = scanUser(tx.QueryRow(ctx, `INSERT INTO users (id,email,password_hash,display_name,role,is_active,created_at,updated_at,email_verified,profile_setup_required) VALUES ($1,$2,'',$3,'USER',true,NOW(),NOW(),$4,true) RETURNING `+userColumns, uuid.New(), identity.Email, &name, identity.EmailVerified && !identity.AccountAlias))
 		if isUniqueViolation(err) {
 			return User{}, ErrEmailLinkRequired
 		}

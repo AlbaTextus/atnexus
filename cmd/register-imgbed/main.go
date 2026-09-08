@@ -59,7 +59,7 @@ func run(appURL, backendURL, output string) error {
 			return err
 		}
 		app, err = st.CreateApplication(ctx, store.Application{
-			ID: id, Name: "AlbaTextus 图床", HomepageURL: appURL,
+			ID: id, Name: "ALBATEXTUS 图床", HomepageURL: appURL,
 			Description: "用户头像、背景图、小说封面、插图及论坛图片托管",
 			IconURL:     appURL + "/static/media/logo.png", MinimumRole: "USER", IsActive: true,
 			RedirectURIs:  []string{appURL + "/api/auth/oauth/callback"},
@@ -71,7 +71,7 @@ func run(appURL, backendURL, output string) error {
 	} else if err != nil {
 		return err
 	} else {
-		if app.IsPublic || app.Name != "AlbaTextus 图床" {
+		if app.IsPublic || app.Name != "ALBATEXTUS 图床" {
 			return errors.New("client ID already belongs to a different application")
 		}
 		encrypted, err := st.ApplicationSecret(ctx, id, uuid.Nil, true)

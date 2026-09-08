@@ -63,7 +63,7 @@ export function LinkedAccounts() {
   async function unlink() {
     if (!unlinking || busy) return
     setBusy(unlinking.id); setError(""); setNotice("")
-    try { await api(`/api/v1/account/identities/${unlinking.id}`, { method: "DELETE" }); setUnlinking(null); setNotice("第三方账号已解绑。"); await load(); updateUser(await api<AccountUser>("/api/v1/me")) }
+    try { await api(`/api/v1/account/identities/${unlinking.id}`, { method: "DELETE" }); setUnlinking(null); setNotice("第三方账号已解绑。"); await load(); updateUser(await api<AccountUser>("/api/v1/user")) }
     catch (reason) { setError(managementError(reason)); setUnlinking(null) } finally { setBusy("") }
   }
 

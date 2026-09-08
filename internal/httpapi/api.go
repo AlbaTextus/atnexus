@@ -73,7 +73,7 @@ func (a *API) Router() http.Handler {
 	r.Post("/api/v1/account/email", a.confirmAccountEmail)
 	r.Post("/api/v1/sessions", a.login)
 	r.Delete("/api/v1/sessions/current", a.logout)
-	r.Get("/api/v1/me", a.me)
+	r.Get("/api/v1/user", a.me)
 	r.Get("/api/v1/admin/users", a.listUsers)
 	r.Post("/api/v1/admin/users", a.createManagedUser)
 	r.Patch("/api/v1/admin/users/{id}", a.updateManagedUser)
@@ -179,7 +179,7 @@ func (a *API) health(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) metadata(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{
-		"userinfo_endpoint": a.cfg.IssuerURL + "/api/v1/me",
+		"userinfo_endpoint": a.cfg.IssuerURL + "/api/v1/user",
 		"issuer":            a.cfg.IssuerURL, "authorization_endpoint": a.cfg.IssuerURL + "/oauth/authorize", "token_endpoint": a.cfg.IssuerURL + "/oauth/token", "revocation_endpoint": a.cfg.IssuerURL + "/oauth/revoke", "introspection_endpoint": a.cfg.IssuerURL + "/oauth/introspect",
 		"response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code", "refresh_token", "client_credentials"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
 	})
@@ -237,7 +237,7 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]string{"error": "server_error"})
 		return
 	}
-	w.Header().Set("Location", "/api/v1/me")
+	w.Header().Set("Location", "/api/v1/user")
 	writeJSON(w, 201, userView(u))
 }
 

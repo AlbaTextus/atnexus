@@ -22,7 +22,7 @@ ALBATEXTUS 是面向社区应用的账户中心与 OAuth 2.0 授权服务。用�
 | 授权确认 | 展示应用与申请权限，用户明确允许后才签发授权码 |
 | 管理后台 | 应用接入、客户端密钥、最低访问角色、用户管理、协议编辑 |
 
-本项目提供 OAuth 2.0 服务，**不签发 OpenID Connect ID Token**。访问令牌是不透明字符串；应用通过 `/api/v1/me` 获取用户身份，不应将令牌当作 JWT 解码。
+本项目提供 OAuth 2.0 服务，**不签发 OpenID Connect ID Token**。访问令牌是不透明字符串；应用通过 `/api/v1/user` 获取用户身份，不应将令牌当作 JWT 解码。
 
 ## 邮箱认证（SMTP）
 
@@ -52,7 +52,7 @@ SMTP_PASS=your-smtp-auth-code
 | `POST /api/v1/account/email/code` | `email`，要求登录及账号中心请求头 |
 | `POST /api/v1/account/email` | `email`、`challenge_id`、`code`、`current_password`（有密码时必填） |
 
-`/api/v1/me` 返回 `email_verified`；OAuth 应用仅在获准 `email` scope 后收到该字段。
+`/api/v1/user` 返回 `email_verified`；OAuth 应用仅在获准 `email` scope 后收到该字段。
 
 ## 快速开始
 
@@ -267,7 +267,7 @@ curl http://localhost:3000/oauth/token \
   --data-urlencode 'redirect_uri=YOUR_REGISTERED_CALLBACK' \
   --data-urlencode 'code_verifier=YOUR_ORIGINAL_VERIFIER'
 
-curl http://localhost:3000/api/v1/me \
+curl http://localhost:3000/api/v1/user \
   --header 'Authorization: Bearer YOUR_ACCESS_TOKEN'
 ```
 
@@ -373,7 +373,7 @@ Go 服务可用 `go build -o release/oauth ./cmd/server` 构建，Windows 可将
 | POST | `/api/v1/users` | 注册 |
 | POST | `/api/v1/sessions` | 密码登录 |
 | DELETE | `/api/v1/sessions/current` | 退出当前会话 |
-| GET | `/api/v1/me` | 当前账户或 Bearer 用户身份 |
+| GET | `/api/v1/user` | 当前账户或 Bearer 用户身份 |
 | POST | `/api/v1/auth/providers/{provider}/start` | 开始第三方登录或绑定 |
 | GET | `/api/v1/auth/providers/{provider}/callback` | 第三方回调 |
 | GET / DELETE | `/api/v1/account/identities` / `/api/v1/account/identities/{provider}` | 列出或解绑第三方账号 |
@@ -419,7 +419,7 @@ Go 服务可用 `go build -o release/oauth ./cmd/server` 构建，Windows 可将
 
 ### 已知限制：维护期间的 OAuth 授权
 
-2026-09-09 隔离数据库联调确认：超级管理员可进入授权确认页并获取授权码，但接入应用通过服务器请求 `/oauth/token` 换取或刷新令牌时，没有浏览器会话 Cookie，仍被维护中间件拦截并返回 `503 maintenance`。仅携带 Bearer 令牌的 `/api/v1/me` 请求也会被拦截。因此，维护期间尚不能完成超级管理员的完整应用登录流程；关闭维护后流程正常。后续需按授权码或令牌所属用户校验维护访问权限，同时保留客户端认证与 PKCE 校验。本次提交记录该限制，尚未修复。
+2026-09-09 隔离数据库联调确认：超级管理员可进入授权确认页并获取授权码，但接入应用通过服务器请求 `/oauth/token` 换取或刷新令牌时，没有浏览器会话 Cookie，仍被维护中间件拦截并返回 `503 maintenance`。仅携带 Bearer 令牌的 `/api/v1/user` 请求也会被拦截。因此，维护期间尚不能完成超级管理员的完整应用登录流程；关闭维护后流程正常。后续需按授权码或令牌所属用户校验维护访问权限，同时保留客户端认证与 PKCE 校验。本次提交记录该限制，尚未修复。
 
 ## 开发
 

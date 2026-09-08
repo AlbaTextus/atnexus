@@ -120,7 +120,7 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
 
   useEffect(() => {
     let cancelled = false
-    api<AccountUser>("/api/v1/me").then(value => {
+    api<AccountUser>("/api/v1/user").then(value => {
       if (cancelled) return
       if (value.profile_setup_required) { window.location.replace(profileSetupPath(window.location.pathname + window.location.search)); return }
       setUser(value)

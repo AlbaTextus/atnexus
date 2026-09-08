@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { RefreshCw, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { HomeBrand } from "@/components/home-brand"
 import { Spinner } from "@/components/ui/spinner"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 
@@ -30,10 +31,11 @@ export function MaintenanceScreen({ unavailable = false }: { unavailable?: boole
 
   return <div className="home-shell home-credit-inspired maintenance-shell">
     <a className="home-skip" href="#maintenance-content">跳转到主要内容</a>
-    <header className="maintenance-header home-container">
-      <span className="maintenance-wordmark">ALBATEXTUS</span>
-      <span className="maintenance-header-note">每一次连接，都值得等待。</span>
-      <ThemeToggle />
+    <header className="home-header maintenance-header">
+      <div className="home-container home-header-inner">
+        <HomeBrand href="/" />
+        <div className="home-header-actions"><span className="maintenance-header-note">每一次连接，都值得等待。</span><ThemeToggle /></div>
+      </div>
     </header>
     <main id="maintenance-content" tabIndex={-1} className="maintenance-main">
       <Empty className="maintenance-empty">

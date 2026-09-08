@@ -22,7 +22,7 @@ function RedirectFeedback() {
       if (message) feedback.success(message)
       if (takeExternalLogin()) {
         // An OAuth round trip alone is not proof of a successful login.
-        void api("/api/v1/me").then(() => { if (active) feedback.success("登录成功") }).catch(() => {})
+        void api("/api/v1/user").then(() => { if (active) feedback.success("登录成功") }).catch(() => {})
       }
     }, 0)
     return () => { active = false; window.clearTimeout(timer) }

@@ -3,10 +3,11 @@
 import { useFeedback, redirectWithFeedback } from "@/lib/feedback"
 
 import Link from "next/link"
+import { Link as TransitionLink } from "next-view-transitions"
 import { usePathname } from "next/navigation"
-import { createContext, useContext, useEffect, useId, useState, type ReactNode } from "react"
-import { LayoutGroup, motion, useAnimationControls, useReducedMotion } from "framer-motion"
-import { AlertCircle, House, LayoutGrid, LogOut, Settings2, ShieldCheck, ShieldX, UserRound, Users, type LucideIcon } from "lucide-react"
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { motion, useAnimationControls, useReducedMotion } from "framer-motion"
+import { AlertCircle, House, LayoutGrid, LogOut, Settings2, ShieldCheck, ShieldX, UserRound, Users } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import { isAdminRole, managementError } from "@/lib/applications"
 import { profileSetupPath } from "@/lib/profile-setup"
@@ -15,7 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
-import { HomeBrand } from "@/components/home-brand"
+import { SiteHeader, navigationTransition, type NavigationItem } from "@/components/site-header"
 import { MaintenanceControl } from "@/components/maintenance-control"
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -29,9 +30,6 @@ function useAccountContext() {
 export function useAccountUser() { return useAccountContext().user }
 export function useUpdateAccountUser() { return useAccountContext().updateUser }
 
-type NavigationItem = { href: string; title: string; icon: LucideIcon }
-const MotionLink = motion.create(Link)
-const navigationTransition = { duration: 0.32, ease: [0.22, 1, 0.36, 1] } as const
 const userNavigation: NavigationItem[] = [
   { href: "/account", title: "用户中心", icon: House },
   { href: "/account/profile", title: "个人资料", icon: UserRound },
@@ -42,58 +40,13 @@ const adminNavigation: NavigationItem[] = [
   { href: "/admin/applications", title: "应用接入", icon: LayoutGrid },
 ]
 
-function CapsuleNavItem({ item, active = false, reducedMotion }: { item: NavigationItem; active?: boolean; reducedMotion: boolean }) {
-  const transition = reducedMotion ? { duration: 0 } : navigationTransition
-  return (
-    <MotionLink
-      href={item.href}
-      prefetch
-      className={cn("center-nav-link", active && "is-active")}
-      aria-label={item.title}
-      aria-current={active ? "page" : undefined}
-      title={active ? undefined : item.title}
-      transition={transition}
-      whileHover={reducedMotion ? undefined : { y: -1 }}
-      whileTap={reducedMotion ? undefined : { scale: 0.97 }}
-    >
-      {active && <motion.span className="center-nav-highlight" layoutId={reducedMotion ? undefined : "active-navigation"} transition={transition} aria-hidden="true" />}
-      <item.icon className="center-nav-icon" strokeWidth={1.8} aria-hidden="true" />
-      <motion.span
-        className="center-nav-label"
-        aria-hidden="true"
-        initial={false}
-        animate={{ width: active ? "auto" : 0, opacity: active ? 1 : 0 }}
-        transition={transition}
-      ><span>{item.title}</span></motion.span>
-    </MotionLink>
-  )
-}
-
 export function AccountShell({ children, area = "account", initialUser }: { children: ReactNode; area?: "account" | "admin"; initialUser?: AccountUser }) {
   const pathname = usePathname()
-  const navigationId = useId()
   const reducedMotion = Boolean(useReducedMotion())
   const pageAnimation = useAnimationControls()
   const [user, setUser] = useState<AccountUser | null>(initialUser || null)
   const [error, setError] = useFeedback("error")
   const [leaving, setLeaving] = useState(false)
-  const [headerCollapsed, setHeaderCollapsed] = useState(false)
-  useEffect(() => {
-    let frame = 0
-    function update() {
-      frame = 0
-      setHeaderCollapsed(current => window.scrollY > 80 ? true : window.scrollY < 20 ? false : current)
-    }
-    function schedule() { if (!frame) frame = window.requestAnimationFrame(update) }
-    update()
-    window.addEventListener("scroll", schedule, { passive: true })
-    window.addEventListener("resize", schedule)
-    return () => {
-      window.removeEventListener("scroll", schedule)
-      window.removeEventListener("resize", schedule)
-      if (frame) window.cancelAnimationFrame(frame)
-    }
-  }, [pathname])
   const admin = Boolean(user && isAdminRole(user.role))
   const denied = area === "admin" && Boolean(user) && !admin
   const accountPath = user ? `/account/${user.numeric_id}` : "/account"
@@ -142,18 +95,9 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
   return (
     <div className={cn("center-shell", pathname === accountPath && "center-profile-home")}>
       <a className="center-skip" href="#center-content">跳转到主要内容</a>
-      <header className="center-header" data-collapsed={headerCollapsed}>
-        <div className="center-header-inner">
-        <HomeBrand href="/" collapsed={headerCollapsed} />
-        <LayoutGroup id={navigationId}>
-          <nav aria-label={title + "导航"} className="center-nav">
-            {navigation.map(item => <CapsuleNavItem key={item.href} item={item} active={active?.href === item.href} reducedMotion={reducedMotion} />)}
-            {admin && <CapsuleNavItem key={areaLink.href} item={areaLink} reducedMotion={reducedMotion} />}
-          </nav>
-        </LayoutGroup>
-        <div className="center-userbar"><ThemeToggle />{user?.role === "SUPER_ADMIN" && <MaintenanceControl />}<Button variant="ghost" size="icon" aria-label="退出登录" disabled={!user || leaving} onClick={logout}><LogOut /></Button></div>
-        </div>
-      </header>
+      <SiteHeader items={admin ? [...navigation, areaLink] : navigation} activeHref={active?.href}
+        navigationLabel={title + "导航"} routeKey={pathname} LinkComponent={Link} BrandLinkComponent={TransitionLink}
+        actions={<><ThemeToggle />{user?.role === "SUPER_ADMIN" && <MaintenanceControl />}<Button variant="ghost" size="icon" aria-label="退出登录" disabled={!user || leaving} onClick={logout}><LogOut /></Button></>} />
       <div className="center-workspace">
         <main id="center-content" tabIndex={-1} className="center-content">
           {error && <Alert variant="destructive" className="mb-6"><AlertCircle /><AlertDescription>{error} <Button variant="link" onClick={() => window.location.reload()}>重新加载</Button></AlertDescription></Alert>}

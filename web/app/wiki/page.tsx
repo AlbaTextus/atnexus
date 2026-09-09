@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { WikiDocument } from "@/components/wiki-document"
 
-export const metadata: Metadata = { title: "欢迎来到 ALBATEXTUS · Wiki" }
+export const metadata: Metadata = { title: "ALBATEXTUS" }
 const content = `## 欢迎 👋
 
 这里是 **ALBATEXTUS Wiki**，记录账户使用方式、应用接入说明，以及与你相关的政策和协议。

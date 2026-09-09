@@ -108,7 +108,7 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = part.Write(data)
 	_ = form.Close()
-	target := a.cfg.ImgbedURL + "/api/categories/user/avatars/upload?returnFormat=full&uploadFolder=" + user.ID.String()
+	target := a.cfg.ImgbedURL + "/api/categories/user/avatars/upload?returnFormat=full&entityId=" + user.ID.String()
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, target, &body)
 	if err != nil {
 		a.applicationError(w, err)

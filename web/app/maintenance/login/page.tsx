@@ -5,7 +5,7 @@ import { AuthLayout } from "@/components/auth-layout"
 import { LoginForm } from "@/components/login-form"
 import { readMaintenance } from "@/lib/maintenance"
 
-export const metadata: Metadata = { title: "超级管理员登录 · ALBATEXTUS", robots: { index: false, follow: false } }
+export const metadata: Metadata = { title: "ALBATEXTUS", robots: { index: false, follow: false } }
 
 export default async function MaintenanceLoginPage({ searchParams }: { searchParams: Promise<{ oauth_error?: string }> }) {
   const params = await searchParams

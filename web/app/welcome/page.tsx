@@ -5,7 +5,7 @@ import { ProfileSetupForm } from "@/components/profile-setup-form"
 import { requireAccount } from "@/lib/account-session"
 import { afterProfileSetup, profileSetupPath } from "@/lib/profile-setup"
 
-export const metadata: Metadata = { title: "设置用户名 · ALBATEXTUS", robots: { index: false, follow: false } }
+export const metadata: Metadata = { title: "ALBATEXTUS", robots: { index: false, follow: false } }
 
 export default async function WelcomePage({ searchParams }: { searchParams: Promise<{ return_to?: string }> }) {
   const { return_to } = await searchParams

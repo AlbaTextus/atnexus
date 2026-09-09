@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
+import { BookOpen, UserRound } from "lucide-react"
 import { Layout, Navbar } from "nextra-theme-docs"
 import { SiteFooter } from "@/components/site-footer"
 import { normalizePageMap } from "nextra/page-map"
@@ -31,7 +32,7 @@ const pageMap = normalizePageMap([{ data: {
 export default function WikiLayout({ children }: { children: ReactNode }) {
   return <div className="wiki-nextra">
     <Layout pageMap={pageMap}
-      navbar={<WikiHeader><Navbar logoLink={false} logo={<WikiBrand />} className="home-header-inner wiki-navbar-inner"><ThemeToggle /><Link href="/wiki" className="wiki-account-link">Wiki</Link><Link href="/account" className="wiki-account-link">用户中心 ↗</Link></Navbar></WikiHeader>}
+      navbar={<WikiHeader><Navbar logoLink={false} logo={<WikiBrand />} className="home-header-inner wiki-navbar-inner"><ThemeToggle /><Link href="/wiki" className="wiki-account-link size-9 justify-center" aria-label="Wiki" title="Wiki"><BookOpen size={20} aria-hidden="true" /></Link><Link href="/account" className="wiki-account-link size-9 justify-center" aria-label="用户中心" title="用户中心"><UserRound size={20} aria-hidden="true" /></Link></Navbar></WikiHeader>}
       search={<WikiSearch />} footer={<SiteFooter />}
       darkMode={false} nextThemes={{ attribute: "class", storageKey: "albatextus-color-mode", defaultTheme: "light" }}
       editLink={null} feedback={{ content: null }}

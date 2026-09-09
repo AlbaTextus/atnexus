@@ -34,7 +34,7 @@ export function MaintenanceScreen({ unavailable = false }: { unavailable?: boole
     <header className="home-header maintenance-header">
       <div className="home-container home-header-inner">
         <HomeBrand href="/" />
-        <div className="home-header-actions"><span className="maintenance-header-note">每一次连接，都值得等待。</span><ThemeToggle /></div>
+        <div className="home-header-actions"><ThemeToggle /></div>
       </div>
     </header>
     <main id="maintenance-content" tabIndex={-1} className="maintenance-main">
@@ -60,7 +60,7 @@ export function MaintenanceScreen({ unavailable = false }: { unavailable?: boole
       </Empty>
     </main>
     <footer className="maintenance-footer home-container">
-      <span>© {new Date().getFullYear()} ALBATEXTUS</span>
+      <span>© 2026 ALBATEXTUS</span>
     </footer>
   </div>
 }

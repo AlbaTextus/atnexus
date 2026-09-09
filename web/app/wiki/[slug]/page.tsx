@@ -3,13 +3,10 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { WikiDocument } from "@/components/wiki-document"
 import { authHref } from "@/components/auth-footer"
-import { legalNames, type LegalDocument } from "@/lib/legal"
+import type { LegalDocument } from "@/lib/legal"
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ return_to?: string; from?: string }> }
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug } = await params
-  return { title: `${slug === "privacy" || slug === "terms" ? legalNames[slug] : "文档"} · ALBATEXTUS Wiki` }
-}
+export const metadata: Metadata = { title: "ALBATEXTUS" }
 export default async function WikiDocumentPage({ params, searchParams }: Props) {
   const { slug } = await params
   if (slug !== "privacy" && slug !== "terms") notFound()

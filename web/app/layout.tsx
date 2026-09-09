@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "ALBATEXTUS 账户",
+  title: "ALBATEXTUS",
   description: "ALBATEXTUS OAuth 账户中心",
 }
 

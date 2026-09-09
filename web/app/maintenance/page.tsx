@@ -4,7 +4,7 @@ import { redirect } from "next/navigation"
 import { readMaintenance } from "@/lib/maintenance"
 import { MaintenanceScreen } from "@/components/maintenance-screen"
 
-export const metadata: Metadata = { title: "维护中 · ALBATEXTUS", robots: { index: false, follow: false } }
+export const metadata: Metadata = { title: "ALBATEXTUS", robots: { index: false, follow: false } }
 export const dynamic = "force-dynamic"
 
 export default async function MaintenancePage() {

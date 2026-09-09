@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/AlbaTextus/oauth/internal/turnstile"
+	"github.com/AlbaTextus/connect/internal/turnstile"
 )
 
 func (a *API) authVerification(w http.ResponseWriter, r *http.Request) {

@@ -11,7 +11,7 @@ import { HomeBrand } from "@/components/home-brand"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { AccountEntryLink } from "@/components/account-entry-link"
 
-const repository = "https://github.com/AlbaTextus/oauth"
+const repository = "https://github.com/AlbaTextus/connect"
 
 
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)"

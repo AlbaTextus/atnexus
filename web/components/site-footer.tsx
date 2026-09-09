@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { Separator } from "@/components/ui/separator"
 
-const repository = "https://github.com/AlbaTextus/oauth"
+const repository = "https://github.com/AlbaTextus/connect"
 
 export function SiteFooter() {
   return <footer className="home-footer" id="community">

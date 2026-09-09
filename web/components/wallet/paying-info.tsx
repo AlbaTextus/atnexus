@@ -11,7 +11,7 @@ export function PayingInfo({ order, expired }: { order: PaymentOrder; expired: b
       <div className="checkout-brand-row"><span className="account-member-brand">ALBATEXTUS</span><Fingerprint className="size-7" aria-hidden="true" /></div>
       <div className="checkout-amount-block">
         <p className="checkout-eyebrow">{status === "paid" ? "已支付积分" : "订单金额"}</p>
-        <p className="checkout-amount"><span>{creditAmount(order.amount)}</span><span className="checkout-unit">积分</span></p>
+        <p className="checkout-amount"><span>{creditAmount(order.amount)}</span></p>
         <Badge variant="outline" className="checkout-status"><StatusIcon aria-hidden="true" />{orderStatus[status]}</Badge>
       </div>
     </CardHeader>

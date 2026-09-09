@@ -74,7 +74,6 @@ export function PaymentCheckout({ orderId }: { orderId: string }) {
           {pending && <div className="checkout-payer">
             <UserAvatar src={user.avatar_url} name={payerName} className="size-10 shrink-0" />
             <div className="checkout-payer-identity"><span className="checkout-eyebrow">付款账户</span><span className="checkout-payer-name">{payerName}</span></div>
-            <div className="checkout-balance"><span className="checkout-eyebrow">可用积分</span><span>{creditAmount(wallet.balance)}</span></div>
           </div>}
           {error && <Alert variant="destructive"><AlertCircle /><AlertDescription role="alert">{error}</AlertDescription></Alert>}
           {order.status === "paid" ? <div className="checkout-state checkout-complete">
@@ -84,8 +83,6 @@ export function PaymentCheckout({ orderId }: { orderId: string }) {
             <LockKeyhole className="size-6" aria-hidden="true" /><h2>{expired ? "订单已过期" : orderStatus[order.status]}</h2><p role="status">此订单已关闭，无法继续支付。</p>
             <Button nativeButton={false} render={<Link href={walletHref} />} variant="outline" size="lg" className="w-full">返回钱包</Button>
           </div> : <form onSubmit={pay} aria-busy={busy} className="checkout-state">
-            <h2>确认支付</h2>
-            <p>请核对应用、商品和金额，确认后将从当前账户扣除积分。</p>
             <Button type="submit" size="lg" disabled={busy || loading} className="w-full">{busy ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}{busy ? "正在支付…" : `确认支付 ${creditAmount(order.amount)} 积分`}</Button>
           </form>}
         </CardContent>

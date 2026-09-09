@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/connect/internal/store"
 )
 
 func runWalletSettlements(ctx context.Context, st *store.Postgres, logger *slog.Logger) {

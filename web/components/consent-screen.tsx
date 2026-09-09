@@ -8,12 +8,11 @@ import { AlertCircle, ArrowRight, ChevronDown, Fingerprint, Globe, KeyRound, Mai
 import { api, ApiError } from "@/lib/api"
 import { roleNames } from "@/lib/applications"
 import { AuthLayout } from "@/components/auth-layout"
-import { ApplicationIcon } from "@/components/application-icon"
 import { UserAvatar } from "@/components/user-avatar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -93,37 +92,54 @@ export function ConsentScreen({ requestToken }: { requestToken: string }) {
   ] : []
 
   return <AuthLayout appearance="white">
-    <div className="consent-screen flex w-full max-w-xl flex-col gap-5">
-      <Link href="/account" className="consent-brand">ALBATEXTUS</Link>
-      {loading ? <div className="flex flex-col gap-5" role="status" aria-label="正在加载应用授权"><Skeleton className="mx-auto size-20" /><Skeleton className="mx-auto h-8 w-48" /><Skeleton className="h-24 w-full" /><Skeleton className="h-72 w-full" /></div> : <>
-        <header className="consent-heading">
-          {consent ? <ApplicationIcon url={consent.application.icon_url} name={consent.application.name} /> : <ShieldCheck className="mx-auto size-12 text-muted-foreground" aria-hidden="true" />}
-          <h1>{consent?.application.name || "应用授权"}</h1>
-        </header>
-        {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}</AlertDescription></Alert>}
-        {consent && <>
-          <Card><CardHeader className="flex flex-row items-center gap-3"><UserAvatar src={consent.user.avatar_url} name={userName} className="size-11" /><div className="min-w-0"><CardTitle>{userName}</CardTitle><CardDescription className="break-all">{consent.user.email_is_alias ? "以当前第三方账户的身份授权" : consent.user.email}</CardDescription></div></CardHeader></Card>
-          <Card><CardHeader className="justify-items-center text-center"><CardTitle>应用信息</CardTitle><CardDescription>{consent.application.description || "此应用已接入 ALBATEXTUS 统一登录。"}</CardDescription></CardHeader><CardContent className="flex flex-col gap-5">
-            <div className="flex flex-col gap-3 text-center text-sm">
-              {consent.application.homepage_url && <div className="flex min-w-0 items-start justify-center gap-2"><Globe className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" /><a href={consent.application.homepage_url} target="_blank" rel="noopener noreferrer" className="break-all text-link underline-offset-4 hover:underline">{consent.application.homepage_url}</a></div>}
-              <div className="flex flex-wrap items-center justify-center gap-2"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" /><span className="text-muted-foreground">最低访问身份</span><Badge variant="secondary">{roleNames[consent.application.minimum_role] || consent.application.minimum_role}</Badge></div>
+    <div className="consent-screen">
+      <Card className="consent-card account-member-card" aria-busy={loading || Boolean(busy)}>
+        <CardHeader className="consent-card-heading">
+          <div className="account-member-heading"><Link href="/account" className="account-member-brand">ALBATEXTUS</Link><Fingerprint className="size-7" aria-hidden="true" /></div>
+        </CardHeader>
+        {loading ? <CardContent className="consent-loading" role="status" aria-label="正在加载应用授权"><Skeleton className="h-16 w-full" /><Skeleton className="h-20 w-full" /><Skeleton className="h-52 w-full" /><Skeleton className="h-12 w-full" /></CardContent> : <>
+          <CardContent className="consent-card-body">
+            {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}</AlertDescription></Alert>}
+            {consent && <>
+              <div className="consent-application">
+                <div className="min-w-0"><h2>{consent.application.name}</h2><p>希望使用你的 ALBATEXTUS 账户登录</p></div>
+              </div>
+              <div className="consent-identity">
+                <UserAvatar src={consent.user.avatar_url} name={userName} className="size-11 shrink-0" />
+                <div className="min-w-0"><p className="consent-identity-label">当前授权身份</p><p className="consent-identity-name">{userName}</p><p className="consent-identity-email">{consent.user.email_is_alias ? "第三方登录账户" : consent.user.email}</p></div>
+                <ShieldCheck className="consent-identity-seal" aria-hidden="true" />
+              </div>
+              <section className="consent-access" aria-labelledby="consent-access-title">
+                <Collapsible>
+                  <h2 id="consent-access-title"><CollapsibleTrigger render={<Button variant="ghost" className="consent-access-trigger group w-full justify-between" />}><span>此应用将获得以下权限</span><span className="consent-access-count">{String(permissions.length).padStart(2, "0")} 项<ChevronDown data-icon="inline-end" className="transition-transform duration-300 ease-out group-aria-expanded:rotate-180" /></span></CollapsibleTrigger></h2>
+                  <CollapsibleContent className="consent-permissions-panel">
+                    <div className="consent-permissions-body pt-4"><ul className="consent-permission-list">{permissions.map(permission => <li key={permission.id}><span className="consent-permission-icon"><permission.icon aria-hidden="true" /></span><div className="min-w-0"><h3>{permission.title}</h3><p>{permission.description}</p></div></li>)}</ul></div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </section>
+              <Separator />
+              <Collapsible className="consent-details">
+                <h2><CollapsibleTrigger render={<Button variant="ghost" className="group w-full justify-between" />}><span>关于此应用</span><ChevronDown data-icon="inline-end" className="transition-transform duration-300 ease-out group-aria-expanded:rotate-180" /></CollapsibleTrigger></h2>
+                <CollapsibleContent className="consent-permissions-panel">
+                  <div className="consent-permissions-body consent-details-body">
+                    <p>{consent.application.description || "此应用已接入 ALBATEXTUS 统一登录。"}</p>
+                    {consent.application.homepage_url && <a href={consent.application.homepage_url} target="_blank" rel="noopener noreferrer"><Globe aria-hidden="true" />{consent.application.homepage_url}</a>}
+                    <div className="flex flex-wrap items-center gap-2"><span>最低访问身份</span><Badge variant="secondary">{roleNames[consent.application.minimum_role] || consent.application.minimum_role}</Badge></div>
+                    <p>授权后返回 <span className="consent-return-origin">{consent.redirect_origin}</span></p>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </>}
+            {(!consent || unusable) && <div className="flex flex-wrap gap-3">{requestToken && <Button variant="outline" onClick={() => setRetry(value => value + 1)}><RefreshCw data-icon="inline-start" />重新检查</Button>}<Button nativeButton={false} role="link" render={<Link href="/account" />}>返回用户中心</Button></div>}
+          </CardContent>
+          {consent && !unusable && <CardFooter className="consent-card-footer">
+            <div className="consent-actions">
+              <Button variant="outline" size="lg" disabled={Boolean(busy)} onClick={() => void decide("deny")}>{busy === "deny" && <Spinner data-icon="inline-start" />}拒绝</Button>
+              <Button size="lg" disabled={Boolean(busy)} onClick={() => void decide("allow")}>{busy === "allow" && <Spinner data-icon="inline-start" />}允许并继续<ArrowRight data-icon="inline-end" /></Button>
             </div>
-            <Separator />
-            <Collapsible>
-              <h2><CollapsibleTrigger render={<Button variant="ghost" className="group w-full justify-between" />}><span>基本信息</span><ChevronDown data-icon="inline-end" className="transition-transform duration-300 ease-out group-aria-expanded:rotate-180" /></CollapsibleTrigger></h2>
-              <CollapsibleContent className="consent-permissions-panel">
-                <div className="consent-permissions-body flex flex-col gap-4 pt-4">
-                <p className="text-sm text-muted-foreground">获取下列信息</p>
-                <ul className="flex flex-col gap-4">{permissions.map(permission => <li key={permission.id} className="flex items-start gap-3"><permission.icon className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" /><div className="min-w-0"><p className="break-words text-sm font-medium">{permission.title}</p><p className="mt-1 text-xs leading-6 text-muted-foreground">{permission.description}</p></div></li>)}</ul>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          </CardContent></Card>
-          {!unusable && <div className="flex flex-col gap-3"><Button size="lg" className="h-12 w-full" disabled={Boolean(busy)} onClick={() => void decide("allow")}>{busy === "allow" ? <Spinner data-icon="inline-start" /> : <ShieldCheck data-icon="inline-start" />}允许并继续<ArrowRight data-icon="inline-end" /></Button><Button variant="outline" size="lg" className="h-12 w-full" disabled={Boolean(busy)} onClick={() => void decide("deny")}>{busy === "deny" && <Spinner data-icon="inline-start" />}拒绝</Button></div>}
+          </CardFooter>}
         </>}
-        {(!consent || unusable) && !loading && <div className="flex flex-wrap justify-center gap-3">{requestToken && <Button variant="outline" onClick={() => setRetry(value => value + 1)}><RefreshCw data-icon="inline-start" />重新检查</Button>}<Button nativeButton={false} role="link" render={<Link href="/account" />}>返回用户中心</Button></div>}
-      </>}
-      <nav className="flex items-center justify-center gap-4 text-xs text-muted-foreground" aria-label="授权说明"><Link href="/wiki/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">隐私政策</Link><Link href="/wiki/terms" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">用户协议</Link></nav>
+      </Card>
     </div>
   </AuthLayout>
 }

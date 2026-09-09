@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/oauth/internal/config"
-	"github.com/AlbaTextus/oauth/internal/security"
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/connect/internal/config"
+	"github.com/AlbaTextus/connect/internal/security"
+	"github.com/AlbaTextus/connect/internal/store"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"

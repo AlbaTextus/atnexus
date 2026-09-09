@@ -3,10 +3,10 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/oauth ./cmd/server
+RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/connect ./cmd/server
 
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/oauth /oauth
+COPY --from=build /out/connect /connect
 EXPOSE 8080
 USER nonroot:nonroot
-ENTRYPOINT ["/oauth"]
+ENTRYPOINT ["/connect"]

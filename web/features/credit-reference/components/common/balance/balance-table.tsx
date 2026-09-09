@@ -4,6 +4,7 @@
 import * as React from "react"
 import { Tabs, TabsList, TabsTrigger } from "@/features/credit-reference/components/ui/tabs"
 import { TransactionTableList } from "@/features/credit-reference/components/common/general/table-data"
+import { BalanceStats } from "@/features/credit-reference/components/common/balance/balance-stats"
 import { TransactionProvider, useTransaction } from "@/features/credit-reference/contexts/transaction-context"
 import { DEFAULT_ORDER_TYPES, type OrderType } from "@/features/credit-reference/lib/services"
 import { formatLocalDate } from "@/features/credit-reference/lib/utils"
@@ -61,7 +62,6 @@ function getTimeRange() {
  * 显示不同类型的积分余额活动记录,支持多标签切换和分页加载
  */
 export function BalanceTable() {
-  const [activeTab, setActiveTab] = React.useState<OrderType | "all">("all")
   const [timeRange, setTimeRange] = React.useState<{ startTime: string; endTime: string } | null>(null)
 
   React.useEffect(() => {
@@ -73,39 +73,9 @@ export function BalanceTable() {
   }
 
   return (
-    <div>
-      <Tabs
-        value={activeTab}
-        onValueChange={(value) => setActiveTab(value as OrderType | "all")}
-        className="w-full"
-      >
-        <TabsList className="flex p-0 gap-4 rounded-none w-full bg-transparent justify-start border-b border-border overflow-x-auto overflow-y-hidden">
-          {TABS.map((tab) => (
-            <TabsTrigger
-              key={tab.value}
-              value={tab.value}
-              className={TAB_TRIGGER_STYLES}
-            >
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        <div className="mt-2">
-          <TransactionProvider
-            defaultParams={{
-              page_size: 20,
-              startTime: timeRange.startTime,
-              endTime: timeRange.endTime,
-            }}
-          >
-            <TransactionList
-              type={activeTab === "all" ? undefined : activeTab}
-            />
-          </TransactionProvider>
-        </div>
-      </Tabs>
-    </div>
+    <TransactionProvider defaultParams={{ page_size: 20, ...timeRange }}>
+      <TransactionList />
+    </TransactionProvider>
   )
 }
 
@@ -114,7 +84,9 @@ export function BalanceTable() {
  * 
  * 负责获取和显示积分余额活动数据
  */
-const TransactionList = React.memo(function TransactionList({ type }: { type?: OrderType }) {
+const TransactionList = React.memo(function TransactionList() {
+  const [activeTab, setActiveTab] = React.useState<OrderType | "all">("all")
+  const type = activeTab === "all" ? undefined : activeTab
   const {
     transactions,
     loading,
@@ -135,16 +107,31 @@ const TransactionList = React.memo(function TransactionList({ type }: { type?: O
   }, [type])
 
   return (
-    <TransactionTableList
-      loading={loading}
-      error={error}
-      transactions={transactions}
-      onRetry={() => fetchTransactions({
-        page: 1,
-        types: type ? [type] : DEFAULT_ORDER_TYPES,
-        startTime: lastParams.startTime,
-        endTime: lastParams.endTime,
-      })}
-    />
+    <section className="w-full max-w-[1440px]" aria-labelledby="recent-activity-title">
+      <h2 id="recent-activity-title" className="font-semibold mb-2">近期活动</h2>
+      <Tabs value={activeTab} onValueChange={value => setActiveTab(value as OrderType | "all")} className="w-full">
+        <TabsList className="flex p-0 gap-4 rounded-none w-full bg-transparent justify-start border-b border-border overflow-x-auto overflow-y-hidden">
+          {TABS.map(tab => <TabsTrigger key={tab.value} value={tab.value} className={TAB_TRIGGER_STYLES}>{tab.label}</TabsTrigger>)}
+        </TabsList>
+        <div className="wallet-activity-layout mt-2">
+          <div className="wallet-recent-activity">
+            <TransactionTableList
+              loading={loading}
+              error={error}
+              transactions={transactions}
+              onRetry={() => fetchTransactions({
+                page: 1,
+                types: type ? [type] : DEFAULT_ORDER_TYPES,
+                startTime: lastParams.startTime,
+                endTime: lastParams.endTime,
+              })}
+            />
+          </div>
+          <aside className="wallet-activity-stats w-full max-w-[360px] rounded-2xl bg-muted/50 p-1" aria-label="7天详情">
+            <BalanceStats />
+          </aside>
+        </div>
+      </Tabs>
+    </section>
   )
 })

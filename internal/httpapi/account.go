@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/AlbaTextus/oauth/internal/security"
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/connect/internal/security"
+	"github.com/AlbaTextus/connect/internal/store"
 )
 
 func (a *API) accountActor(w http.ResponseWriter, r *http.Request) (store.User, bool) {

@@ -3,6 +3,49 @@
 @import "shadcn/tailwind.css";
 @import "../styles/site.css";
 
+/* Consent composes the existing identity card, including its shared dark theme. */
+.auth-shell:has(.consent-screen) .auth-main { padding: 88px 24px 36px; }
+.consent-screen { width: 100%; max-width: 480px; margin-inline: auto; }
+.consent-screen .consent-card { --card-spacing: 28px; gap: 0; padding: 0; }
+.consent-card .consent-card-heading { gap: 9px; padding: 24px 28px 0; }
+.consent-card-heading .account-member-heading { width: 100%; padding-bottom: 0; }
+.consent-card .consent-card-body, .consent-loading { display: flex; flex-direction: column; gap: 23px; padding: 24px 28px 12px; }
+.consent-loading { padding-bottom: 30px; }
+.consent-application { text-align: center; }
+.consent-application h2 { font-size: 17px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.consent-application p { margin-top: 4px; color: var(--muted-foreground); font-size: 11px; line-height: 1.7; }
+.consent-identity { display: flex; align-items: center; gap: 13px; padding: 15px 17px; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--card) 55%, transparent); }
+.consent-identity-label { color: var(--muted-foreground); font-size: 10px; letter-spacing: 1px; }
+.consent-identity-name { margin-top: 3px; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.consent-identity-email { margin-top: 3px; color: var(--muted-foreground); font-size: 11px; overflow-wrap: anywhere; }
+.consent-identity-seal { width: 24px; height: 24px; margin-left: auto; flex-shrink: 0; color: var(--primary); opacity: .65; stroke-width: 1.25; }
+.consent-access .consent-access-trigger { min-height: 44px; padding-inline: 0; font-size: 12px; font-weight: 600; }
+.consent-access-count { display: inline-flex; align-items: center; gap: 10px; color: var(--muted-foreground); font-size: 10px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.consent-permission-list { display: flex; flex-direction: column; gap: 17px; }
+.consent-permission-list > li { display: flex; align-items: flex-start; gap: 12px; }
+.consent-permission-icon { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 8px; background: color-mix(in srgb, var(--card) 65%, transparent); color: var(--muted-foreground); }
+.consent-permission-icon > svg { width: 15px; height: 15px; stroke-width: 1.6; }
+.consent-permission-list h3 { font-size: 12px; font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }
+.consent-permission-list p { margin-top: 3px; color: var(--muted-foreground); font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
+.consent-details { margin-top: -14px; }
+.consent-details [data-slot="collapsible-trigger"] { min-height: 42px; padding-inline: 0; font-size: 12px; font-weight: 600; color: var(--muted-foreground); }
+.consent-details-body { display: flex; flex-direction: column; gap: 12px; padding: 8px 0 14px; color: var(--muted-foreground); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.consent-details-body > a { display: flex; align-items: flex-start; gap: 8px; color: var(--link); }
+.consent-details-body > a > svg { width: 15px; height: 15px; margin-top: 3px; flex-shrink: 0; }
+.consent-details-body > a:hover { text-decoration: underline; }
+.consent-return-origin { color: var(--foreground); }
+.consent-card .consent-card-footer { flex-direction: column; align-items: stretch; gap: 17px; padding: 4px 28px 28px; border: 0; background: transparent; }
+.consent-actions { display: grid; grid-template-columns: 1fr 1.8fr; gap: 12px; }
+.consent-actions > button { min-height: 46px; border-radius: 10px; }
+@media (max-width: 540px) {
+  .auth-shell:has(.consent-screen) .auth-main { padding: 76px 16px 28px; }
+  .consent-card .consent-card-heading { padding: 22px 22px 0; }
+  .consent-card .consent-card-body, .consent-loading { padding-inline: 22px; gap: 21px; }
+  .consent-card .consent-card-footer { padding: 4px 22px 24px; }
+  .consent-identity { padding: 13px; }
+  .consent-identity-seal { width: 20px; height: 20px; }
+}
+
 /* Keep the navigation in place while account/admin content changes. */
 .center-page-enter { view-transition-name: account-page; }
 ::view-transition-group(account-page) {
@@ -91,6 +134,26 @@
 .payment-summary-inset { background: var(--payment-summary-inset); }
 .payment-summary-rule { border-bottom: 1px solid var(--payment-summary-inset); }
 
+/* Keep recent activity at its compact width and height. */
+.wallet-activity-layout { display: grid; width: 100%; max-width: 1440px; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 24px; }
+.wallet-recent-activity { min-width: 0; }
+.wallet-recent-activity [data-slot="scroll-area"] { height: 360px; }
+.wallet-recent-activity table { min-width: 820px; table-layout: fixed; }
+.wallet-recent-activity th:nth-child(1) { width: 160px; }
+.wallet-recent-activity th:nth-child(2) { width: 52px; min-width: 0; }
+.wallet-recent-activity th:nth-child(3) { width: 76px; min-width: 0; }
+.wallet-recent-activity th:nth-child(4) { width: 66px; min-width: 0; }
+.wallet-recent-activity th:nth-child(5) { width: 72px; min-width: 0; }
+.wallet-recent-activity th:nth-child(6) { width: 124px; min-width: 0; }
+.wallet-recent-activity th:nth-child(7) { width: 110px; min-width: 0; }
+.wallet-recent-activity th:nth-child(8) { width: 120px; }
+.wallet-recent-activity th:nth-child(9) { width: 52px; }
+.wallet-recent-activity td:is(:nth-child(1), :nth-child(6), :nth-child(7)) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wallet-activity-stats { min-width: 0; justify-self: center; }
+@media (min-width: 1280px) {
+  .wallet-activity-layout { grid-template-columns: minmax(0, 1fr) 360px; }
+}
+
 /* Order details: payment-card header on identity-card paper, with a receipt edge. */
 .credit-reference.wallet-receipt-dialog {
   display: block;
@@ -113,7 +176,9 @@
   mask: linear-gradient(#000 0 0) top / 100% calc(100% - 10px) no-repeat,
     conic-gradient(from -45deg at bottom, #000 0 90deg, transparent 90deg 360deg) bottom / 20px 10px repeat-x;
 }
-.wallet-receipt-heading { gap: 14px; padding: 20px 24px 24px; }
+.wallet-receipt-heading { justify-items: center; gap: 14px; padding: 20px 24px 24px; text-align: center; }
+.wallet-receipt-brand-row { position: relative; display: flex; width: 100%; min-height: 32px; align-items: center; justify-content: center; padding-inline: 36px; }
+.wallet-receipt-close-slot { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
 .wallet-receipt-heading .wallet-receipt-title { font-size: 12px; font-weight: 500; color: inherit; }
 .wallet-receipt-amount { overflow-wrap: anywhere; font-size: 44px; font-weight: 600; line-height: 1.1; letter-spacing: -1.5px; font-variant-numeric: tabular-nums; }
 .wallet-receipt-heading .wallet-receipt-status { --secondary: var(--payment-summary-inset); --secondary-foreground: var(--payment-summary-fg); width: fit-content; gap: 6px; font-size: 11px; padding: 5px 9px; }

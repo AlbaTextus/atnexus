@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/AlbaTextus/oauth/internal/config"
-	"github.com/AlbaTextus/oauth/internal/httpapi"
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/connect/internal/config"
+	"github.com/AlbaTextus/connect/internal/httpapi"
+	"github.com/AlbaTextus/connect/internal/store"
 	"github.com/joho/godotenv"
 )
 

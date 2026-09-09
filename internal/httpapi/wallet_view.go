@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/connect/internal/store"
 )
 
 func (a *API) walletView(w http.ResponseWriter, r *http.Request) {

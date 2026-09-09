@@ -31,7 +31,7 @@ export const communityIntroduction = {
 
 ### 开放与协作
 
-社区账户项目开放源代码。你可以在 [项目仓库](https://github.com/AlbaTextus/oauth) 查看实现，通过 [Issues](https://github.com/AlbaTextus/oauth/issues) 提交问题和建议，或通过 Pull Request 参与代码与文档改进。
+社区账户项目开放源代码。你可以在 [项目仓库](https://github.com/AlbaTextus/connect) 查看实现，通过 [Issues](https://github.com/AlbaTextus/connect/issues) 提交问题和建议，或通过 Pull Request 参与代码与文档改进。
 
 ## 从这里开始
 

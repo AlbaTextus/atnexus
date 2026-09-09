@@ -7,7 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/connect/internal/store"
 )
 
 func (a *API) completeProfileSetup(w http.ResponseWriter, r *http.Request) {

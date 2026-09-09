@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/connect/internal/store"
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 )

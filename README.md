@@ -1,4 +1,4 @@
-# ALBATEXTUS
+# ALBATEXTUS Connect
 
 **一个账户，让连接更简单。**
 
@@ -397,7 +397,7 @@ pnpm web:build
 pnpm web:start
 ```
 
-Go 服务可用 `go build -o release/oauth ./cmd/server` 构建，Windows 可将输出命名为 `release/oauth.exe`。运行时提供 `.env` 或进程环境变量。已有实例升级只需应用新迁移并更新服务，不需要重复 seed。
+Go 服务可用 `go build -o release/connect ./cmd/server` 构建，Windows 可将输出命名为 `release/connect.exe`。运行时提供 `.env` 或进程环境变量。已有实例升级只需应用新迁移并更新服务，不需要重复 seed。
 
 正式部署应使用同源 HTTPS 入口，正确设置 `ISSUER_URL`、`AUTH_UI_URL`、`WEBAUTHN_RP_ID`、`WEBAUTHN_RP_ORIGINS` 和 `COOKIE_SECURE=true`。反向代理保留 `/api/`、`/oauth/`、`/.well-known/` 的转发；健康检查直接请求 Go 的 `/healthz`。启用 CSP 时，为 Turnstile 放行 `https://challenges.cloudflare.com` 的脚本与 iframe。
 
@@ -504,4 +504,4 @@ Prisma schema 与迁移是数据库结构的来源；Go 服务没有 Prisma Clie
 
 相邻的 ALBATEXTUS 图床可通过 `go run ./cmd/register-imgbed` 联调注册。该工具会登记客户端并写入相邻图床的本地配置，运行前请核对 [工具源码](cmd/register-imgbed/main.go) 中的目录、端口与回调约定。
 
-目前未提供邮箱验证码绑定、OIDC ID Token 或跨子系统统一登出。功能问题和接入反馈可提交到 [GitHub Issues](https://github.com/AlbaTextus/oauth/issues)。
+目前未提供邮箱验证码绑定、OIDC ID Token 或跨子系统统一登出。功能问题和接入反馈可提交到 [GitHub Issues](https://github.com/AlbaTextus/connect/issues)。

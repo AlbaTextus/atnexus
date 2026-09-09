@@ -2,10 +2,9 @@
 
 import { useFeedback, redirectWithFeedback } from "@/lib/feedback"
 
-import Link from "next/link"
-import { Link as TransitionLink } from "next-view-transitions"
+import { Link } from "next-view-transitions"
 import { usePathname } from "next/navigation"
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from "react"
 import { motion, useAnimationControls, useReducedMotion } from "framer-motion"
 import { AlertCircle, House, LayoutGrid, LogOut, Settings2, ShieldCheck, ShieldX, UserRound, Users } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
@@ -57,16 +56,16 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
     ? { href: accountPath, title: "用户中心", icon: House }
     : { href: "/admin/users", title: "管理后台", icon: Settings2 }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!user || denied) return
     pageAnimation.stop()
-    // Keep the route wrapper mounted: changing its key also remounts page state.
-    // A shallow fade keeps the new content readable throughout the transition.
-    if (reducedMotion) {
+    // Native transitions own the old/new page snapshots. Only animate the live
+    // wrapper as a fallback, before paint, without remounting the page state.
+    if (reducedMotion || "startViewTransition" in document) {
       pageAnimation.set({ opacity: 1, y: 0 })
       return
     }
-    pageAnimation.set({ opacity: 0.65, y: 5 })
+    pageAnimation.set({ opacity: 0, y: 8 })
     void pageAnimation.start({ opacity: 1, y: 0, transition: navigationTransition })
     return () => pageAnimation.stop()
   }, [pathname, Boolean(user), denied, reducedMotion, pageAnimation])
@@ -96,7 +95,7 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
     <div className={cn("center-shell", pathname === accountPath && "center-profile-home")}>
       <a className="center-skip" href="#center-content">跳转到主要内容</a>
       <SiteHeader items={admin ? [...navigation, areaLink] : navigation} activeHref={active?.href}
-        navigationLabel={title + "导航"} routeKey={pathname} LinkComponent={Link} BrandLinkComponent={TransitionLink}
+        navigationLabel={title + "导航"} routeKey={pathname} LinkComponent={Link}
         actions={<><ThemeToggle />{user?.role === "SUPER_ADMIN" && <MaintenanceControl />}<Button variant="ghost" size="icon" aria-label="退出登录" disabled={!user || leaving} onClick={logout}><LogOut /></Button></>} />
       <div className="center-workspace">
         <main id="center-content" tabIndex={-1} className="center-content">

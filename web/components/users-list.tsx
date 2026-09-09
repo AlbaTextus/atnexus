@@ -3,10 +3,11 @@
 import { useFeedback } from "@/lib/feedback"
 
 import { useEffect, useState } from "react"
+import { AnimatePresence, LayoutGroup, motion, useIsPresent, useReducedMotion } from "framer-motion"
 import { AlertCircle, Check, ChevronLeft, ChevronRight, Plus, RefreshCw, Search, ShieldCheck, Users } from "lucide-react"
 import { api } from "@/lib/api"
 import { roleNames } from "@/lib/applications"
-import { type UserListResult, userManagementError } from "@/lib/users"
+import { type ManagedUser, type UserListResult, userManagementError } from "@/lib/users"
 import { UserDetailsRow } from "@/components/user-details-row"
 import { UserManagementDialog, type UserAction } from "@/components/user-management-dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -18,6 +19,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 export function UsersList() {
+  const reducedMotion = Boolean(useReducedMotion())
+  const transition = reducedMotion ? { duration: 0 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const }
   const [result, setResult] = useState<UserListResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useFeedback("error")
@@ -45,7 +48,7 @@ export function UsersList() {
       if (controller.signal.aborted) return
       if (page > 1 && data.users.length === 0) { setPage(Math.max(1, Math.ceil(data.total / data.page_size))); return }
       setResult(data)
-    }).catch(reason => { if (!controller.signal.aborted) { setResult(null); setError(userManagementError(reason)) } }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    }).catch(reason => { if (!controller.signal.aborted) setError(userManagementError(reason)) }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
   }, [query, status, role, page, reload])
 
@@ -62,14 +65,32 @@ export function UsersList() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-xl font-semibold">用户管理</h1>
-        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto"><InputGroup className="h-10 min-w-0 flex-1 sm:w-64"><InputGroupAddon><Search /></InputGroupAddon><InputGroupInput aria-label="搜索用户" placeholder="搜索昵称、邮箱或用户 ID" maxLength={320} value={search} onChange={event => setSearch(event.target.value)} /></InputGroup><Button variant="outline" disabled={loading} onClick={() => setReload(value => value + 1)}><RefreshCw data-icon="inline-start" />刷新列表</Button><Button onClick={() => openAction({ kind: "create" })}><Plus data-icon="inline-start" />新建用户</Button></div>
+        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto"><InputGroup className="h-10 min-w-0 flex-1 sm:w-64"><InputGroupAddon><Search /></InputGroupAddon><InputGroupInput aria-label="搜索用户" placeholder="搜索昵称、邮箱或用户 ID" maxLength={320} value={search} onChange={event => setSearch(event.target.value)} /></InputGroup><Button variant="outline" disabled={loading} onClick={() => setReload(value => value + 1)}><RefreshCw data-icon="inline-start" className={loading ? "animate-spin motion-reduce:animate-none" : undefined} />刷新列表</Button><Button onClick={() => openAction({ kind: "create" })}><Plus data-icon="inline-start" />新建用户</Button></div>
       </div>
       <div className="flex flex-wrap gap-3"><ToggleGroup value={[status]} onValueChange={values => { if (values[0]) { setStatus(values[0]); setPage(1) } }} variant="outline" spacing={0} aria-label="用户状态筛选"><ToggleGroupItem value="all">全部状态</ToggleGroupItem><ToggleGroupItem value="active">已启用</ToggleGroupItem><ToggleGroupItem value="inactive">已停用</ToggleGroupItem></ToggleGroup><ToggleGroup value={[role]} onValueChange={values => { if (values[0]) { setRole(values[0]); setPage(1) } }} variant="outline" spacing={0} aria-label="用户角色筛选"><ToggleGroupItem value="all">全部角色</ToggleGroupItem><ToggleGroupItem value="USER" aria-label={roleNames.USER} title={roleNames.USER}>LT1</ToggleGroupItem><ToggleGroupItem value="ADMIN" aria-label={roleNames.ADMIN} title={roleNames.ADMIN}>LT3</ToggleGroupItem><ToggleGroupItem value="SUPER_ADMIN" aria-label={roleNames.SUPER_ADMIN} title={roleNames.SUPER_ADMIN}>LT4</ToggleGroupItem></ToggleGroup></div>
     </div>
-    {loading ? <div className="flex flex-col gap-4" aria-label="正在加载用户"><Skeleton className="h-36 w-full" /><Skeleton className="h-36 w-full" /><Skeleton className="h-36 w-full" /></div> : result && <>
-      {result.users.length ? <div className="flex flex-col gap-3">{result.users.map(user => <UserDetailsRow key={user.id} user={user} onSaved={message => { setNotice(message); setReload(value => value + 1) }} />)}</div> : <Empty className="min-h-64"><EmptyHeader><EmptyMedia variant="icon"><Users /></EmptyMedia><EmptyTitle>没有找到匹配的用户</EmptyTitle><EmptyDescription>试试其他搜索词，或调整角色与状态筛选。</EmptyDescription></EmptyHeader><EmptyContent><Button variant="outline" onClick={clearFilters}>清除筛选</Button></EmptyContent></Empty>}
-      <nav aria-label="用户列表分页" className="mt-auto flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-muted-foreground" aria-live="polite">共 {result.total} 位用户 · 第 {page} / {pages} 页</p><div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(value => value - 1)}><ChevronLeft data-icon="inline-start" />上一页</Button><Button variant="outline" size="sm" disabled={page >= pages} onClick={() => setPage(value => value + 1)}>下一页<ChevronRight data-icon="inline-end" /></Button></div></nav>
-    </>}
+    <span role="status" className="sr-only">{loading ? result ? "正在更新用户列表" : "正在加载用户" : error ? "用户列表更新失败" : `已显示 ${result?.users.length || 0} 位用户`}</span>
+    <LayoutGroup>
+      <motion.div layout={reducedMotion ? false : "size"} transition={transition} className="relative flex flex-col gap-3" aria-label="用户列表" aria-busy={loading}>
+        <AnimatePresence initial={false} mode="popLayout">
+          {!result && loading ? <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={transition} className="flex flex-col gap-4" aria-label="正在加载用户"><Skeleton className="h-36 w-full" /><Skeleton className="h-36 w-full" /><Skeleton className="h-36 w-full" /></motion.div>
+            : result?.users.length ? result.users.map(user => <AnimatedUserRow key={user.id} user={user} reducedMotion={reducedMotion} onSaved={message => { setNotice(message); setReload(value => value + 1) }} />)
+            : result && <motion.div key="empty" layout={!reducedMotion} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={transition}><Empty className="min-h-64"><EmptyHeader><EmptyMedia variant="icon"><Users /></EmptyMedia><EmptyTitle>没有找到匹配的用户</EmptyTitle><EmptyDescription>试试其他搜索词，或调整角色与状态筛选。</EmptyDescription></EmptyHeader><EmptyContent><Button variant="outline" onClick={clearFilters}>清除筛选</Button></EmptyContent></Empty></motion.div>}
+        </AnimatePresence>
+      </motion.div>
+      {result && <motion.nav layout={reducedMotion ? false : "position"} transition={transition} aria-label="用户列表分页" className="mt-auto flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-muted-foreground" aria-live="polite">共 {result.total} 位用户 · 第 {result.page} / {pages} 页</p><div className="flex gap-2"><Button variant="outline" size="sm" disabled={loading || result.page <= 1} onClick={() => setPage(result.page - 1)}><ChevronLeft data-icon="inline-start" />上一页</Button><Button variant="outline" size="sm" disabled={loading || result.page >= pages} onClick={() => setPage(result.page + 1)}>下一页<ChevronRight data-icon="inline-end" /></Button></div></motion.nav>}
+    </LayoutGroup>
     {action && <UserManagementDialog action={action} onClose={() => setAction(null)} onSaved={message => { setAction(null); setNotice(message); setReload(value => value + 1) }} />}
   </div>
+}
+
+// Stable user keys preserve open details and focus during background refreshes.
+// Retiring rows remain only for their exit animation, never as clickable results.
+function AnimatedUserRow({ user, onSaved, reducedMotion, ref }: { user: ManagedUser; onSaved: (message: string) => void; reducedMotion: boolean; ref?: React.Ref<HTMLDivElement> }) {
+  const present = useIsPresent()
+  return <motion.div ref={ref} layout={reducedMotion ? false : "position"} inert={!present} aria-hidden={!present || undefined}
+    initial={{ opacity: 0, y: reducedMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reducedMotion ? 0 : -4 }}
+    transition={reducedMotion ? { duration: 0 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+    <UserDetailsRow user={user} onSaved={onSaved} />
+  </motion.div>
 }

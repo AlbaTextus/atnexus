@@ -2,8 +2,7 @@
 
 import { useFeedback, feedback } from "@/lib/feedback"
 
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { Link, useTransitionRouter } from "next-view-transitions"
 import { useEffect, useState, type FormEvent } from "react"
 import { AlertCircle, ArrowLeft, Check, Code2, LockKeyhole, Save, Settings2, Trash2 } from "lucide-react"
 import { api } from "@/lib/api"
@@ -28,7 +27,7 @@ const initial: Draft = { name: "", homepage_url: "", description: "", icon_url: 
 const toDraft = (app: Application): Draft => ({ name: app.name, homepage_url: app.homepage_url, description: app.description, icon_url: app.icon_url, minimum_role: app.minimum_role, callbacks: app.redirect_uris.join("\n"), is_active: app.is_active, is_public: app.is_public })
 
 export function ApplicationEditor({ id }: { id?: string }) {
-  const router = useRouter()
+  const router = useTransitionRouter()
   const [app, setApp] = useState<Application | null>(null)
   const [draft, setDraft] = useState<Draft>(initial)
   const [saved, setSaved] = useState<Draft>(initial)

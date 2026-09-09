@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Application is the management view of an OAuth client. Secrets are never serialized.
@@ -155,6 +156,10 @@ func (p *Postgres) ApplicationSecret(ctx context.Context, id string, actor uuid.
 func (p *Postgres) DeleteApplication(ctx context.Context, id string, actor uuid.UUID, admin bool) error {
 	result, err := p.pool.Exec(ctx, `DELETE FROM oauth_clients WHERE id=$1 AND ($3 OR owner_id=$2)`, id, actor, admin)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "23001") && pgErr.ConstraintName == "payment_orders_client_id_fkey" {
+			return ErrApplicationHasPayments
+		}
 		return err
 	}
 	if result.RowsAffected() == 0 {

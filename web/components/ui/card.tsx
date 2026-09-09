@@ -7,7 +7,7 @@ function Card({
   variant = "default",
   interactive = false,
   ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm"; variant?: "default" | "auth"; interactive?: boolean }) {
+}: React.ComponentProps<"div"> & { size?: "default" | "sm"; variant?: "default" | "auth" | "payment"; interactive?: boolean }) {
   return (
     <div
       data-slot="card"
@@ -17,6 +17,7 @@ function Card({
       className={cn(
         "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl bg-card py-(--card-spacing) text-sm text-card-foreground ring-1 ring-border shadow-(--surface-shadow) transition-[box-shadow,translate] duration-300 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
         variant === "auth" && "gap-7 rounded-2xl p-8 shadow-(--auth-card-shadow) ring-border has-data-[slot=card-footer]:pb-8 max-sm:p-6 max-sm:has-data-[slot=card-footer]:pb-6",
+        variant === "payment" && "grid gap-0 rounded-3xl border border-border/50 bg-card/70 p-0 shadow-xl ring-0 backdrop-blur-2xl md:grid-cols-[45%_55%]",
         className
       )}
       {...props}

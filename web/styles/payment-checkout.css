@@ -1,0 +1,48 @@
+/* Payment shares the identity card's paper and the wallet receipt's cut edge. */
+.checkout-page { width: min(100%, 460px); margin-inline: auto; padding-block: 24px 48px; }
+.checkout-toolbar { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 18px; color: var(--muted-foreground); }
+.checkout-ticket-shadow { filter: drop-shadow(0 14px 22px color-mix(in srgb, var(--foreground) 7%, transparent)); }
+.checkout-ticket.account-member-card { --card-spacing: 0px; gap: 0; padding-bottom: 14px; color: var(--foreground); }
+.checkout-heading { display: flex; flex-direction: column; gap: 30px; padding: 28px 32px 24px; }
+.checkout-brand-row { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 16px; }
+.checkout-brand-row > svg { color: var(--muted-foreground); }
+.checkout-amount-block { display: flex; width: 100%; flex-direction: column; align-items: center; gap: 12px; }
+.checkout-eyebrow { color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
+.checkout-amount { display: flex; max-width: 100%; align-items: baseline; justify-content: center; gap: 8px; font-size: clamp(40px, 10vw, 64px); font-weight: 550; line-height: 1.1; letter-spacing: -2.5px; font-variant-numeric: tabular-nums; }
+.checkout-amount > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.checkout-unit { flex-shrink: 0; font-size: 12px; font-weight: 400; letter-spacing: normal; color: var(--muted-foreground); }
+.checkout-ticket .checkout-status { gap: 5px; font-size: 10px; color: var(--muted-foreground); background: color-mix(in srgb, var(--background) 35%, transparent); }
+.checkout-order-details { display: flex; flex-direction: column; gap: 18px; padding: 0 32px 24px; }
+.checkout-order-title { overflow-wrap: anywhere; text-align: center; font-size: 14px; font-weight: 550; line-height: 1.6; margin-bottom: 4px; }
+.checkout-order-number { color: var(--muted-foreground); font-size: 11px; }
+.checkout-order-number summary { width: fit-content; cursor: pointer; }
+.checkout-order-number summary:hover { color: var(--foreground); }
+.checkout-order-number[open] summary { margin-bottom: 10px; }
+.checkout-order-number > span { display: block; overflow-wrap: anywhere; font-family: var(--font-mono, monospace); font-size: 10px; }
+.checkout-ticket .checkout-perforation { position: relative; width: auto; height: 0; margin: 0 18px; background: transparent; border-top: 1px dashed color-mix(in srgb, var(--foreground) 18%, transparent); }
+.checkout-perforation::before, .checkout-perforation::after { content: ""; position: absolute; top: -10px; width: 20px; height: 20px; border-radius: 50%; background: var(--background); }
+.checkout-perforation::before { left: -28px; }
+.checkout-perforation::after { right: -28px; }
+.checkout-payment { display: flex; flex-direction: column; gap: 24px; padding: 24px 32px 22px; }
+.checkout-payer { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.checkout-payer-identity { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+.checkout-payer-name { font-size: 12px; font-weight: 550; overflow-wrap: anywhere; }
+.checkout-balance { display: flex; flex-shrink: 0; flex-direction: column; gap: 3px; text-align: right; }
+.checkout-balance > span:last-child { font-size: 14px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.checkout-state { display: flex; flex-direction: column; gap: 10px; }
+.checkout-state h2 { font-size: 15px; font-weight: 600; line-height: 1.5; }
+.checkout-state p { font-size: 12px; color: var(--muted-foreground); line-height: 1.8; overflow-wrap: anywhere; }
+.checkout-state > [data-slot="button"] { margin-top: 8px; }
+.checkout-complete { align-items: center; text-align: center; padding-block: 6px; }
+.checkout-complete > svg { color: var(--muted-foreground); margin-bottom: 4px; }
+.checkout-ticket > .checkout-footer { display: flex; align-items: center; gap: 6px; padding: 0 32px 22px; font-size: 10px; color: var(--muted-foreground); }
+.checkout-monogram { margin-left: auto; font-size: 15px; font-weight: 700; letter-spacing: -1px; }
+.checkout-page > .checkout-cancel { display: flex; margin: 20px auto 0; color: var(--muted-foreground); }
+@media (max-width: 480px) {
+  .checkout-page { padding-block: 8px 32px; }
+  .checkout-heading { padding: 24px 24px 22px; gap: 24px; }
+  .checkout-order-details { padding-inline: 24px; }
+  .checkout-payment { padding-inline: 24px; }
+  .checkout-ticket > .checkout-footer { padding-inline: 24px; }
+  .checkout-balance > span:last-child { max-width: 110px; overflow-wrap: anywhere; }
+}

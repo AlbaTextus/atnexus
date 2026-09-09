@@ -2,7 +2,7 @@
 
 import { Link } from "next-view-transitions"
 import { useEffect, useRef, useState } from "react"
-import { AlertCircle, ArrowUpRight, Check, ChevronRight, LayoutGrid, Plus, Search, Settings2 } from "lucide-react"
+import { AlertCircle, ArrowUpRight, Check, ChevronRight, Circle, LayoutGrid, Plus, Search, Settings2 } from "lucide-react"
 import { api } from "@/lib/api"
 import { type Application, managementError } from "@/lib/applications"
 import { feedback } from "@/lib/feedback"
@@ -54,7 +54,14 @@ export function ApplicationsList() {
       {[{ label: admin ? "全部应用" : "我的应用", count: apps.length, icon: LayoutGrid, tone: "blue", note: admin ? "管理员可管理全部应用" : "你创建并管理的应用" }, { label: "已启用", count: activeCount, icon: Check, tone: "green", note: "可以进行登录授权" }, { label: "已停用", count: apps.length - activeCount, icon: Settings2, tone: "orange", note: "已暂停新的登录授权" }].map(item => <Card key={item.label} className="gap-2 sm:gap-4"><CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-3 sm:px-4"><CardDescription>{item.label}</CardDescription><span className="application-stat-icon" data-tone={item.tone} aria-hidden="true"><item.icon size={18} /></span></CardHeader><CardContent className="px-3 sm:px-4"><div className="center-stat">{loading ? "—" : item.count}</div><p className="mt-1 hidden text-xs text-muted-foreground sm:block">{item.note}</p></CardContent></Card>)}
     </div>
     <div className="flex flex-wrap items-center justify-between gap-4">
-      <div className="flex flex-wrap items-center gap-4"><h1 className="text-xl font-semibold">应用接入</h1><ToggleGroup value={[filter]} onValueChange={values => { if (values[0]) setFilter(values[0]) }} variant="outline" spacing={0} aria-label="应用状态筛选"><ToggleGroupItem value="all">全部应用</ToggleGroupItem><ToggleGroupItem value="active">已启用</ToggleGroupItem><ToggleGroupItem value="inactive">已停用</ToggleGroupItem></ToggleGroup></div>
+      <div className="flex flex-wrap items-center gap-4">
+        <h1 className="text-xl font-semibold">应用接入</h1>
+        <ToggleGroup value={[filter]} onValueChange={values => { if (values[0]) setFilter(values[0]) }} variant="pill" size="lg" spacing={1} aria-label="应用状态筛选">
+          <ToggleGroupItem value="all" aria-label="全部应用" title="全部应用"><Circle aria-hidden="true" className="text-muted-foreground" /></ToggleGroupItem>
+          <ToggleGroupItem value="active" aria-label="已启用" title="已启用"><Circle aria-hidden="true" className="text-(--feedback-success)" /></ToggleGroupItem>
+          <ToggleGroupItem value="inactive" aria-label="已停用" title="已停用"><Circle aria-hidden="true" className="text-(--feedback-error)" /></ToggleGroupItem>
+        </ToggleGroup>
+      </div>
       <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto"><InputGroup className="h-10 min-w-0 flex-1 sm:w-56"><InputGroupAddon><Search /></InputGroupAddon><InputGroupInput aria-label="搜索应用" placeholder="搜索名称或 Client ID" value={search} onChange={event => setSearch(event.target.value)} /></InputGroup><Button nativeButton={false} role="link" render={<Link href="/admin/applications/new" />}><Plus data-icon="inline-start" />创建应用</Button></div>
     </div>
     {loading ? <div className="flex flex-col gap-3" aria-label="正在加载应用"><Skeleton className="h-20 w-full" /><Skeleton className="h-20 w-full" /></div> : visible.length > 0 ? <div role="list" aria-label="接入列表" className="flex flex-col gap-3">{visible.map(app =>

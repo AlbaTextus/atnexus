@@ -49,7 +49,9 @@ func main() {
 		serverErr <- server.ListenAndServe()
 	}()
 	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
+	workerDone := make(chan struct{})
+	go func() { defer close(workerDone); runWalletSettlements(signalCtx, st, logger) }()
+	defer func() { stop(); <-workerDone }()
 	select {
 	case err := <-serverErr:
 		if !errors.Is(err, http.ErrServerClosed) {

@@ -3,7 +3,7 @@
 import { useFeedback } from "@/lib/feedback"
 
 import { useState, type FormEvent } from "react"
-import { AlertCircle, Check, KeyRound, LogOut, UserPlus } from "lucide-react"
+import { AlertCircle, Check, Circle, KeyRound, LogOut, UserPlus } from "lucide-react"
 import { api } from "@/lib/api"
 import { roleNames } from "@/lib/applications"
 import { type ManagedUser, userManagementError } from "@/lib/users"
@@ -85,8 +85,24 @@ export function UserManagementDialog({ action, onClose, onSaved }: {
           {action.kind === "create" && <Field data-disabled={busy}><FieldLabel htmlFor="managed-email">邮箱</FieldLabel><Input id="managed-email" type="email" autoComplete="off" required maxLength={320} disabled={busy} value={email} onChange={event => setEmail(event.target.value)} placeholder="name@example.com" /></Field>}
           {(action.kind === "create" || action.kind === "edit") && <>
             <Field data-disabled={busy}><FieldLabel htmlFor="managed-name">昵称</FieldLabel><Input id="managed-name" maxLength={100} disabled={busy} value={name} onChange={event => setName(event.target.value)} placeholder="可选，最多 100 个字符" /></Field>
-            <Field data-disabled={busy || self}><FieldLabel id="managed-role-label">用户等级</FieldLabel>{roles.length > 1 ? <ToggleGroup aria-labelledby="managed-role-label" variant="outline" spacing={0} value={[role]} disabled={busy || self} onValueChange={values => { if (values[0]) setRole(values[0]) }}><ToggleGroupItem value="USER">{roleNames.USER}</ToggleGroupItem><ToggleGroupItem value="ADMIN">{roleNames.ADMIN}</ToggleGroupItem><ToggleGroupItem value="SUPER_ADMIN">{roleNames.SUPER_ADMIN}</ToggleGroupItem></ToggleGroup> : <p className="text-sm">{roleNames[role]}</p>}<FieldDescription>{self ? "不能修改自己的角色或停用自己的账户。" : actor.role === "SUPER_ADMIN" ? "管理员可管理普通用户；超级管理员可管理所有角色。" : "管理员只能创建和管理普通用户，角色调整由超级管理员完成。"}</FieldDescription></Field>
-            {action.kind === "edit" && <Field data-disabled={busy || self}><FieldLabel id="managed-status-label">账户状态</FieldLabel><ToggleGroup aria-labelledby="managed-status-label" variant="outline" spacing={0} value={[active ? "active" : "inactive"]} disabled={busy || self} onValueChange={values => { if (values[0]) setActive(values[0] === "active") }}><ToggleGroupItem value="active">启用</ToggleGroupItem><ToggleGroupItem value="inactive">停用</ToggleGroupItem></ToggleGroup><FieldDescription>停用后，邮箱、第三方账号与通行密钥均无法登录。</FieldDescription></Field>}
+            <Field data-disabled={busy || self || roles.length === 1}>
+              <FieldLabel id="managed-role-label">用户等级</FieldLabel>
+              <ToggleGroup aria-labelledby="managed-role-label" variant="pill" size="lg" spacing={1} value={[role]} disabled={busy || self || roles.length === 1} onValueChange={values => { if (values[0] && roles.includes(values[0])) setRole(values[0]) }}>
+                <ToggleGroupItem value="USER" aria-label={roleNames.USER} title={roleNames.USER}>LT1</ToggleGroupItem>
+                <ToggleGroupItem value="LT2" disabled aria-label="LT2（暂未开放）" title="LT2（暂未开放）">LT2</ToggleGroupItem>
+                <ToggleGroupItem value="ADMIN" disabled={!roles.includes("ADMIN")} aria-label={roleNames.ADMIN} title={roleNames.ADMIN}>LT3</ToggleGroupItem>
+                <ToggleGroupItem value="SUPER_ADMIN" disabled={!roles.includes("SUPER_ADMIN")} aria-label={roleNames.SUPER_ADMIN} title={roleNames.SUPER_ADMIN}>LT4</ToggleGroupItem>
+              </ToggleGroup>
+              <FieldDescription>{self ? "不能修改自己的角色或停用自己的账户。" : actor.role === "SUPER_ADMIN" ? "管理员可管理普通用户；超级管理员可管理所有角色。" : "管理员只能创建和管理普通用户，角色调整由超级管理员完成。"} LT2 暂未开放。</FieldDescription>
+            </Field>
+            {action.kind === "edit" && <Field data-disabled={busy || self}>
+              <FieldLabel id="managed-status-label">账户状态</FieldLabel>
+              <ToggleGroup aria-labelledby="managed-status-label" variant="pill" size="lg" spacing={1} value={[active ? "active" : "inactive"]} disabled={busy || self} onValueChange={values => { if (values[0]) setActive(values[0] === "active") }}>
+                <ToggleGroupItem value="active" aria-label="已启用" title="已启用"><Circle aria-hidden="true" className="text-(--feedback-success)" /></ToggleGroupItem>
+                <ToggleGroupItem value="inactive" aria-label="已停用" title="已停用"><Circle aria-hidden="true" className="text-(--feedback-error)" /></ToggleGroupItem>
+              </ToggleGroup>
+              <FieldDescription>停用后，邮箱、第三方账号与通行密钥均无法登录。</FieldDescription>
+            </Field>}
           </>}
           {needsPassword && <>
             <Field data-disabled={busy} data-invalid={Boolean(passwordError)}><FieldLabel htmlFor="managed-password">{action.kind === "create" ? "初始密码" : "新密码"}</FieldLabel><PasswordInput id="managed-password" label="新密码" required autoComplete="new-password" disabled={busy} aria-invalid={Boolean(passwordError)} aria-describedby="managed-password-help" value={password} onChange={event => { setPassword(event.target.value); setPasswordError("") }} /><FieldDescription id="managed-password-help">12–72 字节，建议使用随机生成的长密码。</FieldDescription></Field>

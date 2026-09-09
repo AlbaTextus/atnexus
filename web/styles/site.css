@@ -318,8 +318,10 @@ body { min-height: 100vh; margin: 0; background: var(--page-canvas); color: var(
 .center-nav-link.is-active { color: var(--center-nav-foreground); }
 .center-nav-highlight { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: color-mix(in srgb, var(--center-nav-foreground) 13%, transparent); pointer-events: none; }
 .center-nav-icon { width: 16px; height: 16px; flex-shrink: 0; }
-.center-nav-label { display: block; overflow: hidden; }
-.center-nav-label > span { display: block; padding-inline-start: 6px; }
+.center-nav-caption-position { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); pointer-events: none; }
+.center-nav-caption { display: block; padding: 6px 13px; border-radius: 999px; background: #e9edf2; color: #20272b; box-shadow: 0 6px 18px color-mix(in srgb, var(--foreground) 8%, transparent); font-size: 12px; font-weight: 500; line-height: 1.4; white-space: nowrap; transform-origin: center top; }
+.dark .center-nav-caption { background: var(--accent); color: var(--foreground); }
+.center-header[data-collapsed="true"] > .center-nav-caption-position { transform: translate(-50%, 12px); }
 .center-nav-link:focus-visible, .center-brand:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
 .center-nav-link:focus-visible { outline-color: var(--center-nav-foreground); outline-offset: -3px; }
 .center-workspace { display: flex; min-width: 0; flex: 1; flex-direction: column; }
@@ -462,7 +464,6 @@ body { min-height: 100vh; margin: 0; background: var(--page-canvas); color: var(
   .center-brand { font-size: 21px; }
   .center-nav { gap: 2px; padding: 5px; }
   .center-nav-link { min-width: 36px; padding-inline: 10px; font-size: 11px; }
-  .center-nav-label > span { padding-inline-start: 6px; }
   .center-userbar { gap: 8px; }
   .center-content { padding: 28px 20px; }
   .center-page-heading h1 { font-size: 25px; }
@@ -486,7 +487,6 @@ body { min-height: 100vh; margin: 0; background: var(--page-canvas); color: var(
   .center-header-inner { gap: 8px; grid-template-columns: auto minmax(0, 1fr) auto; }
   .center-header .center-nav { gap: 0; }
   .center-header .center-nav-link { min-width: 32px; padding-inline: 8px; }
-  .center-header .center-nav-label { display: none; }
 }
 @media (max-width: 360px) {
   .center-header .center-nav-link { min-width: 28px; padding-inline: 6px; }

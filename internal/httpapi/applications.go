@@ -34,6 +34,10 @@ func (a *API) applicationActor(w http.ResponseWriter, r *http.Request) (store.Us
 }
 
 func (a *API) applicationError(w http.ResponseWriter, err error) {
+	if errors.Is(err, store.ErrApplicationHasPayments) {
+		writeJSON(w, 409, map[string]string{"error": "application_has_payments", "error_description": "应用已有支付记录，请停用应用以保留订单和流水。"})
+		return
+	}
 	if errors.Is(err, store.ErrNotFound) {
 		writeJSON(w, 404, map[string]string{"error": "application_not_found"})
 		return

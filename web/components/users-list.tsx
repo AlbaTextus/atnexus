@@ -4,7 +4,7 @@ import { useFeedback } from "@/lib/feedback"
 
 import { useEffect, useState } from "react"
 import { AnimatePresence, LayoutGroup, motion, useIsPresent, useReducedMotion } from "framer-motion"
-import { AlertCircle, Check, ChevronLeft, ChevronRight, Plus, RefreshCw, Search, ShieldCheck, Users } from "lucide-react"
+import { AlertCircle, Check, ChevronLeft, ChevronRight, Circle, Plus, RefreshCw, Search, ShieldCheck, Users } from "lucide-react"
 import { api } from "@/lib/api"
 import { roleNames } from "@/lib/applications"
 import { type ManagedUser, type UserListResult, userManagementError } from "@/lib/users"
@@ -67,7 +67,20 @@ export function UsersList() {
         <h1 className="text-xl font-semibold">用户管理</h1>
         <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto"><InputGroup className="h-10 min-w-0 flex-1 sm:w-64"><InputGroupAddon><Search /></InputGroupAddon><InputGroupInput aria-label="搜索用户" placeholder="搜索昵称、邮箱或用户 ID" maxLength={320} value={search} onChange={event => setSearch(event.target.value)} /></InputGroup><Button variant="outline" disabled={loading} onClick={() => setReload(value => value + 1)}><RefreshCw data-icon="inline-start" className={loading ? "animate-spin motion-reduce:animate-none" : undefined} />刷新列表</Button><Button onClick={() => openAction({ kind: "create" })}><Plus data-icon="inline-start" />新建用户</Button></div>
       </div>
-      <div className="flex flex-wrap gap-3"><ToggleGroup value={[status]} onValueChange={values => { if (values[0]) { setStatus(values[0]); setPage(1) } }} variant="outline" spacing={0} aria-label="用户状态筛选"><ToggleGroupItem value="all">全部状态</ToggleGroupItem><ToggleGroupItem value="active">已启用</ToggleGroupItem><ToggleGroupItem value="inactive">已停用</ToggleGroupItem></ToggleGroup><ToggleGroup value={[role]} onValueChange={values => { if (values[0]) { setRole(values[0]); setPage(1) } }} variant="outline" spacing={0} aria-label="用户角色筛选"><ToggleGroupItem value="all">全部角色</ToggleGroupItem><ToggleGroupItem value="USER" aria-label={roleNames.USER} title={roleNames.USER}>LT1</ToggleGroupItem><ToggleGroupItem value="ADMIN" aria-label={roleNames.ADMIN} title={roleNames.ADMIN}>LT3</ToggleGroupItem><ToggleGroupItem value="SUPER_ADMIN" aria-label={roleNames.SUPER_ADMIN} title={roleNames.SUPER_ADMIN}>LT4</ToggleGroupItem></ToggleGroup></div>
+      <div className="flex flex-wrap gap-3">
+        <ToggleGroup value={[status]} onValueChange={values => { if (values[0]) { setStatus(values[0]); setPage(1) } }} variant="pill" size="lg" spacing={1} aria-label="用户状态筛选">
+          <ToggleGroupItem value="all" aria-label="全部状态" title="全部状态"><Circle aria-hidden="true" className="text-muted-foreground" /></ToggleGroupItem>
+          <ToggleGroupItem value="active" aria-label="已启用" title="已启用"><Circle aria-hidden="true" className="text-(--feedback-success)" /></ToggleGroupItem>
+          <ToggleGroupItem value="inactive" aria-label="已停用" title="已停用"><Circle aria-hidden="true" className="text-(--feedback-error)" /></ToggleGroupItem>
+        </ToggleGroup>
+        <ToggleGroup value={[role]} onValueChange={values => { if (values[0]) { setRole(values[0]); setPage(1) } }} variant="pill" size="lg" spacing={1} aria-label="用户角色筛选">
+          <ToggleGroupItem value="all" aria-label="全部角色" title="全部角色"><Circle aria-hidden="true" className="text-muted-foreground" /></ToggleGroupItem>
+          <ToggleGroupItem value="USER" aria-label={roleNames.USER} title={roleNames.USER}>LT1</ToggleGroupItem>
+          <ToggleGroupItem value="LT2" disabled aria-label="LT2（暂未开放）" title="LT2（暂未开放）">LT2</ToggleGroupItem>
+          <ToggleGroupItem value="ADMIN" aria-label={roleNames.ADMIN} title={roleNames.ADMIN}>LT3</ToggleGroupItem>
+          <ToggleGroupItem value="SUPER_ADMIN" aria-label={roleNames.SUPER_ADMIN} title={roleNames.SUPER_ADMIN}>LT4</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
     </div>
     <span role="status" className="sr-only">{loading ? result ? "正在更新用户列表" : "正在加载用户" : error ? "用户列表更新失败" : `已显示 ${result?.users.length || 0} 位用户`}</span>
     <LayoutGroup>

@@ -3,7 +3,7 @@
 import { Fingerprint, Rotate3D, ShieldCheck } from "lucide-react"
 import { useId, useState, useSyncExternalStore, type PointerEvent } from "react"
 import { motion, useMotionTemplate, useSpring } from "framer-motion"
-import { useAccountUser } from "@/components/account-shell"
+import { useAccountUser, type AccountUser } from "@/components/account-shell"
 import { UserAvatar } from "@/components/user-avatar"
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -18,6 +18,10 @@ const getServerMotionPreference = () => true
 
 export function AccountIdentityCard() {
   const user = useAccountUser()
+  return <UserIdentityCard user={user} />
+}
+
+export function UserIdentityCard({ user }: { user: AccountUser }) {
   const cardId = useId()
   const [showBack, setShowBack] = useState(false)
   const reducedMotion = useSyncExternalStore(subscribeMotionPreference, getMotionPreference, getServerMotionPreference)
@@ -42,8 +46,8 @@ export function AccountIdentityCard() {
   const joinedAt = user.created_at ? new Date(user.created_at) : null
   const validDate = joinedAt && !Number.isNaN(joinedAt.getTime())
   const joinedDate = validDate ? joinedAt.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }) : "暂无记录"
-  return <section className="account-identity-section" aria-labelledby="account-identity-title">
-    <h2 id="account-identity-title">身份卡</h2>
+  return <section className="account-identity-section" aria-labelledby={`${cardId}-title`}>
+    <h2 id={`${cardId}-title`}>身份卡</h2>
     <div id={cardId} className="account-member-stage" onPointerMove={followPointer} onPointerLeave={resetCard} onPointerCancel={resetCard}>
     <motion.div style={{ rotateX: reducedMotion ? 0 : rotateX, rotateY: reducedMotion ? 0 : rotateY, transformPerspective: 1000 }} whileHover={reducedMotion ? undefined : { y: -4 }} whileTap={reducedMotion ? undefined : { scale: 0.985 }} transition={{ type: "spring", stiffness: 180, damping: 24 }}>
     <div className="account-member-flipper" data-flipped={showBack}>

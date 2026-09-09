@@ -10,12 +10,12 @@ const nextConfig = {
     ]
   },
   async headers() {
-    return [{ source: "/consent", headers: [
+    return ["/consent", "/pay/:path*", "/account/:userId/wallet", "/account/wallet", "/account/:userId/security", "/account/security", "/admin/users"].map(source => ({ source, headers: [
       { key: "X-Frame-Options", value: "DENY" },
       { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
       { key: "Referrer-Policy", value: "no-referrer" },
       { key: "Cache-Control", value: "no-store" },
-    ] }]
+    ] }))
   },
   async rewrites() {
     return [

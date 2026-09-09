@@ -4,7 +4,7 @@ import { useFeedback, feedback } from "@/lib/feedback"
 
 import { Link, useTransitionRouter } from "next-view-transitions"
 import { useEffect, useState, type FormEvent } from "react"
-import { AlertCircle, ArrowLeft, Check, Code2, LockKeyhole, Save, Settings2, Trash2 } from "lucide-react"
+import { AlertCircle, ArrowLeft, Check, Circle, Code2, LockKeyhole, Save, Settings2, Trash2 } from "lucide-react"
 import { api } from "@/lib/api"
 import { type Application, type OAuthMetadata, managementError } from "@/lib/applications"
 import { CopyField } from "@/components/copy-field"
@@ -14,11 +14,10 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
-import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
@@ -116,9 +115,25 @@ export function ApplicationEditor({ id }: { id?: string }) {
           <Field data-disabled={busy}><FieldLabel htmlFor="app-description">应用描述 <span className="text-muted-foreground">（选填）</span></FieldLabel><Textarea id="app-description" name="description" value={draft.description} onChange={e => change("description",e.target.value)} maxLength={1000} disabled={busy} placeholder="简单介绍这个应用的用途" className="min-h-24" /></Field>
           <Field data-disabled={busy}><FieldLabel htmlFor="app-callbacks">回调地址</FieldLabel><Textarea id="app-callbacks" name="redirect_uris" value={draft.callbacks} onChange={e => change("callbacks",e.target.value)} required disabled={busy} placeholder="https://your-app.example.com/auth/callback" className="min-h-24" aria-describedby="callback-help" /><FieldDescription id="callback-help">每行一个地址，最多 10 个。需精确匹配，不支持通配符；本地开发可使用 localhost 的 HTTP 地址。</FieldDescription></Field>
           <Field data-disabled={busy}><FieldLabel htmlFor="app-icon">应用图标 <span className="text-muted-foreground">（选填）</span></FieldLabel><Input id="app-icon" name="icon_url" type="url" value={draft.icon_url} onChange={e => change("icon_url",e.target.value)} maxLength={2048} disabled={busy} placeholder="https://your-app.example.com/logo.png" className="h-11" /></Field>
-          <Field data-disabled={busy}><FieldLabel id="app-type-label">应用类型</FieldLabel>{app ? <div><Badge variant="secondary">{app.is_public ? <Code2 data-icon="inline-start" /> : <LockKeyhole data-icon="inline-start" />}{app.is_public ? "公开客户端 · PKCE" : "服务端应用"}</Badge></div> : <ToggleGroup aria-labelledby="app-type-label" value={[draft.is_public ? "public" : "confidential"]} onValueChange={values => { if (values[0]) change("is_public",values[0] === "public") }} disabled={busy || Boolean(app)} variant="outline" spacing={0} className="max-w-full flex-wrap"><ToggleGroupItem value="confidential"><LockKeyhole />服务端应用</ToggleGroupItem><ToggleGroupItem value="public"><Code2 />公开客户端</ToggleGroupItem></ToggleGroup>}<FieldDescription>{draft.is_public ? "适用于纯前端或原生应用，必须使用 S256 PKCE。" : "适用于有后端的子系统，Client Secret 仅保存在服务端。"} 创建后不可更改。</FieldDescription></Field>
-          <Field data-disabled={busy}><FieldLabel id="app-role-label">最低访问等级</FieldLabel><ToggleGroup aria-labelledby="app-role-label" value={[draft.minimum_role]} onValueChange={values => { if (values[0]) change("minimum_role",values[0]) }} disabled={busy} variant="outline" spacing={0} className="max-w-full flex-wrap"><ToggleGroupItem value="USER" title="普通用户">LT1</ToggleGroupItem><ToggleGroupItem value="ADMIN" title="管理员">LT3</ToggleGroupItem><ToggleGroupItem value="SUPER_ADMIN" title="超级管理员">LT4</ToggleGroupItem></ToggleGroup><FieldDescription>达到所选等级即可访问，LT2 暂未开放。</FieldDescription></Field>
-          <Field orientation="horizontal" data-disabled={busy}><FieldContent><FieldLabel htmlFor="app-active">启用应用</FieldLabel><FieldDescription>停用后将阻止登录，并撤销已有授权。</FieldDescription></FieldContent><Switch id="app-active" checked={draft.is_active} onCheckedChange={value => change("is_active",value)} disabled={busy} /></Field>
+          <Field data-disabled={busy}><FieldLabel id="app-type-label">应用类型</FieldLabel>{app ? <div><Badge variant="secondary">{app.is_public ? <Code2 data-icon="inline-start" /> : <LockKeyhole data-icon="inline-start" />}{app.is_public ? "公开客户端 · PKCE" : "服务端应用"}</Badge></div> : <ToggleGroup aria-labelledby="app-type-label" value={[draft.is_public ? "public" : "confidential"]} onValueChange={values => { if (values[0]) change("is_public",values[0] === "public") }} disabled={busy || Boolean(app)} variant="pill" size="lg" spacing={1} className="max-w-full flex-wrap"><ToggleGroupItem value="confidential"><LockKeyhole />服务端应用</ToggleGroupItem><ToggleGroupItem value="public"><Code2 />公开客户端</ToggleGroupItem></ToggleGroup>}<FieldDescription>{draft.is_public ? "适用于纯前端或原生应用，必须使用 S256 PKCE。" : "适用于有后端的子系统，Client Secret 仅保存在服务端。"} 创建后不可更改。</FieldDescription></Field>
+          <Field data-disabled={busy}>
+            <FieldLabel id="app-role-label">最低访问等级</FieldLabel>
+            <ToggleGroup aria-labelledby="app-role-label" value={[draft.minimum_role]} onValueChange={values => { if (values[0]) change("minimum_role",values[0]) }} disabled={busy} variant="pill" size="lg" spacing={1} className="max-w-full flex-wrap">
+              <ToggleGroupItem value="USER" aria-label="1 级 · 普通用户" title="普通用户">LT1</ToggleGroupItem>
+              <ToggleGroupItem value="LT2" disabled aria-label="LT2（暂未开放）" title="LT2（暂未开放）">LT2</ToggleGroupItem>
+              <ToggleGroupItem value="ADMIN" aria-label="3 级 · 管理员" title="管理员">LT3</ToggleGroupItem>
+              <ToggleGroupItem value="SUPER_ADMIN" aria-label="4 级 · 超级管理员" title="超级管理员">LT4</ToggleGroupItem>
+            </ToggleGroup>
+            <FieldDescription>达到所选等级即可访问，LT2 暂未开放。</FieldDescription>
+          </Field>
+          <Field data-disabled={busy}>
+            <FieldLabel id="app-active-label">应用状态</FieldLabel>
+            <ToggleGroup aria-labelledby="app-active-label" value={[draft.is_active ? "active" : "inactive"]} onValueChange={values => { if (values[0]) change("is_active", values[0] === "active") }} disabled={busy} variant="pill" size="lg" spacing={1}>
+              <ToggleGroupItem value="active" aria-label="已启用" title="已启用"><Circle aria-hidden="true" className="text-(--feedback-success)" /></ToggleGroupItem>
+              <ToggleGroupItem value="inactive" aria-label="已停用" title="已停用"><Circle aria-hidden="true" className="text-(--feedback-error)" /></ToggleGroupItem>
+            </ToggleGroup>
+            <FieldDescription>停用后将阻止登录，并撤销已有授权。</FieldDescription>
+          </Field>
           {app && <p className="text-xs text-muted-foreground">修改回调地址、访问角色或启停状态会撤销已有授权，子系统需要重新登录。</p>}
         </FieldGroup></CardContent><CardFooter className="flex-wrap gap-3"><Button type="submit" size="lg" disabled={busy || Boolean(app && !dirty)}>{busy ? <Spinner data-icon="inline-start" aria-hidden="true" /> : <Save data-icon="inline-start" />}{app ? "保存修改" : "创建应用"}</Button><Button type="button" variant="outline" disabled={busy || !dirty} onClick={() => { setDraft(saved); setError(""); setNotice("") }}>取消修改</Button>{app && <Button type="button" variant="destructive" disabled={busy} className="ml-auto" onClick={() => { setConfirm("delete"); setConfirmError(""); setDeleteName("") }}><Trash2 data-icon="inline-start" />删除应用</Button>}</CardFooter></Card>
       </form>

@@ -3,6 +3,63 @@
 @import "shadcn/tailwind.css";
 @import "../styles/site.css";
 
+/* Connect announcements and email workspace. */
+.announcement-trigger { position: relative; }
+.announcement-dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--destructive); box-shadow: 0 0 0 2px var(--background); }
+.announcement-dialog { max-height: min(720px, 85dvh); overflow-y: auto; padding: 24px; }
+.announcement-list { display: flex; flex-direction: column; gap: 4px; }
+.announcement-item { display: flex; align-items: flex-start; gap: 14px; width: 100%; padding: 16px 10px; text-align: left; border-radius: 10px; transition: background .15s; }
+.announcement-item:hover, .announcement-dialog .communications-record:hover { background: var(--accent); }
+.announcement-item:focus-visible, .communications-record:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.announcement-item-icon, .communications-record-icon { display: grid; place-items: center; flex: 0 0 auto; width: 38px; height: 38px; border-radius: 11px; background: var(--muted); color: var(--muted-foreground); }
+.announcement-item-copy { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.announcement-item-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-weight: 550; overflow-wrap: anywhere; }
+.announcement-excerpt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--muted-foreground); line-height: 1.7; overflow-wrap: anywhere; }
+.announcement-detail { display: flex; align-items: stretch; flex-direction: column; gap: 14px; }
+.announcement-detail > button { align-self: flex-start; }
+.announcement-detail h2 { font-size: 21px; font-weight: 600; overflow-wrap: anywhere; }
+.message-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.9; font-size: 13px; }
+.message-meta { font-size: 11px; line-height: 1.7; color: var(--muted-foreground); }
+.communications-page { display: flex; flex-direction: column; gap: 28px; }
+.communications-compose { display: flex; flex-direction: column; gap: 28px; }
+.communications-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+.communications-editor { min-width: 0; }
+.communications-preview-column { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.communications-preview-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+.communications-preview-heading h2 { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+.email-template-preview { display: flex; flex-direction: column; gap: 10px; }
+.email-template-frame { display: block; width: 100%; border: 1px solid var(--border); border-radius: 14px; background: #f5f7fa; color-scheme: light; }
+.communications-history { display: flex; flex-direction: column; gap: 20px; }
+.message-record-dialog { max-height: min(720px, 85dvh); grid-template-rows: auto minmax(0, 1fr) auto; gap: 16px; }
+.message-record-dialog-body { min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; }
+.message-record-dialog [data-slot="dialog-footer"] { flex-shrink: 0; }
+.communications-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.communications-history-heading h2 { font-size: 20px; font-weight: 600; margin-bottom: 5px; }
+.message-scroll-list { height: 340px; min-height: 160px; max-height: 70dvh; overflow-y: auto; overflow-x: hidden; resize: vertical; scrollbar-gutter: stable; overscroll-behavior-y: contain; border: 1px solid var(--border); border-radius: 12px; background: var(--card); scrollbar-color: var(--muted-foreground) transparent; }
+.message-scroll-list:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.message-scroll-list[data-dragging="true"], .message-scroll-list[data-dragging="true"] * { cursor: grabbing; user-select: none; }
+.message-scroll-list::-webkit-scrollbar { width: 10px; }
+.message-scroll-list::-webkit-scrollbar-thumb { background: var(--muted-foreground); border: 3px solid var(--card); border-radius: 8px; }
+.communications-record { display: flex; align-items: center; gap: 20px; width: 100%; min-height: 58px; padding: 16px 20px; text-align: left; transition: background .15s; }
+.communications-record > strong { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.communications-record > time { flex-shrink: 0; color: var(--muted-foreground); font-size: 12px; font-variant-numeric: tabular-nums; }
+.communications-record + .communications-record { border-top: 1px solid var(--border); }
+.announcement-dialog .communications-record > strong { font-size: 13px; font-weight: 500; }
+.communications-history .message-scroll-list { padding: 2px 6px 2px 2px; border: 0; border-radius: 0; background: transparent; }
+.communications-history .communications-record { min-height: 64px; }
+.communications-history .communications-record + .communications-record { margin-top: 12px; }
+.auth-theme-toolbar { display: flex; align-items: center; gap: 4px; }
+@media (max-width: 760px) {
+  .communications-options { grid-template-columns: 1fr; gap: 22px; }
+  .communications-history-heading { flex-wrap: wrap; }
+  .communications-record { display: flex; flex-direction: column; align-items: flex-start; padding: 13px 12px; gap: 5px; }
+  .communications-record > strong { width: 100%; flex: none; }
+  .communications-record > time { font-size: 11px; }
+  .center-header:has(.announcement-trigger) .center-header-inner { grid-template-columns: auto 1fr; gap: 4px 12px; }
+  .center-header:has(.announcement-trigger) .center-nav { grid-area: 2 / 1 / 3 / -1; justify-content: center; }
+  .center-header:has(.announcement-trigger) .center-userbar { grid-area: 1 / 2; }
+}
+
 /* Consent composes the existing identity card, including its shared dark theme. */
 .auth-shell:has(.consent-screen) .auth-main { padding: 88px 24px 36px; }
 .consent-screen { width: 100%; max-width: 480px; margin-inline: auto; }
@@ -216,4 +273,67 @@
   line-height: 1.4;
   white-space: nowrap;
   text-decoration: none;
+}
+
+/* Carry the account identity card's ice-blue and blush palette into the hero. */
+.home-credit-inspired {
+  --identity-ice: #e0f2ff;
+  --identity-blush: #fceafa;
+  --identity-ink-blue: #36769d;
+  --identity-ink-lilac: #796795;
+  --identity-ink-rose: #a45e95;
+  --identity-glass: #ffffff94;
+  --identity-glass-border: #ffffffd9;
+  --identity-glass-highlight: #ffffff;
+  --identity-glass-shadow: #5264821a;
+}
+.dark .home-credit-inspired {
+  --identity-ice: #29415b;
+  --identity-blush: #423044;
+  --identity-ink-blue: #a9d5f0;
+  --identity-ink-lilac: #c7b8e3;
+  --identity-ink-rose: #e6b6db;
+  --identity-glass: #1b202b9e;
+  --identity-glass-border: #b8cce02e;
+  --identity-glass-highlight: #ffffff14;
+  --identity-glass-shadow: #00000030;
+}
+.home-shell.home-credit-inspired .landing-copy h1 span {
+  color: color-mix(in srgb, var(--identity-ink-blue) 34%, white);
+}
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .home-shell.home-credit-inspired .landing-copy h1 span {
+    background: linear-gradient(110deg, color-mix(in srgb, var(--identity-ink-blue) 34%, white) 5%, color-mix(in srgb, var(--identity-ink-lilac) 34%, white) 52%, color-mix(in srgb, var(--identity-ink-rose) 34%, white) 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+}
+.home-shell.home-credit-inspired .landing-glow {
+  background: radial-gradient(ellipse at 80% 20%, var(--identity-ice), transparent 65%),
+    radial-gradient(ellipse at 15% 85%, var(--identity-blush), transparent 65%);
+  filter: blur(42px);
+}
+.home-shell.home-credit-inspired .identity-card {
+  background: radial-gradient(ellipse at 100% 0, var(--identity-ice), transparent 60%),
+    radial-gradient(ellipse at 0 100%, var(--identity-blush), transparent 58%), var(--identity-glass);
+  border-color: var(--identity-glass-border);
+  -webkit-backdrop-filter: blur(32px) saturate(115%);
+  backdrop-filter: blur(32px) saturate(115%);
+  box-shadow: 0 20px 52px var(--identity-glass-shadow), inset 0 1px 0 var(--identity-glass-highlight);
+}
+.home-shell.home-credit-inspired .identity-floating {
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  border-color: var(--identity-glass-border);
+  -webkit-backdrop-filter: blur(24px) saturate(115%);
+  backdrop-filter: blur(24px) saturate(115%);
+  box-shadow: 0 10px 30px var(--identity-glass-shadow), inset 0 1px 0 var(--identity-glass-highlight);
+}
+.home-shell.home-credit-inspired .identity-avatar,
+.home-shell.home-credit-inspired .identity-passkey .identity-feature-icon {
+  background: color-mix(in srgb, var(--identity-ice) 80%, var(--card));
+  color: var(--identity-ink-blue);
+}
+@media (forced-colors: active) {
+  .home-shell.home-credit-inspired .landing-copy h1 span { background: none; color: CanvasText; }
 }

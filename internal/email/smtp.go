@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"mime"
+	"mime/multipart"
 	"mime/quotedprintable"
 	"net"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strconv"
 	"strings"
 	"time"
@@ -33,13 +35,37 @@ func New(cfg config.SMTP) *SMTP {
 
 // Never propagate SMTP replies: some servers echo addresses or credentials.
 func (s *SMTP) SendCode(ctx context.Context, to, code, purpose string) error {
-	if err := s.send(ctx, to, code, purpose); err != nil {
+	label := "验证或绑定邮箱"
+	if purpose == "register" {
+		label = "注册账户"
+	}
+	content := fmt.Sprintf("你的 ALBATEXTUS 邮箱验证码是：%s\r\n\r\n用于%s，5 分钟内有效。请勿将验证码告诉他人。\r\n如果不是你本人操作，请忽略此邮件。\r\n", code, label)
+	html, err := RenderVerification(code, purpose)
+	if err != nil {
+		return err
+	}
+	return s.deliver(ctx, to, "ALBATEXTUS 邮箱验证码", content, html)
+}
+
+func (s *SMTP) SendMessage(ctx context.Context, to, subject, content string) error {
+	html, err := RenderMessage(subject, content)
+	if err != nil {
+		return err
+	}
+	return s.deliver(ctx, to, subject, content, html)
+}
+
+func (s *SMTP) deliver(ctx context.Context, to, subject, content, html string) error {
+	if strings.TrimSpace(subject) == "" || strings.ContainsAny(subject, "\r\n\x00") {
+		return errors.New("invalid subject")
+	}
+	if err := s.send(ctx, to, subject, content, html); err != nil {
 		return errors.New("SMTP delivery failed")
 	}
 	return nil
 }
 
-func (s *SMTP) send(ctx context.Context, to, code, purpose string) error {
+func (s *SMTP) send(ctx context.Context, to, subject, content, html string) error {
 	if !s.cfg.Enabled() {
 		return errors.New("SMTP not configured")
 	}
@@ -98,19 +124,40 @@ func (s *SMTP) send(ctx context.Context, to, code, purpose string) error {
 	if err != nil {
 		return err
 	}
-	label := "验证或绑定邮箱"
-	if purpose == "register" {
-		label = "注册账户"
+	message, err := encodeMessage(from.String(), recipient.String(), subject, content, html)
+	if err != nil {
+		return err
 	}
-	var body bytes.Buffer
-	encoder := quotedprintable.NewWriter(&body)
-	_, _ = fmt.Fprintf(encoder, "你的 ALBATEXTUS 邮箱验证码是：%s\r\n\r\n用于%s，5 分钟内有效。请勿将验证码告诉他人。\r\n如果不是你本人操作，请忽略此邮件。\r\n", code, label)
-	_ = encoder.Close()
-	message := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n%s", from.String(), recipient.String(), mime.QEncoding.Encode("UTF-8", "ALBATEXTUS 邮箱验证码"), time.Now().Format(time.RFC1123Z), body.String())
-	if _, err := writer.Write([]byte(message)); err != nil {
+	if _, err := writer.Write(message); err != nil {
 		return err
 	}
 	// A successful DATA reply confirms acceptance; a later QUIT failure must not
 	// invalidate a code the server already accepted for delivery.
 	return writer.Close()
+}
+
+func encodeMessage(from, to, subject, plain, html string) ([]byte, error) {
+	var body bytes.Buffer
+	parts := multipart.NewWriter(&body)
+	for _, part := range []struct{ kind, content string }{{"text/plain", plain}, {"text/html", html}} {
+		header := textproto.MIMEHeader{}
+		header.Set("Content-Type", part.kind+"; charset=UTF-8")
+		header.Set("Content-Transfer-Encoding", "quoted-printable")
+		writer, err := parts.CreatePart(header)
+		if err != nil {
+			return nil, err
+		}
+		encoder := quotedprintable.NewWriter(writer)
+		if _, err := encoder.Write([]byte(part.content)); err != nil {
+			return nil, err
+		}
+		if err := encoder.Close(); err != nil {
+			return nil, err
+		}
+	}
+	if err := parts.Close(); err != nil {
+		return nil, err
+	}
+	header := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=%q\r\n\r\n", from, to, mime.QEncoding.Encode("UTF-8", subject), time.Now().Format(time.RFC1123Z), parts.Boundary())
+	return append([]byte(header), body.Bytes()...), nil
 }

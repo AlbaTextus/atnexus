@@ -9,6 +9,7 @@ import { SiteFooter } from "@/components/site-footer"
 import { CloudflareNetwork } from "@/components/cloudflare-network"
 import { HomeBrand } from "@/components/home-brand"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { AnnouncementCenter } from "@/components/announcement-center"
 import { AccountEntryLink } from "@/components/account-entry-link"
 
 const repository = "https://github.com/AlbaTextus/connect"
@@ -68,7 +69,7 @@ export function HomePage() {
       <div className="home-container home-header-inner">
         <HomeBrand collapsed={brandCollapsed} />
         <div className="home-header-actions">
-          <ThemeToggle />
+          <AnnouncementCenter /><ThemeToggle />
           <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<a href={repository} target="_blank" rel="noopener noreferrer" />} aria-label="GitHub 项目（新窗口）" className="home-repo-link"><Github /></Button>
           <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<TransitionLink href="/wiki" />} aria-label="前往 Wiki" title="前往 Wiki">W</Button>
           <AccountEntryLink render={<TransitionLink href="/account" />} />

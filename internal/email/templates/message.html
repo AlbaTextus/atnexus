@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no" />
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
+    <title>{{.Subject}}</title>
+    {{outlookSettings}}
+    <style>
+      :root { color-scheme: light; supported-color-schemes: light; }
+      body { margin: 0 !important; padding: 0 !important; }
+      table { border-collapse: separate; border-spacing: 0; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+      td { padding: 0; }
+      a { color: inherit; }
+      a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; }
+      @media only screen and (max-width: 620px) {
+        .outer-padding { padding: 28px 16px !important; }
+        .card-padding { padding: 32px 24px !important; }
+        .brand-padding { padding: 0 4px 24px !important; }
+        .email-heading { font-size: 27px !important; line-height: 38px !important; }
+        .code-digits { font-size: 36px !important; letter-spacing: 8px !important; padding-left: 8px !important; }
+        .brand-note { font-size: 10px !important; }
+        .footer-padding { padding: 24px 8px 0 !important; }
+      }
+      @media only screen and (max-width: 360px) {
+        .card-padding { padding: 28px 20px !important; }
+        .brand-wordmark { font-size: 20px !important; }
+        .code-digits { font-size: 30px !important; letter-spacing: 6px !important; padding-left: 6px !important; }
+      }
+    </style>
+  </head>
+  <body style="margin:0;padding:0;width:100%;background-color:#f5f7fa;color:#1f1f1f;font-family:Arial,'PingFang SC','Microsoft YaHei',sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+    <!-- Based on mail/verification-code.html; dynamic content is escaped by Go html/template. -->
+    <!-- 收件箱摘要不暴露验证码，避免验证码出现在锁屏通知中。 -->
+    <div style="display:none;font-size:1px;line-height:1px;color:#f5f7fa;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">{{.Preview}}</div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f7fa" style="width:100%;background-color:#f5f7fa;">
+      <tr>
+        <td class="outer-padding" align="center" style="padding:64px 24px;">
+          {{outlookStart}}
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;border-collapse:separate;border-spacing:0;">
+            <tr>
+              <td class="brand-padding" style="padding:0 4px 28px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td class="brand-wordmark" align="center" style="text-align:center;font-size:23px;line-height:32px;font-weight:700;letter-spacing:-0.7px;color:#141413;">ALBATEXTUS</td>
+                  </tr>
+                  <tr>
+                    <td class="brand-note" align="center" style="padding-top:6px;text-align:center;font-size:11px;line-height:20px;color:#687386;letter-spacing:1px;">{{.BrandNote}}</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <!-- 与 OAuth 身份卡一致的渐变；不支持渐变的邮件客户端回退为白底。 -->
+              <td bgcolor="#ffffff" style="background-color:#ffffff;background-image:radial-gradient(ellipse at 100% 0,#e0f2ff 0,transparent 55%),radial-gradient(ellipse at 0 100%,#fceafa 0,transparent 50%);border:1px solid #e4e8ef;border-radius:20px;box-shadow:0 12px 32px #203b6010;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td class="card-padding" style="padding:44px 44px 40px;">
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:0;">
+                        <tr>
+                          <td style="padding-bottom:20px;">
+                            <p style="margin:0;font-size:10px;line-height:16px;font-weight:700;letter-spacing:2.4px;color:#0b57d0;">{{.Eyebrow}}</p>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="padding-bottom:16px;">
+                            <h1 class="email-heading" style="margin:0;font-size:32px;line-height:44px;font-weight:600;letter-spacing:-0.8px;color:#141413;overflow-wrap:anywhere;word-break:break-word;">{{.Heading}}</h1>
+                          </td>
+                        </tr>
+                        {{if .Code}}
+                        <tr>
+                          <td style="padding-bottom:28px;">
+                            <p style="margin:0;font-size:14px;line-height:26px;color:#5e6572;">你好，<br />{{.PurposeText}}<br />请在页面中输入下方验证码，完成邮箱验证。</p>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td bgcolor="#edf3fe" style="background-color:#edf3fe;border:1px solid #dce7fb;border-radius:12px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                              <tr>
+                                <td align="center" style="padding:23px 16px 9px;font-size:12px;line-height:20px;color:#475c7a;">你的邮箱验证码</td>
+                              </tr>
+                              <tr>
+                                <td align="center" style="padding:0 12px;">
+                                  <p class="code-digits" style="margin:0;padding-left:12px;font-family:Consolas,'Courier New',monospace;font-size:42px;line-height:58px;font-weight:700;letter-spacing:12px;color:#0b57d0;white-space:nowrap;">{{.Code}}</p>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td align="center" style="padding:10px 16px 23px;font-size:12px;line-height:20px;color:#475c7a;">此验证码 <strong style="font-weight:600;color:#0b57d0;">5 分钟</strong> 内有效</td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="padding-top:18px;padding-bottom:30px;">
+                            <p style="margin:0;font-size:12px;line-height:22px;color:#687386;">返回刚才的页面，输入验证码即可继续。<br />如果验证码已过期，请在页面中重新获取。</p>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="border-top:1px solid #edf0f4;padding-top:24px;">
+                            <h2 style="margin:0 0 8px;font-size:12px;line-height:20px;font-weight:600;color:#303744;">保护好你的账户</h2>
+                            <p style="margin:0;font-size:12px;line-height:22px;color:#687386;">请勿向任何人透露此验证码。<br />如果这不是你本人的操作，请忽略此邮件。</p>
+                          </td>
+                        </tr>
+                        {{else}}
+                        <tr><td style="padding:4px 0 12px;word-break:break-word;overflow-wrap:anywhere;"><p style="margin:0;font-size:14px;line-height:28px;color:#5e6572;">{{range .Lines}}{{.}}<br />{{end}}</p></td></tr>
+                        {{end}}
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td class="footer-padding" align="center" style="padding:28px 20px 0;">
+                <p style="margin:0 0 10px;font-size:12px;line-height:22px;letter-spacing:1.5px;color:#687386;">每一次连接，都有归处。</p>
+                <p style="margin:0;font-size:11px;line-height:21px;color:#7d8694;">{{.FooterText}}<br />© {{.Year}} ALBATEXTUS</p>
+              </td>
+            </tr>
+          </table>
+          {{outlookEnd}}
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -99,11 +99,11 @@ export function ApplicationEditor({ id }: { id?: string }) {
 
   if (loading) return <div className="flex flex-col gap-6"><Skeleton className="h-12 w-64" /><Skeleton className="h-72 w-full" /><Skeleton className="h-96 w-full" /></div>
   return <div className="flex flex-col gap-6">
-    <div className="center-page-heading"><div><p className="center-eyebrow">APPLICATION SETTINGS</p><h1>{app ? app.name : "创建应用"}</h1><p>{app ? "管理接入凭据、应用信息和登录权限。" : "连接你的子系统，共用一个 ALBATEXTUS 账户。"}</p></div><Button variant="outline" nativeButton={false} role="link" render={<Link href="/admin/applications" />}><ArrowLeft data-icon="inline-start" />返回应用</Button></div>
+    <div className="center-page-heading application-editor-heading"><div><p className="center-eyebrow">APPLICATION SETTINGS</p><h1>{app ? app.name : "创建应用"}</h1><p>{app ? "管理接入凭据、应用信息和登录权限。" : "连接你的子系统，共用一个 ALBATEXTUS 账户。"}</p></div><Button variant="outline" nativeButton={false} role="link" render={<Link href="/admin/applications" />}><ArrowLeft data-icon="inline-start" />返回应用</Button></div>
     {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}</AlertDescription></Alert>}
     {notice && <Alert><Check /><AlertDescription role="status">{notice}</AlertDescription></Alert>}
     {id && !app ? <Button variant="outline" onClick={() => window.location.reload()}>重新加载</Button> : <>
-      {app && <Card><CardHeader><CardTitle className="flex items-center gap-2"><LockKeyhole size={18} />接入信息</CardTitle><CardDescription>将这些信息配置到子系统的 OAuth 客户端中。</CardDescription></CardHeader><CardContent><FieldGroup className="gap-5">
+      {app && <Card className="border border-border"><CardHeader><CardTitle className="flex items-center gap-2"><LockKeyhole size={18} />接入信息</CardTitle><CardDescription>将这些信息配置到子系统的 OAuth 客户端中。</CardDescription></CardHeader><CardContent><FieldGroup className="gap-5">
         <CopyField label="Client ID" value={app.id} />
         {app.is_public ? <Field><FieldLabel>Client Secret</FieldLabel><FieldDescription>公开客户端使用 S256 PKCE，无需保存客户端密钥。</FieldDescription></Field> : <ClientSecretField key={`${app.id}:${secretRevision}`} applicationId={app.id} available={app.secret_available} busy={busy} onRotate={() => { setConfirm("rotate"); setConfirmError("") }} />}
         {metadata ? <><CopyField label="Authorization Endpoint" value={metadata.authorization_endpoint} /><CopyField label="Token Endpoint" value={metadata.token_endpoint} /><CopyField label="User Endpoint" value={metadata.userinfo_endpoint} /></> : <Alert><AlertCircle /><AlertDescription>接口地址暂时加载失败。<Button variant="link" onClick={() => { void api<OAuthMetadata>("/.well-known/oauth-authorization-server").then(setMetadata).catch(reason => setError(managementError(reason))) }}>重新加载</Button></AlertDescription></Alert>}<div className="flex flex-wrap gap-2">{app.allowed_scopes.map(scope => <Badge key={scope} variant="secondary">{scope}</Badge>)}<Badge variant="outline">Authorization Code + PKCE</Badge></div></FieldGroup></CardContent></Card>}
@@ -118,7 +118,7 @@ export function ApplicationEditor({ id }: { id?: string }) {
           <Field data-disabled={busy}><FieldLabel id="app-type-label">应用类型</FieldLabel>{app ? <div><Badge variant="secondary">{app.is_public ? <Code2 data-icon="inline-start" /> : <LockKeyhole data-icon="inline-start" />}{app.is_public ? "公开客户端 · PKCE" : "服务端应用"}</Badge></div> : <ToggleGroup aria-labelledby="app-type-label" value={[draft.is_public ? "public" : "confidential"]} onValueChange={values => { if (values[0]) change("is_public",values[0] === "public") }} disabled={busy || Boolean(app)} variant="pill" size="lg" spacing={1} className="max-w-full flex-wrap"><ToggleGroupItem value="confidential"><LockKeyhole />服务端应用</ToggleGroupItem><ToggleGroupItem value="public"><Code2 />公开客户端</ToggleGroupItem></ToggleGroup>}<FieldDescription>{draft.is_public ? "适用于纯前端或原生应用，必须使用 S256 PKCE。" : "适用于有后端的子系统，Client Secret 仅保存在服务端。"} 创建后不可更改。</FieldDescription></Field>
           <Field data-disabled={busy}>
             <FieldLabel id="app-role-label">最低访问等级</FieldLabel>
-            <ToggleGroup aria-labelledby="app-role-label" value={[draft.minimum_role]} onValueChange={values => { if (values[0]) change("minimum_role",values[0]) }} disabled={busy} variant="pill" size="lg" spacing={1} className="max-w-full flex-wrap">
+            <ToggleGroup aria-labelledby="app-role-label" value={[draft.minimum_role]} onValueChange={values => { if (values[0]) change("minimum_role",values[0]) }} disabled={busy} variant="pill" size="lg" spacing={1} className="w-fit! max-w-full flex-wrap">
               <ToggleGroupItem value="USER" aria-label="1 级 · 普通用户" title="普通用户">LT1</ToggleGroupItem>
               <ToggleGroupItem value="LT2" disabled aria-label="LT2（暂未开放）" title="LT2（暂未开放）">LT2</ToggleGroupItem>
               <ToggleGroupItem value="ADMIN" aria-label="3 级 · 管理员" title="管理员">LT3</ToggleGroupItem>
@@ -128,7 +128,7 @@ export function ApplicationEditor({ id }: { id?: string }) {
           </Field>
           <Field data-disabled={busy}>
             <FieldLabel id="app-active-label">应用状态</FieldLabel>
-            <ToggleGroup aria-labelledby="app-active-label" value={[draft.is_active ? "active" : "inactive"]} onValueChange={values => { if (values[0]) change("is_active", values[0] === "active") }} disabled={busy} variant="pill" size="lg" spacing={1}>
+            <ToggleGroup aria-labelledby="app-active-label" value={[draft.is_active ? "active" : "inactive"]} onValueChange={values => { if (values[0]) change("is_active", values[0] === "active") }} disabled={busy} variant="pill" size="lg" spacing={1} className="w-fit! max-w-full flex-wrap">
               <ToggleGroupItem value="active" aria-label="已启用" title="已启用"><Circle aria-hidden="true" className="text-(--feedback-success)" /></ToggleGroupItem>
               <ToggleGroupItem value="inactive" aria-label="已停用" title="已停用"><Circle aria-hidden="true" className="text-(--feedback-error)" /></ToggleGroupItem>
             </ToggleGroup>

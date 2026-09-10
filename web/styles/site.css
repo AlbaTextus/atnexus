@@ -437,6 +437,15 @@ body { min-height: 100vh; margin: 0; background: var(--page-canvas); color: var(
 .center-page-heading h1 { margin: 0; overflow-wrap: anywhere; font-size: 27px; font-weight: 650; letter-spacing: -0.5px; }
 .center-page-heading > div { min-width: 0; }
 .center-page-heading p { margin-top: 8px; color: var(--muted-foreground); font-size: 13px; line-height: 1.7; }
+.application-editor-heading { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 4fr) minmax(120px, 1fr); }
+.application-editor-heading > div { grid-column: 2; text-align: center; }
+.application-editor-heading .center-eyebrow { justify-content: center; }
+.application-editor-heading .center-eyebrow::before { background: var(--feedback-success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--feedback-success) 10%, transparent); }
+.application-editor-heading > a { grid-column: 3; justify-self: end; }
+@media (max-width: 720px) {
+  .application-editor-heading { grid-template-columns: minmax(0, 1fr); }
+  .application-editor-heading > div, .application-editor-heading > a { grid-column: 1; }
+}
 .center-stat { font-size: 29px; font-weight: 600; letter-spacing: -1px; line-height: 1.4; }
 .center-footer { padding: 20px; color: var(--muted-foreground); text-align: center; font-size: 10px; }
 .application-icon { display: grid; width: 52px; height: 52px; flex-shrink: 0; place-items: center; overflow: hidden; border: 1px solid var(--border); border-radius: 15px; background: linear-gradient(145deg, var(--muted), var(--card)); color: var(--muted-foreground); transition: transform 350ms var(--ease-out-soft), color 220ms, border-color 220ms; }

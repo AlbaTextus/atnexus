@@ -36,7 +36,7 @@ export function ChangePassword() {
     try { await api("/api/v1/account/password", { method: "POST", body: JSON.stringify({ current_password: current, new_password: password }) }); setCurrent(""); setPassword(""); setConfirmation(""); setDone(true); feedback.success("密码已更新，请重新登录") }
     catch (reason) { setError(managementError(reason)); if (reason instanceof ApiError && reason.code === "incorrect_password") setInvalid("current") } finally { setBusy(false) }
   }
-  return <form onSubmit={submit} aria-busy={busy}><Card>
+  return <form onSubmit={submit} aria-busy={busy}><Card className="border border-border">
     <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound size={18} />登录密码</CardTitle><CardDescription>{hasPassword ? "修改密码需要验证当前密码，完成后需重新登录。" : user.email_is_alias ? "设置密码后，也可以使用个人资料中的登录标识登录。" : "你目前使用第三方账号登录。设置密码后，也可使用邮箱登录。"}</CardDescription></CardHeader>
     <CardContent>{done ? <Alert><Check /><AlertDescription role="status">密码已更新，原有登录会话和应用授权已失效。请使用新密码重新登录。</AlertDescription></Alert> : <FieldGroup>
       {error && <Alert variant="destructive" id="password-change-error"><AlertCircle /><AlertDescription>{error}</AlertDescription></Alert>}

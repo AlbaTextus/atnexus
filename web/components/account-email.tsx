@@ -50,7 +50,7 @@ export function AccountEmail() {
     finally { setSubmitting(false) }
   }
 
-  return <form onSubmit={submit} aria-busy={busy}><Card>
+  return <form onSubmit={submit} aria-busy={busy}><Card className="border border-border">
     <CardHeader>
       <CardTitle className="flex items-center gap-2">电子邮箱<Badge variant={verified ? "secondary" : "outline"}>{verified ? "已验证" : user.email_is_alias ? "未绑定" : "待验证"}</Badge></CardTitle>
       <CardDescription>{user.email_is_alias ? "绑定可收件邮箱后，可使用它作为登录邮箱，第三方登录仍可继续使用。" : "验证邮箱所有权，或更换用于登录的邮箱。"}</CardDescription>

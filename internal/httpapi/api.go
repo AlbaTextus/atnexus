@@ -189,8 +189,19 @@ func (a *API) timeout(next http.Handler) http.Handler {
 	return http.TimeoutHandler(next, a.cfg.HTTPRequestTimeout, `{"error":"server_timeout"}`)
 }
 func (a *API) health(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if err := a.store.Ping(r.Context()); err != nil {
 		writeJSON(w, 503, map[string]string{"status": "unhealthy"})
+		return
+	}
+	state, err := a.maintenanceState(r.Context())
+	if err != nil {
+		writeJSON(w, 503, map[string]string{"status": "unhealthy"})
+		return
+	}
+	if state.Enabled {
+		w.Header().Set("Retry-After", "15")
+		writeJSON(w, 433, map[string]string{"status": "maintenance"})
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "ok"})

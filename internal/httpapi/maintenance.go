@@ -22,10 +22,12 @@ func maintenanceReply(w http.ResponseWriter, unavailable bool) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Retry-After", "15")
 	code, message := "maintenance", "网站维护中，目前仅超级管理员可以访问。"
+	status := 433
 	if unavailable {
 		code, message = "maintenance_unavailable", "暂时无法确认服务状态，请稍后重试。"
+		status = http.StatusServiceUnavailable
 	}
-	writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": code, "error_description": message})
+	writeJSON(w, status, map[string]string{"error": code, "error_description": message})
 }
 
 // Keep only the transports required for super-admin authentication open.

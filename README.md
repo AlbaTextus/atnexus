@@ -411,7 +411,7 @@ Go 服务可用 `go build -o release/connect ./cmd/server` 构建，Windows 可�
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| GET | `/healthz` | Go 与数据库健康检查 |
+| GET | `/healthz` | 正常返回 200；维护开启返回 433（status=maintenance）；数据库或维护状态读取失败返回 503 |
 | GET | `/.well-known/oauth-authorization-server` | OAuth 元数据 |
 | GET | `/oauth/authorize` | 发起授权码流程 |
 | POST | `/oauth/token` | 换取、刷新令牌或使用客户端凭证 |
@@ -468,7 +468,7 @@ Go 服务可用 `go build -o release/connect ./cmd/server` 构建，Windows 可�
 
 维护页不展示管理员登录入口。超级管理员可直接访问 `/maintenance/login`，使用密码、通行密钥或已绑定的第三方账号登录。普通账户即使密码正确也不会获得新会话；第三方登录会先验证已有绑定账户的超级管理员角色，拒绝其他账户，也不会自动注册新用户。已登录的超级管理员可以正常使用管理功能并结束维护。
 
-页面访问由 Next.js 请求代理拦截，业务 API 和 OAuth 接口由 Go 中间件校验，受限请求返回 `503` 和 `Retry-After: 15`。已打开的页面每 15 秒检查一次状态，并在重新聚焦时检查；结束维护后，维护页自动恢复到首页。此功能不会撤销已有会话，恢复后用户可继续使用。
+页面访问由 Next.js 请求代理拦截并跳转至维护页，业务 API 和 OAuth 接口由 Go 中间件校验，维护期间受限请求返回 `433` 和 `Retry-After: 15`；无法读取维护状态时仍返回 `503`。已打开的页面每 15 秒检查一次状态，并在重新聚焦时检查；结束维护后，维护页自动恢复到首页。此功能不会撤销已有会话，恢复后用户可继续使用。
 
 接口：`GET /api/v1/maintenance` 返回当前维护状态与当前会话是否可放行；`PUT /api/v1/admin/maintenance` 接受 `{"enabled": true|false}`，要求超级管理员会话及标准账户请求来源校验。健康检查、状态查询、身份验证所需接口以及退出登录保持可用。
 

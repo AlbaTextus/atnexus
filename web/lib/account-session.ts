@@ -14,7 +14,7 @@ const currentAccount = cache(async (): Promise<AccountUser | null> => {
     signal: AbortSignal.timeout(10000),
   })
   if (response.status === 401) return null
-  if (response.status === 503) redirect("/maintenance")
+  if (response.status === 433 || response.status === 503) redirect("/maintenance")
   if (!response.ok) throw new Error("暂时无法加载账户，请稍后重试。")
   return response.json()
 })

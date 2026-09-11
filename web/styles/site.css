@@ -851,7 +851,12 @@ body { min-height: 100vh; margin: 0; background: var(--page-canvas); color: var(
 .home-guide-note p > span { margin-left: 14px; color: var(--muted-foreground); }
 .home-guide-note > a { display: inline-flex; align-items: center; gap: 7px; color: var(--home-highlight); font-size: 12px; }
 .home-footer { padding-top: 54px; border-top: 1px solid var(--border); color: var(--foreground); background: var(--home-panel); color-scheme: dark; }
-.home-footer-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 48px; padding-bottom: 48px; }
+.home-footer-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: start; gap: 38px 130px; padding-bottom: 48px; }
+.home-footer > .home-container { container-type: inline-size; }
+.home-footer-brand { position: relative; top: -10px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.home-footer-github { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; color: var(--muted-foreground); font-size: 13px; transition: color 160ms ease; }
+.home-footer-github:hover { color: var(--foreground); }
+.home-footer-github:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: 4px; }
 .home-footer .home-brand { flex-direction: column; align-items: flex-start; }
 .home-footer .home-wordmark { font-size: 30px; }
 .home-brand small { display: block; margin-top: 7px; font-size: 10px; font-weight: 400; letter-spacing: .02em; color: var(--muted-foreground); }
@@ -859,16 +864,23 @@ body { min-height: 100vh; margin: 0; background: var(--page-canvas); color: var(
 .home-footer-signature { display: inline-flex; align-items: center; gap: 10px; color: var(--muted-foreground); font-size: 10px; letter-spacing: .03em; }
 .home-footer-column { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
 .home-footer-column h2 { margin-bottom: 9px; font-size: 13px; font-weight: 600; }
-.home-footer-column > a { display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 12px; transition: color 160ms ease; }
-.home-footer-column > a:hover { color: var(--foreground); }
+.home-footer-column > a { position: relative; display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 12px; transition: color 180ms ease, transform 220ms ease; }
+.home-footer-column > a::after { content: ""; position: absolute; inset-inline: 0; bottom: 0; height: 1px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform 220ms ease; }
+.home-footer-column > a:is(:hover, :focus-visible) { color: var(--foreground); transform: translateX(3px); }
+.home-footer-column > a:is(:hover, :focus-visible)::after { transform: scaleX(1); }
+.home-footer-column > a:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .home-footer-column > a, .home-footer-column > a::after { transition: none; }
+  .home-footer-column > a:is(:hover, :focus-visible) { transform: none; }
+}
 .home-community-note { margin-top: 2px; padding-left: 13px; border-left: 2px solid var(--border); color: var(--muted-foreground); font-size: 11px; line-height: 1.8; }
 .home-resource-links { display: flex; flex-wrap: wrap; gap: 8px; }
 .home-resource-note { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 10px; }
-.home-footer-bottom { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding-block: 32px; color: #727580; font-size: 13px; }
+.home-footer-bottom { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding-block: 32px 12px; color: #727580; font-size: 13px; }
 .home-footer-legal { display: flex; flex-shrink: 0; gap: 28px; }
 .home-footer-legal a { padding-block: 8px; transition: color 180ms ease; }
 .home-footer-legal a:hover { color: var(--foreground); }
-.home-footer-watermark { overflow: hidden; height: clamp(55px, 9vw, 140px); padding-top: 8px; color: #f8f8f9; font-family: Arial, sans-serif; font-size: clamp(44px, 13vw, 200px); font-weight: 800; letter-spacing: -.055em; line-height: 1; text-align: center; user-select: none; pointer-events: none; }
+.home-footer-watermark { padding-block: 0 24px; color: #f8f8f9; font-family: Arial, sans-serif; font-size: min(14cqi, 200px); font-weight: 800; letter-spacing: -.055em; line-height: 1.1; text-align: center; white-space: nowrap; user-select: none; pointer-events: none; }
 @media (hover: hover) and (pointer: fine) {
   .home-entry:hover { translate: 0 -4px; }
   .home-entry:hover .home-entry-arrow { transform: translate(3px, -3px); opacity: 1; }
@@ -888,8 +900,7 @@ body { min-height: 100vh; margin: 0; background: var(--page-canvas); color: var(
   #home-applications, #community, .home-shell #guide { scroll-margin-top: 172px; }
 }
 @media (max-width: 900px) {
-  .home-footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 38px 50px; }
-  .home-footer-brand { grid-column: 1 / -1; }
+  .home-footer-grid { column-gap: clamp(40px, 10vw, 130px); }
   .home-guide-grid { gap: 24px; }
   .home-guide-note p > span { display: block; margin-left: 0; }
 }
@@ -922,7 +933,7 @@ body { min-height: 100vh; margin: 0; background: var(--page-canvas); color: var(
   .home-guide-note > p { flex-basis: calc(100% - 40px); }
   .home-guide-note > a { margin-left: 29px; }
   .home-footer { padding-top: 38px; }
-  .home-footer-grid { gap: 35px 20px; padding-bottom: 35px; }
+  .home-footer-grid { grid-template-columns: minmax(0, 1fr); gap: 35px 20px; padding-bottom: 35px; }
   .home-footer-brand { grid-column: 1 / -1; }
   .home-footer-column { gap: 15px; }
   .home-footer-column h2 { margin-bottom: 3px; }
@@ -1229,7 +1240,6 @@ svg.lucide-fingerprint { color: #141413; }
 @media (prefers-reduced-motion: no-preference) {
   .home-shell, .home-header, .home-footer { transition: background-color 240ms ease, color 240ms ease; }
 }
-@media (max-width: 440px) { .home-header .home-repo-link { display: none; } }
 .home-footer-projects { gap: 0; }
 .home-footer-projects h2 { margin-bottom: 2px; }
 .home-footer-projects > a { line-height: 18px; }

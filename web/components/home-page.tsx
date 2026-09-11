@@ -3,7 +3,7 @@
 import { Link as TransitionLink } from "next-view-transitions"
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { motion, useInView } from "framer-motion"
-import { Check, Code2, Fingerprint, Github, Globe2, ShieldCheck, Sparkles, UserRound } from "lucide-react"
+import { Check, Code2, Fingerprint, Globe2, ShieldCheck, Sparkles, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SiteFooter } from "@/components/site-footer"
 import { CloudflareNetwork } from "@/components/cloudflare-network"
@@ -11,8 +11,6 @@ import { HomeBrand } from "@/components/home-brand"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { AnnouncementCenter } from "@/components/announcement-center"
 import { AccountEntryLink } from "@/components/account-entry-link"
-
-const repository = "https://github.com/AlbaTextus/connect"
 
 
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)"
@@ -70,7 +68,6 @@ export function HomePage() {
         <HomeBrand collapsed={brandCollapsed} />
         <div className="home-header-actions">
           <AnnouncementCenter /><ThemeToggle />
-          <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<a href={repository} target="_blank" rel="noopener noreferrer" />} aria-label="GitHub 项目（新窗口）" className="home-repo-link"><Github /></Button>
           <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<TransitionLink href="/wiki" />} aria-label="前往 Wiki" title="前往 Wiki">W</Button>
           <AccountEntryLink render={<TransitionLink href="/account" />} />
         </div>

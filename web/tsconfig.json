@@ -37,7 +37,9 @@
     "release/types/**/*.ts",
     "release/dev/types/**/*.ts",
     "temps/next-imgbed/types/**/*.ts",
-    "temps/next-imgbed/dev/types/**/*.ts"
+    "temps/next-imgbed/dev/types/**/*.ts",
+    "temp/next-imgbed/types/**/*.ts",
+    "temp/next-imgbed/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

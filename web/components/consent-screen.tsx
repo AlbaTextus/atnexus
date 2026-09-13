@@ -97,7 +97,23 @@ export function ConsentScreen({ requestToken }: { requestToken: string }) {
         <CardHeader className="consent-card-heading">
           <div className="account-member-heading"><Link href="/account" className="account-member-brand">ALBATEXTUS</Link><Fingerprint className="size-7" aria-hidden="true" /></div>
         </CardHeader>
-        {loading ? <CardContent className="consent-loading" role="status" aria-label="正在加载应用授权"><Skeleton className="h-16 w-full" /><Skeleton className="h-20 w-full" /><Skeleton className="h-52 w-full" /><Skeleton className="h-12 w-full" /></CardContent> : <>
+        {loading ? <CardContent className="consent-loading" role="status" aria-label="正在加载应用授权">
+          <div className="consent-loading-heading">
+            <span className="consent-loading-mark" aria-hidden="true"><Fingerprint /></span>
+            <p>正在准备授权信息<span className="consent-loading-dots" aria-hidden="true"><i /><i /><i /></span></p>
+          </div>
+          <div className="consent-identity" aria-hidden="true">
+            <Skeleton className="size-11 shrink-0 rounded-full" />
+            <div className="flex flex-1 flex-col gap-3"><Skeleton className="h-3 w-20" /><Skeleton className="h-3 w-3/5" /></div>
+            <ShieldCheck className="consent-identity-seal" />
+          </div>
+          <div className="flex flex-col gap-6" aria-hidden="true">
+            <div className="flex items-center justify-between gap-4"><Skeleton className="h-4 w-2/5" /><Skeleton className="h-3 w-12" /></div>
+            <Separator />
+            <Skeleton className="h-4 w-1/4" />
+          </div>
+          <div className="consent-actions" aria-hidden="true"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>
+        </CardContent> : <>
           <CardContent className="consent-card-body">
             {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}</AlertDescription></Alert>}
             {consent && <>

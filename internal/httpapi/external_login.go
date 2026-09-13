@@ -213,7 +213,7 @@ func (a *API) externalLoginCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, a.cfg.AuthUIURL+"/maintenance", http.StatusSeeOther)
 		return
 	}
-	if err := a.issueSession(w, r.Context(), user); err != nil {
+	if err := a.issueSession(w, r, user); err != nil {
 		a.externalLoginError(w, r, flow, "login_failed")
 		return
 	}

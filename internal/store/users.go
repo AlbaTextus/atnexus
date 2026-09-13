@@ -14,7 +14,8 @@ var ErrUserForbidden = errors.New("user management forbidden")
 
 type ManagedUser struct {
 	User
-	UpdatedAt time.Time
+	UpdatedAt       time.Time
+	LastLoginDevice *LoginDevice
 }
 
 type UserFilter struct {
@@ -44,7 +45,7 @@ type UserManagementStore interface {
 
 func scanManagedUser(row pgx.Row) (ManagedUser, error) {
 	var u ManagedUser
-	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role, &u.IsActive, &u.CreatedAt, &u.AvatarSource, &u.AvatarURL, &u.CustomAvatarURL, &u.NumericID, &u.Bio, &u.EmailVerified, &u.ProfileSetupRequired, &u.UpdatedAt)
+	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role, &u.IsActive, &u.CreatedAt, &u.AvatarSource, &u.AvatarURL, &u.CustomAvatarURL, &u.NumericID, &u.Bio, &u.EmailVerified, &u.ProfileSetupRequired, &u.UpdatedAt, &u.LastLoginDevice)
 	return u, err
 }
 
@@ -60,7 +61,7 @@ func (p *Postgres) ListUsers(ctx context.Context, filter UserFilter) (UserList, 
 	if err := p.pool.QueryRow(ctx, `SELECT COUNT(*),COUNT(*) FILTER (WHERE is_active),COUNT(*) FILTER (WHERE role IN ('ADMIN','SUPER_ADMIN')) FROM users`).Scan(&result.All, &result.Active, &result.Admins); err != nil {
 		return result, err
 	}
-	rows, err := p.pool.Query(ctx, `SELECT `+userColumns+`,users.updated_at FROM users`+where+` ORDER BY created_at DESC,id LIMIT $4 OFFSET $5`, search, filter.Role, filter.Status, filter.PageSize, (filter.Page-1)*filter.PageSize)
+	rows, err := p.pool.Query(ctx, `SELECT `+userColumns+`,users.updated_at,users.last_login_device FROM users`+where+` ORDER BY created_at DESC,id LIMIT $4 OFFSET $5`, search, filter.Role, filter.Status, filter.PageSize, (filter.Page-1)*filter.PageSize)
 	if err != nil {
 		return result, err
 	}
@@ -111,7 +112,7 @@ func (p *Postgres) CreateManagedUser(ctx context.Context, actorID uuid.UUID, inp
 		return ManagedUser{}, ErrUserForbidden
 	}
 	u, err := scanManagedUser(tx.QueryRow(ctx, `INSERT INTO users (id,email,password_hash,display_name,role,is_active,created_at,updated_at)
-	 VALUES ($1,$2,$3,$4,$5,true,NOW(),NOW()) RETURNING `+userColumns+`,users.updated_at`, uuid.New(), input.Email, input.PasswordHash, input.DisplayName, input.Role))
+	 VALUES ($1,$2,$3,$4,$5,true,NOW(),NOW()) RETURNING `+userColumns+`,users.updated_at,users.last_login_device`, uuid.New(), input.Email, input.PasswordHash, input.DisplayName, input.Role))
 	if isUniqueViolation(err) {
 		return ManagedUser{}, ErrAlreadyExists
 	}
@@ -122,7 +123,7 @@ func (p *Postgres) CreateManagedUser(ctx context.Context, actorID uuid.UUID, inp
 }
 
 func managedTarget(ctx context.Context, tx pgx.Tx, actor User, id uuid.UUID, revision time.Time) (ManagedUser, error) {
-	u, err := scanManagedUser(tx.QueryRow(ctx, `SELECT `+userColumns+`,users.updated_at FROM users WHERE id=$1 FOR UPDATE`, id))
+	u, err := scanManagedUser(tx.QueryRow(ctx, `SELECT `+userColumns+`,users.updated_at,users.last_login_device FROM users WHERE id=$1 FOR UPDATE`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return u, ErrNotFound
 	}
@@ -167,7 +168,7 @@ func (p *Postgres) UpdateManagedUser(ctx context.Context, actorID, id uuid.UUID,
 	if !canManageUser(actor, input.Role) || (actorID == id && (input.Role != previous.Role || !input.IsActive)) {
 		return ManagedUser{}, ErrUserForbidden
 	}
-	u, err := scanManagedUser(tx.QueryRow(ctx, `UPDATE users SET display_name=$2,role=$3,is_active=$4,updated_at=clock_timestamp() WHERE id=$1 RETURNING `+userColumns+`,users.updated_at`, id, input.DisplayName, input.Role, input.IsActive))
+	u, err := scanManagedUser(tx.QueryRow(ctx, `UPDATE users SET display_name=$2,role=$3,is_active=$4,updated_at=clock_timestamp() WHERE id=$1 RETURNING `+userColumns+`,users.updated_at,users.last_login_device`, id, input.DisplayName, input.Role, input.IsActive))
 	if err != nil {
 		return ManagedUser{}, err
 	}

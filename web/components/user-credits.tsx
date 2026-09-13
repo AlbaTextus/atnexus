@@ -72,7 +72,7 @@ export function UserCredits({ userID, onLockedChange }: { userID: number; onLock
     {loadError && <Alert variant="destructive"><AlertCircle /><AlertDescription role="alert">{loadError}<Button variant="link" disabled={loading} onClick={() => setReload(value => value + 1)}>重新加载积分</Button></AlertDescription></Alert>}
     {loading && !target && <Skeleton className="h-36 w-full" aria-label="正在加载积分" />}
     {target && <>
-      <div className="managed-user-credit-card">
+      <div className="managed-user-credit-card managed-user-panel">
         <h2>积分卡</h2>
         <WalletAppearance><BalanceCard available={Number(result?.balance_after ?? target.wallet.balance)} pending={Number(target.wallet.pending_balance || "0")} loading={loading} headingLevel={3} /></WalletAppearance>
         <div className="account-member-controls"><UserCreditHistory userID={userID} disabled={locked} /></div>

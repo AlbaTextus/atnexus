@@ -1,7 +1,7 @@
 import { ApiError } from "@/lib/api"
 import type { AccountUser } from "@/components/account-shell"
 
-export type ManagedUser = AccountUser & { is_active: boolean; created_at: string; updated_at: string }
+export type ManagedUser = AccountUser & { is_active: boolean; created_at: string; updated_at: string; last_login_device?: { ip: string; fingerprint: string; user_agent: string; screen?: string; timezone?: string; logged_in_at: string } | null }
 export type UserListResult = {
   users: ManagedUser[]
   total: number

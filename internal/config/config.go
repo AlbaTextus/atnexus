@@ -12,6 +12,7 @@ import (
 )
 
 type Config struct {
+	TrustedProxyCIDRs         []string
 	Env                       string
 	HTTPAddr                  string
 	DatabaseURL               string
@@ -38,6 +39,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	c := Config{
+		TrustedProxyCIDRs:         getList("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128"),
 		Env:                       getenv("APP_ENV", "development"),
 		HTTPAddr:                  getenv("HTTP_ADDR", ":8080"),
 		DatabaseURL:               os.Getenv("DATABASE_URL"),

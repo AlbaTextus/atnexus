@@ -44,6 +44,7 @@ model LegalDocument {
 }
 
 model User {
+	lastLoginDevice Json? @map("last_login_device")
   bio          String              @default("") @db.Text
   numericId    Int                 @unique @default(autoincrement()) @map("numeric_id")
   id           String              @id @default(uuid()) @db.Uuid

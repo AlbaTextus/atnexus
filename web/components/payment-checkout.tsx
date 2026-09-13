@@ -66,7 +66,29 @@ export function PaymentCheckout({ orderId }: { orderId: string }) {
       <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={walletHref} />}><ArrowLeft data-icon="inline-start" />返回钱包</Button>
       <Button variant="ghost" size="icon" aria-label="刷新订单" disabled={busy || loading} onClick={() => { setError(""); setRevision(v => v + 1) }}><RefreshCw /></Button>
     </div>
-    {loading && !order ? <Skeleton className="h-[640px] w-full rounded-3xl" /> : order && wallet ? <div className="checkout-ticket-shadow">
+    {loading && !order ? <div className="checkout-ticket-shadow" role="status" aria-label="正在加载支付订单">
+      <Card className="account-member-card wallet-receipt checkout-ticket checkout-loading">
+        <div className="checkout-heading">
+          <div className="checkout-brand-row"><span className="account-member-brand">ALBATEXTUS</span><ShieldCheck className="checkout-loading-mark" aria-hidden="true" /></div>
+          <div className="checkout-amount-block">
+            <p className="checkout-eyebrow">正在准备订单信息<span className="checkout-loading-dots" aria-hidden="true"><i /><i /><i /></span></p>
+            <Skeleton className="h-14 w-40" aria-hidden="true" />
+            <Skeleton className="h-5 w-20" aria-hidden="true" />
+          </div>
+        </div>
+        <div className="checkout-order-details" aria-hidden="true">
+          <Skeleton className="mx-auto h-5 w-3/5" />
+          <div className="flex justify-between gap-4"><Skeleton className="h-3 w-16" /><Skeleton className="h-3 w-28" /></div>
+          <div className="flex justify-between gap-4"><Skeleton className="h-3 w-20" /><Skeleton className="h-3 w-24" /></div>
+        </div>
+        <Separator className="checkout-perforation" />
+        <CardContent className="checkout-payment" aria-hidden="true">
+          <div className="checkout-payer"><Skeleton className="size-10 shrink-0 rounded-full" /><div className="flex flex-1 flex-col gap-3"><Skeleton className="h-3 w-16" /><Skeleton className="h-3 w-28" /></div></div>
+          <Skeleton className="h-12 w-full" />
+        </CardContent>
+        <CardFooter className="checkout-footer"><ShieldCheck className="size-3.5" aria-hidden="true" /><span>ALBATEXTUS · 安全支付</span><span className="checkout-monogram" aria-hidden="true">AT</span></CardFooter>
+      </Card>
+    </div> : order && wallet ? <div className="checkout-ticket-shadow checkout-ready">
       <Card className="account-member-card wallet-receipt checkout-ticket">
         <PayingInfo order={order} expired={expired} />
         <Separator className="checkout-perforation" />
@@ -76,10 +98,10 @@ export function PaymentCheckout({ orderId }: { orderId: string }) {
             <div className="checkout-payer-identity"><span className="checkout-eyebrow">付款账户</span><span className="checkout-payer-name">{payerName}</span></div>
           </div>}
           {error && <Alert variant="destructive"><AlertCircle /><AlertDescription role="alert">{error}</AlertDescription></Alert>}
-          {order.status === "paid" ? <div className="checkout-state checkout-complete">
+          {order.status === "paid" ? <div key="paid" className="checkout-state checkout-complete checkout-paid">
             <Check className="size-7" aria-hidden="true" /><h2>支付成功</h2><p role="status">积分已支付，可以返回原应用继续操作。</p>
             <Button nativeButton={false} render={<Link href={walletHref} />} size="lg" className="w-full">查看钱包<ArrowRight data-icon="inline-end" /></Button>
-          </div> : !pending ? <div className="checkout-state checkout-complete">
+          </div> : !pending ? <div key="closed" className="checkout-state checkout-complete">
             <LockKeyhole className="size-6" aria-hidden="true" /><h2>{expired ? "订单已过期" : orderStatus[order.status]}</h2><p role="status">此订单已关闭，无法继续支付。</p>
             <Button nativeButton={false} render={<Link href={walletHref} />} variant="outline" size="lg" className="w-full">返回钱包</Button>
           </div> : <form onSubmit={pay} aria-busy={busy} className="checkout-state">

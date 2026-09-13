@@ -9,6 +9,7 @@ import { UserCredits } from "@/components/user-credits"
 import { UserManagementDialog, type UserAction } from "@/components/user-management-dialog"
 import { canManageUser, type ManagedUser } from "@/lib/users"
 import { Badge } from "@/components/ui/badge"
+import { UserDeviceCard } from "@/components/user-device-card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
@@ -36,8 +37,8 @@ export function UserDetailsRow({ user, onSaved }: { user: ManagedUser; onSaved: 
       <DialogHeader className="managed-user-dialog-heading"><DialogTitle>用户详情</DialogTitle><DialogDescription>查看账户信息、管理登录权限{actor.role === "SUPER_ADMIN" ? "与积分。" : "。"}</DialogDescription></DialogHeader>
       <div className="managed-user-dialog-body">
         <div className="managed-user-profile">
-          <UserIdentityCard user={user} />
-          <section className="managed-user-login" aria-label="登录信息">
+          <section className="managed-user-panel managed-user-identity" aria-label="身份信息"><UserIdentityCard user={user} /></section>
+          <section className="managed-user-login managed-user-panel" aria-label="登录信息">
             <h3><Settings2 className="size-4" aria-hidden="true" />账户管理</h3>
             <div className="flex flex-wrap gap-2"><Badge variant={user.is_active ? "success" : "secondary"}>{user.is_active ? "已启用" : "已停用"}</Badge>{self && <Badge variant="outline">当前账户</Badge>}</div>
             <dl>{details.map(detail => <div key={detail.label}><dt>{detail.label}</dt><dd>{detail.value}</dd></div>)}</dl>
@@ -46,6 +47,7 @@ export function UserDetailsRow({ user, onSaved }: { user: ManagedUser; onSaved: 
             </div>
           </section>
         </div>
+        <UserDeviceCard key={user.id} device={user.last_login_device} />
         {open && actor.role === "SUPER_ADMIN" && <UserCredits key={user.id} userID={user.numeric_id} onLockedChange={setCreditsLocked} />}
       </div>
       {action && <UserManagementDialog action={action} onClose={() => setAction(null)} onSaved={message => { setAction(null); setOpen(false); onSaved(message) }} />}

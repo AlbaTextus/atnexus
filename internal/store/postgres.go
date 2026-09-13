@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -101,7 +102,13 @@ func (p *Postgres) UpsertUser(ctx context.Context, in UserSeed) (User, error) {
 }
 
 func (p *Postgres) CreateSession(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) error {
-	_, err := p.pool.Exec(ctx, `INSERT INTO user_sessions (id, token_hash, user_id, expires_at, created_at) VALUES ($1, $2, $3, $4, NOW())`, uuid.New(), tokenHash, userID, expiresAt)
+	var metadata []byte
+	if device, ok := ctx.Value(loginDeviceKey{}).(LoginDevice); ok {
+		metadata, _ = json.Marshal(device)
+	}
+	_, err := p.pool.Exec(ctx, `WITH session AS (
+	 INSERT INTO user_sessions (id, token_hash, user_id, expires_at, created_at) VALUES ($1, $2, $3, $4, NOW()) RETURNING user_id
+	) UPDATE users SET last_login_device=COALESCE($5::jsonb,last_login_device) WHERE id IN (SELECT user_id FROM session)`, uuid.New(), tokenHash, userID, expiresAt, metadata)
 	if isUniqueViolation(err) {
 		return ErrConflict
 	}

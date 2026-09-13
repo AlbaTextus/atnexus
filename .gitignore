@@ -17,3 +17,5 @@ server.exe
 .codegraph/
 temps/
 release/
+temp/
+web/temp/

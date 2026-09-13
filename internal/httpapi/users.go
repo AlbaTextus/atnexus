@@ -51,6 +51,7 @@ func (a *API) userManagementError(w http.ResponseWriter, err error) {
 func managedUserView(u store.ManagedUser) map[string]any {
 	view := userView(u.User)
 	view["is_active"], view["updated_at"] = u.IsActive, u.UpdatedAt
+	view["last_login_device"] = u.LastLoginDevice
 	return view
 }
 

@@ -262,7 +262,7 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	if !a.allowMaintenanceLogin(w, r, u) {
 		return
 	}
-	if err := a.issueSession(w, r.Context(), u); err != nil {
+	if err := a.issueSession(w, r, u); err != nil {
 		a.log.Error("create registration session", "error", err)
 		writeJSON(w, 500, map[string]string{"error": "server_error"})
 		return
@@ -289,7 +289,7 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	if !a.allowMaintenanceLogin(w, r, u) {
 		return
 	}
-	if err := a.issueSession(w, r.Context(), u); err != nil {
+	if err := a.issueSession(w, r, u); err != nil {
 		a.log.Error("create session", "error", err)
 		writeJSON(w, 500, map[string]string{"error": "server_error"})
 		return
@@ -297,13 +297,13 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, userView(u))
 }
 
-func (a *API) issueSession(w http.ResponseWriter, ctx context.Context, user store.User) error {
+func (a *API) issueSession(w http.ResponseWriter, r *http.Request, user store.User) error {
 	value, err := security.RandomToken(32)
 	if err != nil {
 		return err
 	}
 	expires := time.Now().Add(a.cfg.SessionTTL)
-	if err := a.store.CreateSession(ctx, user.ID, security.HashToken(value), expires); err != nil {
+	if err := a.store.CreateSession(store.WithLoginDevice(r.Context(), a.loginDevice(r)), user.ID, security.HashToken(value), expires); err != nil {
 		return err
 	}
 	http.SetCookie(w, &http.Cookie{Name: a.cfg.SessionCookieName, Value: value, Path: "/", Expires: expires, MaxAge: int(a.cfg.SessionTTL.Seconds()), HttpOnly: true, Secure: a.cfg.CookieSecure, SameSite: http.SameSiteLaxMode})
@@ -534,7 +534,7 @@ func (a *API) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 	if !a.allowMaintenanceLogin(w, r, user) {
 		return
 	}
-	if err := a.issueSession(w, r.Context(), user); err != nil {
+	if err := a.issueSession(w, r, user); err != nil {
 		a.log.Error("create passkey login session", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
 		return

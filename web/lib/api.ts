@@ -1,3 +1,5 @@
+import { collectLoginDevice } from "@/lib/login-device"
+
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
     super(message)
@@ -6,6 +8,9 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  if (init?.method === "POST" && (path === "/api/v1/sessions" || path === "/api/v1/users" || path === "/api/v1/passkeys/login/finish" || /^\/api\/v1\/auth\/providers\/[^/]+\/start$/.test(path))) {
+    await collectLoginDevice()
+  }
   const response = await fetch(path, {
     credentials: "include",
     ...init,

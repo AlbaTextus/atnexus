@@ -3,6 +3,9 @@
 @import "shadcn/tailwind.css";
 @import "../styles/site.css";
 
+/* Keep the header centered at the same position on short and scrollable pages. */
+html { scrollbar-gutter: stable; }
+
 /* Connect announcements and email workspace. */
 .announcement-trigger { position: relative; }
 .announcement-dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--destructive); box-shadow: 0 0 0 2px var(--background); }

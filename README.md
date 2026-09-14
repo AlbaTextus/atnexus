@@ -531,4 +531,6 @@ Prisma schema 与迁移是数据库结构的来源；Go 服务没有 Prisma Clie
 
 相邻的 ALBATEXTUS 图床可通过 `go run ./cmd/register-imgbed` 联调注册。该工具会登记客户端并写入相邻图床的本地配置，运行前请核对 [工具源码](cmd/register-imgbed/main.go) 中的目录、端口与回调约定。
 
+相邻的 Status 后台可通过 `go run ./cmd/register-status` 接入当前 Connect。工具创建独立机密应用 `albatextus-status`，最低角色为 `ADMIN`，仅申请 `profile`；默认回调为 `http://127.0.0.1:3100/api/auth/callback`，凭据写入 `../status/.dev.vars`。应用所有者和初始允许账号使用 `SEED_ADMIN_EMAIL` 对应的现有管理员，也可在首次登记时用 `-admin-id <UUID>` 指定。支持 `-app-url`、`-issuer-url`、`-output`；重复运行保留已有密钥、回调和 Status 管理密钥。登记后在 Status 执行 `npm run db:migrate:local` 并重启开发服务。工具不会重置用户、运行 seed 或修改其他应用。
+
 目前未提供邮箱验证码绑定、OIDC ID Token 或跨子系统统一登出。功能问题和接入反馈可提交到 [GitHub Issues](https://github.com/AlbaTextus/connect/issues)。

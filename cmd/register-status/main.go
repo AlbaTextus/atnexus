@@ -28,8 +28,9 @@ func main() {
 	issuerURL := flag.String("issuer-url", "", "Public Connect origin; defaults to ISSUER_URL")
 	adminID := flag.String("admin-id", "", "Existing administrator UUID; defaults to the SEED_ADMIN_EMAIL account")
 	output := flag.String("output", "../status/.dev.vars", "Local Status environment file")
+	migrateOwnerAllowlist := flag.Bool("migrate-owner-allowlist", false, "Replace the legacy owner-only Status allowlist with administrator role access")
 	flag.Parse()
-	if err := run(*appURL, *issuerURL, *adminID, *output); err != nil {
+	if err := run(*appURL, *issuerURL, *adminID, *output, *migrateOwnerAllowlist); err != nil {
 		fmt.Fprintln(os.Stderr, "Status registration failed:", err)
 		os.Exit(1)
 	}
@@ -47,7 +48,7 @@ func origin(raw string) (string, error) {
 	return strings.TrimRight(u.String(), "/"), nil
 }
 
-func run(appURL, issuerURL, adminID, output string) error {
+func run(appURL, issuerURL, adminID, output string, migrateOwnerAllowlist bool) error {
 	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
 		return errors.New("cannot read Connect environment")
 	}
@@ -111,6 +112,20 @@ func run(appURL, issuerURL, adminID, output string) error {
 	if err != nil || !admin.IsActive || (admin.Role != "ADMIN" && admin.Role != "SUPER_ADMIN") {
 		return errors.New("an active Connect administrator is required; select an existing account with -admin-id")
 	}
+
+	// Existing ID restrictions are preserved unless the legacy owner-only default
+	// is explicitly migrated. Never silently widen a custom account allowlist.
+	if migrateOwnerAllowlist {
+		allowedIDs := strings.TrimSpace(values["STATUS_OAUTH_ALLOWED_USER_IDS"])
+		if allowedIDs != "" && allowedIDs != admin.ID.String() {
+			return errors.New("cannot migrate a custom Status account allowlist; review STATUS_OAUTH_ALLOWED_USER_IDS first")
+		}
+		delete(values, "STATUS_OAUTH_ALLOWED_USER_IDS")
+	}
+	if strings.TrimSpace(values["STATUS_OAUTH_ALLOWED_ROLES"]) == "" {
+		values["STATUS_OAUTH_ALLOWED_ROLES"] = "ADMIN,SUPER_ADMIN"
+	}
+	values["STATUS_OAUTH_ROLE_CLAIM"] = "role"
 
 	callback := appURL + "/api/auth/callback"
 	app, err := st.ApplicationByID(ctx, clientID, admin.ID, true)
@@ -186,9 +201,6 @@ func run(appURL, issuerURL, adminID, output string) error {
 	values["STATUS_OAUTH_USER_ID_CLAIM"] = "sub"
 	// Connect reads form credentials directly; this also preserves URL-sensitive characters.
 	values["STATUS_OAUTH_TOKEN_AUTH_METHOD"] = "client_secret_post"
-	if values["STATUS_OAUTH_ALLOWED_USER_IDS"] == "" {
-		values["STATUS_OAUTH_ALLOWED_USER_IDS"] = admin.ID.String()
-	}
 	contents, err := godotenv.Marshal(values)
 	if err != nil {
 		return err

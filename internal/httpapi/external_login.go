@@ -15,14 +15,20 @@ import (
 
 func (a *API) loginProviders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
+	features, err := a.siteFeatures(r.Context())
+	if err != nil {
+		a.log.Error("read site features for login providers", "error", err)
+		siteFeaturesUnavailable(w)
+		return
+	}
 	providers := make([]map[string]any, 0)
 	for _, p := range a.federation.Providers() {
 		if p.ID == "custom" && !p.Enabled() {
 			continue
 		}
-		providers = append(providers, map[string]any{"id": p.ID, "name": p.Name, "enabled": p.Enabled()})
+		providers = append(providers, map[string]any{"id": p.ID, "name": p.Name, "enabled": features.ExternalLoginEnabled && features.LoginProviderEnabled(p.ID) && p.Enabled()})
 	}
-	writeJSON(w, 200, map[string]any{"providers": providers})
+	writeJSON(w, 200, map[string]any{"providers": providers, "enabled": features.ExternalLoginEnabled})
 }
 
 func (a *API) externalStore(w http.ResponseWriter) (store.ExternalLoginStore, bool) {
@@ -53,7 +59,22 @@ func (a *API) startExternalLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 403, map[string]string{"error": "invalid_origin"})
 		return
 	}
-	provider, ok := a.federation.Provider(chi.URLParam(r, "provider"))
+	features, err := a.siteFeatures(r.Context())
+	if err != nil {
+		a.log.Error("read site features for external login", "error", err)
+		siteFeaturesUnavailable(w)
+		return
+	}
+	if !features.ExternalLoginEnabled {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "external_login_disabled", "error_description": "第三方登录已关闭，请使用邮箱或通行密钥登录。"})
+		return
+	}
+	providerID := chi.URLParam(r, "provider")
+	if !features.LoginProviderEnabled(providerID) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "login_provider_disabled", "error_description": "该第三方登录方式已关闭，请选择其他登录方式。"})
+		return
+	}
+	provider, ok := a.federation.Provider(providerID)
 	if !ok {
 		writeJSON(w, 503, map[string]string{"error": "provider_unavailable", "error_description": "该登录方式尚未配置，请使用邮箱登录或联系管理员。"})
 		return
@@ -150,6 +171,20 @@ func (a *API) externalLoginCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Path: callbackPath, MaxAge: -1, HttpOnly: true, Secure: a.cfg.CookieSecure, SameSite: http.SameSiteLaxMode})
+	features, err := a.siteFeatures(r.Context())
+	if err != nil {
+		a.log.Error("read site features for external login callback", "error", err)
+		a.externalLoginError(w, r, flow, "site_features_unavailable")
+		return
+	}
+	if !features.ExternalLoginEnabled {
+		a.externalLoginError(w, r, flow, "external_login_disabled")
+		return
+	}
+	if !features.LoginProviderEnabled(provider.ID) {
+		a.externalLoginError(w, r, flow, "login_provider_disabled")
+		return
+	}
 	if flow.UserID != nil {
 		user, ok := a.currentUser(r)
 		session, err := r.Cookie(a.cfg.SessionCookieName)
@@ -200,6 +235,12 @@ func (a *API) externalLoginCallback(w http.ResponseWriter, r *http.Request) {
 			message = "identity_linked"
 		case errors.Is(err, store.ErrInactiveUser):
 			message = "account_disabled"
+		case errors.Is(err, store.ErrRegistrationDisabled):
+			message = "registration_disabled"
+		case errors.Is(err, store.ErrExternalLoginDisabled):
+			message = "external_login_disabled"
+		case errors.Is(err, store.ErrLoginProviderDisabled):
+			message = "login_provider_disabled"
 		}
 		a.externalLoginError(w, r, flow, message)
 		return

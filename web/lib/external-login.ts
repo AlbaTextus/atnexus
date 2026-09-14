@@ -11,6 +11,10 @@ const messages: Record<string, string> = {
   verified_email_required: "第三方账号没有提供已验证的邮箱。请先验证邮箱，或登录已有 ALBATEXTUS 账户后绑定。",
   identity_linked: "此第三方账号已被绑定，或当前账户已绑定该平台的其他账号。",
   account_disabled: "此账户已停用，请联系管理员。",
+  registration_disabled: "全站注册已关闭，请使用已有账户登录。",
+  external_login_disabled: "第三方登录已关闭，请使用邮箱或通行密钥登录。",
+  login_provider_disabled: "该第三方登录方式已关闭，请选择其他登录方式。",
+  site_features_unavailable: "暂时无法读取站点功能设置，请稍后重试。",
   login_failed: "第三方登录未完成，请重试。",
 }
 

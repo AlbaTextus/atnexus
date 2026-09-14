@@ -186,7 +186,6 @@ body { min-height: 100vh; margin: 0; background: var(--page-canvas); color: var(
 }
 .auth-shell-white .auth-card {
   max-width: 380px;
-  min-height: 635px;
   gap: 20px;
   padding: 24px;
   transition: padding 360ms var(--ease-out-soft), gap 360ms var(--ease-out-soft);
@@ -194,7 +193,6 @@ body { min-height: 100vh; margin: 0; background: var(--page-canvas); color: var(
 .auth-shell-white .auth-card > :is([data-slot="card-header"], [data-slot="card-footer"]) { flex-shrink: 0; }
 .auth-shell-white .auth-card > [data-slot="card-content"] {
   min-width: 0;
-  flex: 1;
 }
 .auth-shell-white .auth-card [data-slot="field-group"] { gap: 14px; transition: gap 360ms var(--ease-out-soft); }
 .auth-shell-white .auth-card [data-slot="field-separator"] { margin-block: 16px; transition: margin 360ms var(--ease-out-soft); }
@@ -205,10 +203,6 @@ body { min-height: 100vh; margin: 0; background: var(--page-canvas); color: var(
 .auth-shell-white .auth-card:has(.verification-gate[data-state="closed"]) .auth-wordmark { margin-bottom: 20px; }
 @media (min-width: 640px) {
   .auth-shell-white .auth-card:has(.verification-gate[data-state="closed"]) { padding: 32px; }
-}
-/* Reserve space for compact Turnstile widgets without constraining content. */
-@media (max-width: 379px) {
-  .auth-shell-white .auth-card { min-height: 715px; }
 }
 .auth-shell-identity {
   position: relative;

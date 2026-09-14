@@ -32,9 +32,10 @@ export function RegisterForm({ returnTo }: RegisterFormProps) {
   const [error, setError] = useFeedback("error")
   const [confirmError, setConfirmError] = useState(false)
   const destination = safeReturnTo(returnTo)
+  const registrationDisabled = verification.config?.registration_enabled === false
 
   async function sendCode() {
-    if (busy || !verification.ready || !verification.config?.email_enabled) return
+    if (busy || registrationDisabled || !verification.ready || !verification.config?.email_enabled) return
     const input = document.getElementById("email") as HTMLInputElement | null
     if (!input?.reportValidity()) return
     setError("")
@@ -45,7 +46,7 @@ export function RegisterForm({ returnTo }: RegisterFormProps) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (busy || !verification.ready || !emailVerification.challengeID || !verification.config?.email_enabled) return
+    if (busy || registrationDisabled || !verification.ready || !emailVerification.challengeID || !verification.config?.email_enabled) return
     setError("")
     setConfirmError(false)
     if (password !== confirm) {
@@ -80,30 +81,30 @@ export function RegisterForm({ returnTo }: RegisterFormProps) {
 
       <form onSubmit={submit} onChange={() => setError("")} aria-busy={busy} aria-describedby={error ? "register-error" : undefined}>
         <FieldGroup className="gap-5">
-          <Field data-disabled={busy}>
+          <Field data-disabled={busy || registrationDisabled}>
             <FieldLabel htmlFor="email" className="sr-only">电子邮箱</FieldLabel>
-            <Input id="email" name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} required maxLength={320} value={email} onChange={(event) => { setEmail(event.target.value); emailVerification.reset() }} disabled={busy} className="h-11 px-3" placeholder="邮箱" />
+            <Input id="email" name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} required maxLength={320} value={email} onChange={(event) => { setEmail(event.target.value); emailVerification.reset() }} disabled={busy || registrationDisabled} className="h-11 px-3" placeholder="邮箱" />
           </Field>
-          <Field data-disabled={busy}>
+          <Field data-disabled={busy || registrationDisabled}>
             <FieldLabel htmlFor="password" className="sr-only">密码</FieldLabel>
-            <PasswordInput id="password" name="password" autoComplete="new-password" required minLength={12} maxLength={72} value={password} onChange={(event) => { setPassword(event.target.value); setConfirmError(false) }} disabled={busy} placeholder="密码（至少 12 个字符）" />
+            <PasswordInput id="password" name="password" autoComplete="new-password" required minLength={12} maxLength={72} value={password} onChange={(event) => { setPassword(event.target.value); setConfirmError(false) }} disabled={busy || registrationDisabled} placeholder="密码（至少 12 个字符）" />
           </Field>
-          <Field data-disabled={busy} data-invalid={confirmError}>
+          <Field data-disabled={busy || registrationDisabled} data-invalid={confirmError}>
             <FieldLabel htmlFor="confirm" className="sr-only">确认密码</FieldLabel>
-            <PasswordInput id="confirm" name="confirm" label="确认密码" autoComplete="new-password" required minLength={12} maxLength={72} value={confirm} onChange={(event) => { setConfirm(event.target.value); setConfirmError(false) }} disabled={busy} placeholder="再次输入你的密码" aria-invalid={confirmError || undefined} aria-describedby={confirmError ? "confirm-error" : undefined} />
+            <PasswordInput id="confirm" name="confirm" label="确认密码" autoComplete="new-password" required minLength={12} maxLength={72} value={confirm} onChange={(event) => { setConfirm(event.target.value); setConfirmError(false) }} disabled={busy || registrationDisabled} placeholder="再次输入你的密码" aria-invalid={confirmError || undefined} aria-describedby={confirmError ? "confirm-error" : undefined} />
             {confirmError && <FieldError id="confirm-error">两次输入的密码不一致，请重新确认。</FieldError>}
           </Field>
           <AuthVerification verification={verification} disabled={busy} />
-          {verification.config && !verification.config.email_enabled && <Alert><AlertCircle /><AlertDescription>邮箱注册暂不可用，请稍后重试或使用第三方账号登录。</AlertDescription></Alert>}
-          <EmailCodeField id="register-email-code" verification={emailVerification} disabled={busy} sendDisabled={!email || !verification.ready || !verification.config?.email_enabled} onSend={sendCode} />
-          <Button type="submit" size="lg" disabled={busy || !verification.ready || !verification.config?.email_enabled || !emailVerification.challengeID || emailVerification.code.length !== 6} className="mt-1 h-11 w-full">
+          {registrationDisabled && <Alert><AlertCircle /><AlertDescription>全站注册已关闭，已有账户仍可返回登录。</AlertDescription></Alert>}
+          {verification.config && verification.config.registration_enabled && !verification.config.email_enabled && <Alert><AlertCircle /><AlertDescription>邮箱注册暂不可用，请稍后重试或使用第三方账号登录。</AlertDescription></Alert>}
+          <EmailCodeField id="register-email-code" verification={emailVerification} disabled={busy || registrationDisabled} sendDisabled={!email || registrationDisabled || !verification.ready || !verification.config?.email_enabled} onSend={sendCode} />
+          <Button type="submit" size="lg" disabled={busy || registrationDisabled || !verification.ready || !verification.config?.email_enabled || !emailVerification.challengeID || emailVerification.code.length !== 6} className="mt-1 h-11 w-full">
             {busy && <Spinner data-icon="inline-start" aria-hidden="true" />}
             {busy ? "正在创建…" : "创建账户"}
           </Button>
         </FieldGroup>
       </form>
-      <FieldSeparator className="my-6">或使用第三方账号</FieldSeparator>
-      <SocialLogin returnTo={destination} disabled={busy || !verification.ready} onBusyChange={setBusy} verificationHeaders={verification.headers} onAttemptFailed={verification.reset} />
+      <SocialLogin returnTo={destination} disabled={busy || !verification.ready} onBusyChange={setBusy} verificationHeaders={verification.headers} onAttemptFailed={verification.reset} separator={<FieldSeparator className="my-6">或使用第三方账号</FieldSeparator>} />
     </AuthCard>
   )
 }

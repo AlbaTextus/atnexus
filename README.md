@@ -457,8 +457,17 @@ Go 服务可用 `go build -o release/connect ./cmd/server` 构建，Windows 可�
 | POST | `/api/v1/admin/users/{id}/password` | 重置用户密码 |
 | POST | `/api/v1/admin/users/{id}/revoke-sessions` | 撤销用户登录与授权 |
 | GET / PUT | `/api/v1/admin/legal/{slug}` | 读取 / 更新协议 |
+| GET / PATCH | `/api/v1/admin/features` | 读取 / 更新站点功能开关 |
 
 用户列表支持 `q`、`role`、`status`、`page`、`page_size`；更新用户需提交读到的 `updated_at`。协议以 Markdown 保存，更新需提交 `revision`。版本冲突会返回 `409`，应重新读取后编辑。
+
+## 站点功能开关
+
+管理员可在「应用接入」页面底部控制第三方登录、全站注册和 Cloudflare Turnstile 验证。第三方登录保留总开关，并支持单独启停 GitHub、LINUX DO 和已配置的自定义平台；平台名称和 Cloudflare 验证前显示品牌图标。设置保存在数据库 `site_features` 中并即时生效；部署前需执行 `pnpm db:deploy`。
+
+关闭第三方登录总开关会停用全部平台的登录与账户绑定入口，并保留各平台的独立设置。关闭某个平台只阻止该平台登录与绑定；登录入口、回调及账户写入事务均检查设置，已经开始的流程也受限制。关闭全站注册会阻止邮箱验证码注册及第三方首次建号，已有账户仍可登录，已登录用户仍可绑定邮箱。关闭 Cloudflare 验证会跳过登录、注册和通行密钥操作的人机验证；重新开启后仍需有效的 `TURNSTILE_SITE_KEY` 与 `TURNSTILE_SECRET_KEY` 配置才能显示验证组件。
+
+接口 `GET /api/v1/admin/features` 返回三个总开关、`providers` 平台列表（`id`、`name`、`enabled`、`configured`）和 Turnstile 的配置状态；`PATCH /api/v1/admin/features` 接受 `{"feature":"external_login_enabled|registration_enabled|turnstile_enabled","enabled":true|false}`，或 `{"provider":"github|linuxdo|custom","enabled":true|false}`，每次只指定一种目标。平台状态独立保存于 `provider_login_enabled`，更新一个平台不会覆盖其他平台；未单独设置的平台默认允许，总开关关闭时仍全部停用。读写均要求管理员会话及标准账户请求来源校验。
 
 ## 网站维护
 

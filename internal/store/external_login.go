@@ -77,6 +77,18 @@ func (p *Postgres) ResolveExternalIdentity(ctx context.Context, identity Externa
 		return User{}, err
 	}
 	defer tx.Rollback(ctx)
+	// Keep the policy locked through account resolution so a disabled provider
+	// cannot finish signing in after its settings update has committed.
+	features, err := scanSiteFeatures(tx.QueryRow(ctx, `SELECT `+siteFeaturesColumns+` FROM site_features WHERE id=1 FOR SHARE`))
+	if err != nil {
+		return User{}, err
+	}
+	if !features.ExternalLoginEnabled {
+		return User{}, ErrExternalLoginDisabled
+	}
+	if !features.LoginProviderEnabled(identity.Provider) {
+		return User{}, ErrLoginProviderDisabled
+	}
 	// Serialize first-time logins for one upstream identity; database uniqueness remains authoritative.
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, identity.Provider+":"+identity.Subject); err != nil {
 		return User{}, err
@@ -116,6 +128,9 @@ func (p *Postgres) ResolveExternalIdentity(ctx context.Context, identity Externa
 			return User{}, ErrInactiveUser
 		}
 	} else {
+		if !features.RegistrationEnabled {
+			return User{}, ErrRegistrationDisabled
+		}
 		if (!identity.EmailVerified && !identity.AccountAlias) || identity.Email == "" {
 			return User{}, ErrVerifiedEmailRequired
 		}

@@ -47,8 +47,8 @@ export function UserDetailsRow({ user, onSaved }: { user: ManagedUser; onSaved: 
             </div>
           </section>
         </div>
-        <UserDeviceCard key={user.id} device={user.last_login_device} />
-        {open && actor.role === "SUPER_ADMIN" && <UserCredits key={user.id} userID={user.numeric_id} onLockedChange={setCreditsLocked} />}
+        <UserDeviceCard device={user.last_login_device} />
+        {open && actor.role === "SUPER_ADMIN" && <UserCredits userID={user.numeric_id} onLockedChange={setCreditsLocked} />}
       </div>
       {action && <UserManagementDialog action={action} onClose={() => setAction(null)} onSaved={message => { setAction(null); setOpen(false); onSaved(message) }} />}
     </DialogContent>

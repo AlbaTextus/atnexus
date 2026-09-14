@@ -48,6 +48,15 @@ func (p *Postgres) ReserveEmailCode(ctx context.Context, c EmailChallenge, limit
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if c.Purpose == "register" {
+		var registrationEnabled bool
+		if err := tx.QueryRow(ctx, `SELECT registration_enabled FROM site_features WHERE id=1 FOR SHARE`).Scan(&registrationEnabled); err != nil {
+			return err
+		}
+		if !registrationEnabled {
+			return ErrRegistrationDisabled
+		}
+	}
 	// Consistent lock order prevents concurrent sends from deadlocking.
 	sort.Slice(limits, func(i, j int) bool { return limits[i].Key < limits[j].Key })
 	for _, limit := range limits {
@@ -121,6 +130,13 @@ func (p *Postgres) CompleteEmailVerification(ctx context.Context, in EmailComple
 	var user User
 	switch in.Purpose {
 	case "register":
+		var registrationEnabled bool
+		if err := tx.QueryRow(ctx, `SELECT registration_enabled FROM site_features WHERE id=1 FOR SHARE`).Scan(&registrationEnabled); err != nil {
+			return User{}, err
+		}
+		if !registrationEnabled {
+			return User{}, ErrRegistrationDisabled
+		}
 		user, err = scanUser(tx.QueryRow(ctx, `INSERT INTO users (id,email,password_hash,display_name,email_verified,role,is_active,created_at,updated_at,profile_setup_required)
 		 VALUES ($1,$2,$3,$4,true,'USER',true,NOW(),NOW(),true) RETURNING `+userColumns, uuid.New(), in.Email, in.PasswordHash, in.DisplayName))
 	case "account":

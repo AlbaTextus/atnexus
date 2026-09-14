@@ -178,6 +178,18 @@ model SiteMaintenance {
   @@map("site_maintenance")
 }
 
+model SiteFeatures {
+  id                   Int      @id @default(1)
+  externalLoginEnabled Boolean  @default(true) @map("external_login_enabled")
+  registrationEnabled  Boolean  @default(true) @map("registration_enabled")
+  turnstileEnabled     Boolean  @default(true) @map("turnstile_enabled")
+  providerLoginEnabled Json     @default("{}") @map("provider_login_enabled")
+  updatedBy             String?  @map("updated_by") @db.Uuid
+  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("site_features")
+}
+
 model UserSession {
   id        String    @id @default(uuid()) @db.Uuid
   tokenHash String    @unique @map("token_hash") @db.Char(64)

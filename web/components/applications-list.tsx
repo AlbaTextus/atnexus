@@ -7,6 +7,7 @@ import { api } from "@/lib/api"
 import { type Application, managementError } from "@/lib/applications"
 import { feedback } from "@/lib/feedback"
 import { ApplicationIcon } from "@/components/application-icon"
+import { SiteFeatureControls } from "@/components/site-feature-controls"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -79,5 +80,6 @@ export function ApplicationsList() {
       </div>
     )}</div> : <Card><CardContent><Empty className="py-12"><EmptyHeader><EmptyMedia variant="icon"><LayoutGrid /></EmptyMedia><EmptyTitle>{apps.length ? "没有找到匹配的应用" : "接入你的第一个应用"}</EmptyTitle><EmptyDescription>{apps.length ? "试试其他搜索词或状态筛选。" : "创建应用，配置回调地址，即可使用统一账户登录你的子系统。"}</EmptyDescription></EmptyHeader><EmptyContent>{apps.length ? <Button variant="outline" onClick={() => { setSearch(""); setFilter("all") }}>清除筛选</Button> : <Button nativeButton={false} role="link" render={<Link href="/admin/applications/new" />}><Plus data-icon="inline-start" />创建应用</Button>}</EmptyContent></Empty></CardContent></Card>}
     <Card><CardHeader><CardTitle>第一次接入？</CardTitle><CardDescription>查看授权流程、接口地址和回调处理说明。</CardDescription></CardHeader><CardContent><Button variant="link" nativeButton={false} role="link" render={<Link href="/wiki/integration" />} className="px-0">阅读接入指南<ArrowUpRight data-icon="inline-end" /></Button></CardContent></Card>
+    <SiteFeatureControls />
   </div>
 }

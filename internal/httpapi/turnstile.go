@@ -10,12 +10,35 @@ import (
 func (a *API) authVerification(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	c := a.cfg.Turnstile
-	writeJSON(w, 200, map[string]any{"enabled": c.Enabled(), "site_key": c.SiteKey, "test_mode": c.TestMode, "action": turnstile.Action, "email_enabled": a.cfg.SMTP.Enabled()})
+	features, err := a.siteFeatures(r.Context())
+	if err != nil {
+		a.log.Error("read site features for auth verification", "error", err)
+		siteFeaturesUnavailable(w)
+		return
+	}
+	writeJSON(w, 200, map[string]any{
+		"enabled":                features.TurnstileEnabled && c.Enabled(),
+		"site_key":               c.SiteKey,
+		"test_mode":              c.TestMode,
+		"action":                 turnstile.Action,
+		"email_enabled":          a.cfg.SMTP.Enabled(),
+		"registration_enabled":   features.RegistrationEnabled,
+		"external_login_enabled": features.ExternalLoginEnabled,
+	})
 }
 
 func (a *API) verifyHuman(w http.ResponseWriter, r *http.Request) bool {
 	w.Header().Set("Cache-Control", "no-store")
-	err := a.turnstile.Verify(r.Context(), r.Header.Get("X-Turnstile-Token"))
+	features, err := a.siteFeatures(r.Context())
+	if err != nil {
+		a.log.Error("read site features for human verification", "error", err)
+		siteFeaturesUnavailable(w)
+		return false
+	}
+	if !features.TurnstileEnabled {
+		return true
+	}
+	err = a.turnstile.Verify(r.Context(), r.Header.Get("X-Turnstile-Token"))
 	if err == nil {
 		return true
 	}

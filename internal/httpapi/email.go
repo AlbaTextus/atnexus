@@ -28,6 +28,9 @@ func (a *API) emailStore(w http.ResponseWriter) (store.EmailStore, bool) {
 }
 
 func (a *API) sendRegistrationCode(w http.ResponseWriter, r *http.Request) {
+	if !a.requireRegistration(w, r) {
+		return
+	}
 	if !a.verifyHuman(w, r) {
 		return
 	}
@@ -154,6 +157,8 @@ func (a *API) emailError(w http.ResponseWriter, err error) {
 		status, code, message = 409, "email_exists", "这个邮箱已被使用，请登录已有账户或更换邮箱。"
 	case errors.Is(err, store.ErrConflict):
 		status, code, message = 409, "account_changed", "账户信息已变更，请刷新页面或重新登录后重试。"
+	case errors.Is(err, store.ErrRegistrationDisabled):
+		status, code, message = http.StatusForbidden, "registration_disabled", "全站注册已关闭，已有账户仍可正常登录。"
 	default:
 		a.log.Error("email operation failed")
 	}

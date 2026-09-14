@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 
-type VerificationConfig = { enabled: boolean; site_key: string; test_mode: boolean; action: string; email_enabled: boolean }
+type VerificationConfig = { enabled: boolean; site_key: string; test_mode: boolean; action: string; email_enabled: boolean; registration_enabled: boolean; external_login_enabled: boolean }
 
 export function useAuthVerification({ requireAgreement = false }: { requireAgreement?: boolean } = {}) {
   const [config, setConfig] = useState<VerificationConfig | null>(null)

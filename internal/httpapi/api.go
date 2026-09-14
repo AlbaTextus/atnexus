@@ -73,6 +73,8 @@ func (a *API) Router() http.Handler {
 	r.Post("/api/v1/admin/communications/{id}/send", a.sendCommunication)
 	r.Post("/api/v1/admin/communications/{id}/archive", a.archiveCommunication)
 	r.Put("/api/v1/admin/maintenance", a.setMaintenance)
+	r.Get("/api/v1/admin/features", a.getSiteFeatures)
+	r.Patch("/api/v1/admin/features", a.setSiteFeature)
 	r.Get("/healthz", a.health)
 	r.Get("/.well-known/oauth-authorization-server", a.metadata)
 	r.Post("/api/v1/users", a.register)
@@ -224,6 +226,9 @@ type userInput struct {
 }
 
 func (a *API) register(w http.ResponseWriter, r *http.Request) {
+	if !a.requireRegistration(w, r) {
+		return
+	}
 	if !a.verifyHuman(w, r) {
 		return
 	}

@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 
-export function SocialLogin({ returnTo, disabled = false, onBusyChange, verificationHeaders, onAttemptFailed, children }: { returnTo: string; disabled?: boolean; onBusyChange?: (busy: boolean) => void; verificationHeaders?: Record<string, string>; onAttemptFailed?: () => void; children?: ReactNode }) {
+export function SocialLogin({ returnTo, disabled = false, onBusyChange, verificationHeaders, onAttemptFailed, children, separator }: { returnTo: string; disabled?: boolean; onBusyChange?: (busy: boolean) => void; verificationHeaders?: Record<string, string>; onAttemptFailed?: () => void; children?: ReactNode; separator?: ReactNode }) {
   const [providers, setProviders] = useState<LoginProvider[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState("")
@@ -37,13 +37,21 @@ export function SocialLogin({ returnTo, disabled = false, onBusyChange, verifica
     } catch (reason) { setError(authErrorMessage(reason, managementError(reason))); setBusy(""); onBusyChange?.(false); onAttemptFailed?.() }
   }
 
-  return <div className="flex flex-col gap-3">
-    <div className={cn("grid", children ? "auth-login-methods grid-cols-3 gap-2" : "grid-cols-2 gap-3")}>
-      {loading ? <Skeleton className="col-span-2 h-11 w-full" /> : providers.map(provider => {
-        return <Button key={provider.id} type="button" variant="outline" size={children ? "sm" : "lg"} className={cn("h-11 min-w-0", children && "px-1.5 max-[400px]:flex-col max-[400px]:gap-0.5")} disabled={disabled || Boolean(busy) || !provider.enabled} title={!provider.enabled ? "暂未开放" : undefined} onClick={() => void login(provider)}>{busy === provider.id ? <Spinner data-icon="inline-start" aria-hidden="true" /> : <ProviderIcon provider={provider.id} data-icon="inline-start" />}<span className="truncate">{provider.name}</span></Button>
-      })}
-      {children}
+  const enabledProviders = providers.filter(provider => provider.enabled)
+  const hasMethods = loading || enabledProviders.length > 0 || Boolean(children)
+
+  if (!hasMethods && !error) return null
+
+  return <>
+    {separator}
+    <div className="flex flex-col gap-3">
+      {hasMethods && <div className={cn("grid grid-flow-col auto-cols-fr", children ? "auth-login-methods gap-2" : "gap-3")}>
+        {loading ? <Skeleton className="h-11 w-full" /> : enabledProviders.map(provider => {
+          return <Button key={provider.id} type="button" variant="outline" size={children ? "sm" : "lg"} className="h-11 min-w-0 px-1.5 max-[400px]:flex-col max-[400px]:gap-0.5" disabled={disabled || Boolean(busy)} onClick={() => void login(provider)}>{busy === provider.id ? <Spinner data-icon="inline-start" aria-hidden="true" /> : <ProviderIcon provider={provider.id} data-icon="inline-start" />}<span className="truncate">{provider.name}</span></Button>
+        })}
+        {children}
+      </div>}
+      {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}<Button type="button" variant="link" disabled={Boolean(busy)} onClick={() => setRetry(value => value + 1)}>重试</Button></AlertDescription></Alert>}
     </div>
-    {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}<Button type="button" variant="link" disabled={Boolean(busy)} onClick={() => setRetry(value => value + 1)}>重试</Button></AlertDescription></Alert>}
-  </div>
+  </>
 }

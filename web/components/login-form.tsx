@@ -112,7 +112,7 @@ export function LoginForm({ returnTo, oauthError, maintenance = false }: LoginFo
       title={maintenance ? "超级管理员登录" : "欢迎回来"} titleId="login-title"
       description={maintenance ? "维护期间，仅超级管理员可通过已配置的登录方式进入。" : undefined}
       brand={<AuthWordmark verified={Boolean(verification.config?.enabled && verification.ready)} />}
-      footer={maintenance ? <Button variant="link" nativeButton={false} role="link" render={<Link href="/maintenance" />}>返回维护页</Button> : <AuthFooter returnTo={returnTo} />}
+      footer={maintenance ? <Button variant="link" nativeButton={false} role="link" render={<Link href="/maintenance" />}>返回维护页</Button> : <AuthFooter returnTo={returnTo} registrationEnabled={verification.config?.registration_enabled === true} />}
     >
       {error && <Alert id="login-error" variant="destructive" className="mb-5"><AlertCircle aria-hidden="true" /><AlertDescription>{error}</AlertDescription></Alert>}
 

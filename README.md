@@ -269,10 +269,9 @@ Go 服务在注册、密码登录、第三方登录发起、通行密钥登录�
 | `/account/security` | 密码、通行密钥与第三方账号管理 |
 | `/admin/applications` | 应用列表、创建、启停、配置与密钥管理 |
 | `/admin/users` | 用户搜索、角色与状态管理、密码重置、撤销登录 |
-| `/wiki/integration` | 公开应用接入指南、服务端点与接入约定 |
-| `/admin/integration`、`/account/integration` | 跳转到 Wiki 接入指南 |
+| `/admin/integration`、`/account/integration`、`/wiki/*` | 跳转到独立的 [ALBATEXTUS Wiki](https://github.com/AlbaTextus/wiki) 接入指南与对应文档 |
 | `/admin/legal` | 跳转到 Wiki |
-| `/wiki/privacy`、`/wiki/terms` | 公开协议正文；`/privacy`、`/terms` 跳转到对应 Wiki 页面 |
+| `/privacy`、`/terms` | 跳转到 Wiki 上的公开协议正文；协议内容仍由本服务的 `/api/v1/legal/{slug}` 提供 |
 | `/consent` | OAuth 应用授权确认 |
 
 账户采用四级等级：1 级普通用户（`USER`）、2 级预留、3 级管理员（`ADMIN`）、4 级超级管理员（`SUPER_ADMIN`）。2 级暂不对应角色，也不能分配或设置为应用访问门槛。用户接口保留 `role`，同时返回由角色确定的数字 `level`（1、3、4）；现有账户自动按角色对应等级，无需数据库迁移。普通用户管理自己的账户；3 级管理员可管理应用及协议，但用户管理仅限 1 级普通用户；4 级超级管理员可管理全部角色。管理操作禁止修改自己的角色、停用自己，或通过后台重置自己的密码和撤销自己的登录。
@@ -347,7 +346,7 @@ curl http://localhost:3000/oauth/token \
 
 ### 关键环境变量
 
-Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先。前端的 `OAUTH_BACKEND_URL` 和 `NEXT_OUTPUT_DIR` 需单独传给 Next.js 进程。
+Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先。前端的 `OAUTH_BACKEND_URL`、`NEXT_PUBLIC_WIKI_URL` 和 `NEXT_OUTPUT_DIR` 需单独传给 Next.js 进程。
 
 | 变量 | 用途 |
 | --- | --- |
@@ -364,6 +363,7 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 | `WEBAUTHN_RP_ORIGINS` | 允许的完整前端 Origin，逗号分隔 |
 | `PASSKEY_CHALLENGE_TTL` | Passkey 挑战有效期，默认 `5m` |
 | `OAUTH_BACKEND_URL` | Next.js 转发到的 Go 地址，默认 `http://localhost:8080` |
+| `NEXT_PUBLIC_WIKI_URL` | 独立 Wiki 服务的公开地址，用于文档、接入指南与协议链接及 `/wiki/*` 跳转，默认 `http://localhost:3200`；构建时内联，修改后需重新构建 |
 | `NEXT_OUTPUT_DIR` | Next.js 构建目录，相对于 `web/`，默认 `.next` |
 
 其他配置见 [.env.example](.env.example) 和 [配置实现](internal/config/config.go)。修改代理后端地址时，生产前端需要重新构建，以更新 rewrites。
@@ -489,7 +489,7 @@ Go 服务可用 `go build -o release/connect ./cmd/server` 构建，Windows 可�
 
 管理后台使用统一的 `/admin/notifications` 消息发布页面。同一份标题与正文可选择「站内公告」「邮箱推送」或两个渠道同时发布，共用一份草稿和发布记录；旧的 `/admin/announcements`、`/admin/emails` 地址均跳转到此页面。管理员可保存草稿、发布和撤下公告，以及向全部已验证用户、管理员或自己发送邮件。邮件范围仅包含启用且邮箱已验证的账户，排除 `.invalid` 占位邮箱；站内公告始终对全站公开，与邮件收件范围独立。后台记录与公开公告列表不设条数截断，每行只显示标题与时间，点击后查看详情或编辑。列表支持滚轮、触屏滑动、鼠标拖动滚动及右下角拖动调整高度；统计覆盖全部消息。
 
-首页、Wiki、登录注册页与账户后台的右上角提供公告信封。未读公告显示红点，打开详情或点击「全部已读」后消除；发布内容更新后重新提醒。已读状态按账户保存在当前浏览器，访客单独记录，暂不跨设备同步。公告每分钟及窗口重新聚焦时刷新。后台采用上方编辑、下方完整预览、底部发布记录的布局。
+首页、登录注册页与账户后台的右上角提供公告信封，独立的 Wiki 服务通过公开公告接口显示同一份公告。未读公告显示红点，打开详情或点击「全部已读」后消除；发布内容更新后重新提醒。已读状态按账户保存在当前浏览器，访客单独记录，暂不跨设备同步。公告每分钟及窗口重新聚焦时刷新。后台采用上方编辑、下方完整预览、底部发布记录的布局。
 
 点击发布记录会打开独立详情弹窗，不替换当前编辑内容与预览。已发布的公告可通过弹窗底部的「撤下公告」操作，长内容在弹窗内滚动，操作栏保持可见；草稿可通过「继续编辑」主动载入编辑器。仅邮件记录和已撤下公告不提供撤下按钮。
 

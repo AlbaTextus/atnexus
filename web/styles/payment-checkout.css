@@ -10,7 +10,6 @@
 .checkout-eyebrow { color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
 .checkout-amount { display: flex; max-width: 100%; align-items: baseline; justify-content: center; gap: 8px; font-size: clamp(40px, 10vw, 64px); font-weight: 550; line-height: 1.1; letter-spacing: -2.5px; font-variant-numeric: tabular-nums; }
 .checkout-amount > span:first-child { min-width: 0; overflow-wrap: anywhere; }
-.checkout-unit { flex-shrink: 0; font-size: 12px; font-weight: 400; letter-spacing: normal; color: var(--muted-foreground); }
 .checkout-ticket .checkout-status { gap: 5px; font-size: 10px; color: var(--muted-foreground); background: color-mix(in srgb, var(--background) 35%, transparent); }
 .checkout-order-details { display: flex; flex-direction: column; gap: 18px; padding: 0 32px 24px; }
 .checkout-order-title { overflow-wrap: anywhere; text-align: center; font-size: 14px; font-weight: 550; line-height: 1.6; margin-bottom: 4px; }
@@ -27,8 +26,6 @@
 .checkout-payer { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .checkout-payer-identity { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
 .checkout-payer-name { font-size: 12px; font-weight: 550; overflow-wrap: anywhere; }
-.checkout-balance { display: flex; flex-shrink: 0; flex-direction: column; gap: 3px; text-align: right; }
-.checkout-balance > span:last-child { font-size: 14px; font-weight: 550; font-variant-numeric: tabular-nums; }
 .checkout-state { display: flex; flex-direction: column; gap: 10px; }
 .checkout-state h2 { font-size: 15px; font-weight: 600; line-height: 1.5; }
 .checkout-state p { font-size: 12px; color: var(--muted-foreground); line-height: 1.8; overflow-wrap: anywhere; }
@@ -65,5 +62,4 @@
   .checkout-order-details { padding-inline: 24px; }
   .checkout-payment { padding-inline: 24px; }
   .checkout-ticket > .checkout-footer { padding-inline: 24px; }
-  .checkout-balance > span:last-child { max-width: 110px; overflow-wrap: anywhere; }
 }

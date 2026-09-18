@@ -1,2 +1,3 @@
 import { redirect } from "next/navigation"
-export default function IntegrationPage() { redirect("/wiki/integration") }
+import { wikiUrl } from "@/lib/wiki"
+export default function IntegrationPage() { redirect(wikiUrl("/integration")) }

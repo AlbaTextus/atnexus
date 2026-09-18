@@ -1,11 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import Link from "next/link"
 import { useTheme } from "next-themes"
 import { AlertCircle, RotateCw, Shield, ShieldCheck } from "lucide-react"
 import { api } from "@/lib/api"
 import { loadTurnstile } from "@/lib/turnstile"
+import { wikiUrl } from "@/lib/wiki"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -142,7 +142,7 @@ export function AuthVerification({ verification, disabled = false }: { verificat
             </div>
             {verification.requireAgreement && <div className="verification-agreement" aria-hidden={!showAgreement || undefined} inert={!showAgreement}>
               <Button ref={agreementButton} type="button" size="sm" className="min-w-28" disabled={disabled || !showAgreement || verification.agreementAccepted} onClick={verification.acceptAgreement}>{verification.agreementAccepted ? "已同意" : "同意并继续"}</Button>
-              <p><Link href="/wiki/privacy" target="_blank" rel="noopener noreferrer" aria-label="隐私政策（新窗口）">隐私政策</Link>与<Link href="/wiki/terms" target="_blank" rel="noopener noreferrer" aria-label="用户协议（新窗口）">用户协议</Link></p>
+              <p><a href={wikiUrl("/privacy")} target="_blank" rel="noopener noreferrer" aria-label="隐私政策（新窗口）">隐私政策</a>与<a href={wikiUrl("/terms")} target="_blank" rel="noopener noreferrer" aria-label="用户协议（新窗口）">用户协议</a></p>
             </div>}
           </div>
           {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}<Button type="button" variant="link" disabled={disabled} onClick={verification.reload}><RotateCw data-icon="inline-start" />重新验证</Button></AlertDescription></Alert>}

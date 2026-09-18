@@ -1,13 +1,14 @@
 import Link from "next/link"
 import { safeReturnTo } from "@/lib/api"
+import { wikiUrl } from "@/lib/wiki"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 
-export function authHref(path: "/login" | "/register" | "/privacy" | "/terms", returnTo?: string | null, from: "login" | "register" = "login") {
+function authHref(path: "/login" | "/register" | "/privacy" | "/terms", returnTo?: string | null, from: "login" | "register" = "login") {
   const query = new URLSearchParams()
   if (returnTo) query.set("return_to", safeReturnTo(returnTo))
   if ((path === "/privacy" || path === "/terms") && from === "register") query.set("from", "register")
-  const destination = path === "/privacy" || path === "/terms" ? `/wiki${path}` : path
+  const destination = path === "/privacy" || path === "/terms" ? wikiUrl(path) : path
   return destination + (query.size ? `?${query}` : "")
 }
 

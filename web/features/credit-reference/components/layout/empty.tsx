@@ -115,30 +115,3 @@ export function EmptyStateWithBorder(props: EmptyStateProps) {
     </div>
   )
 }
-
-/**
- * 简化版空状态组件（内联使用）
- * 适合在较小的区域显示
- * 
- * @example
- * ```tsx
- * <EmptyInline
- *   message="暂无数据"
- *   icon={FileTextIcon}
- * />
- * ```
- * @param {Pick<EmptyStateProps, 'icon' | 'className'> & { message?: string }} props - 简化版空状态组件属性
- * @returns {React.ReactNode} 简化版空状态组件
- */
-export function EmptyInline({
-  message = "暂无数据",
-  icon: Icon = FileTextIcon,
-  className,
-}: Pick<EmptyStateProps, 'icon' | 'className'> & { message?: string }) {
-  return (
-    <div className={cn("flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground", className)}>
-      <Icon className="size-4" />
-      <span>{message}</span>
-    </div>
-  )
-}

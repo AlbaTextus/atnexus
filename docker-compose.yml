@@ -52,6 +52,7 @@ services:
       dockerfile: web/Dockerfile
       args:
         OAUTH_BACKEND_URL: http://oauth:8080
+        NEXT_PUBLIC_WIKI_URL: ${NEXT_PUBLIC_WIKI_URL:-http://localhost:3200}
     environment:
       OAUTH_BACKEND_URL: http://oauth:8080
     ports:

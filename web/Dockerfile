@@ -9,7 +9,9 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY web ./web
 ARG OAUTH_BACKEND_URL=http://oauth:8080
+ARG NEXT_PUBLIC_WIKI_URL=http://localhost:3200
 ENV OAUTH_BACKEND_URL=$OAUTH_BACKEND_URL
+ENV NEXT_PUBLIC_WIKI_URL=$NEXT_PUBLIC_WIKI_URL
 RUN pnpm web:build
 
 EXPOSE 3000

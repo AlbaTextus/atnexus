@@ -11,6 +11,7 @@ import { HomeBrand } from "@/components/home-brand"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { AnnouncementCenter } from "@/components/announcement-center"
 import { AccountEntryLink } from "@/components/account-entry-link"
+import { wikiUrl } from "@/lib/wiki"
 
 
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)"
@@ -68,7 +69,7 @@ export function HomePage() {
         <HomeBrand collapsed={brandCollapsed} />
         <div className="home-header-actions">
           <AnnouncementCenter /><ThemeToggle />
-          <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<TransitionLink href="/wiki" />} aria-label="前往 Wiki" title="前往 Wiki">W</Button>
+          <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<a href={wikiUrl()} />} aria-label="前往 Wiki" title="前往 Wiki">W</Button>
           <AccountEntryLink render={<TransitionLink href="/account" />} />
         </div>
       </div>

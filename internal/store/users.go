@@ -177,7 +177,13 @@ func (p *Postgres) UpdateManagedUser(ctx context.Context, actorID, id uuid.UUID,
 			return ManagedUser{}, err
 		}
 	}
-	return u, tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return ManagedUser{}, err
+	}
+	if previous.Role != input.Role || previous.IsActive != input.IsActive {
+		p.invalidateUserSessionCache(ctx, id)
+	}
+	return u, nil
 }
 
 func (p *Postgres) ResetUserPassword(ctx context.Context, actorID, id uuid.UUID, revision time.Time, hash string) error {
@@ -206,5 +212,9 @@ func (p *Postgres) updateManagedUserAccess(ctx context.Context, actorID, id uuid
 	if err := revokeManagedUserAccess(ctx, tx, id); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	p.invalidateUserSessionCache(ctx, id)
+	return nil
 }

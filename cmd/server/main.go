@@ -37,6 +37,13 @@ func main() {
 		logger.Error("database is unavailable", "error", err)
 		os.Exit(1)
 	}
+	if cfg.Redis.Enabled {
+		if err := st.EnableRedisSessionCache(ctx, cfg.Redis.URL, cfg.Redis.KeyPrefix, cfg.Redis.SessionTTL); err != nil {
+			logger.Error("redis cache initialization failed", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("redis session cache enabled", "ttl", cfg.Redis.SessionTTL)
+	}
 	api, err := httpapi.New(cfg, st, logger)
 	if err != nil {
 		logger.Error("http api initialization failed", "error", err)

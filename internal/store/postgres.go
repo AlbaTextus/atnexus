@@ -13,7 +13,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Postgres struct{ pool *pgxpool.Pool }
+type Postgres struct {
+	pool         *pgxpool.Pool
+	sessionCache *redisSessionCache
+}
 
 func NewPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
 	cfg, err := pgxpool.ParseConfig(databaseURL)
@@ -30,7 +33,21 @@ func NewPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
 	return &Postgres{pool: pool}, nil
 }
 
-func (p *Postgres) Close()                         { p.pool.Close() }
+func (p *Postgres) EnableRedisSessionCache(ctx context.Context, rawURL, prefix string, ttl time.Duration) error {
+	cache, err := newRedisSessionCache(ctx, rawURL, prefix, ttl)
+	if err != nil {
+		return err
+	}
+	p.sessionCache = cache
+	return nil
+}
+
+func (p *Postgres) Close() {
+	if p.sessionCache != nil {
+		p.sessionCache.close()
+	}
+	p.pool.Close()
+}
 func (p *Postgres) Ping(ctx context.Context) error { return p.pool.Ping(ctx) }
 
 func isUniqueViolation(err error) bool {
@@ -106,19 +123,35 @@ func (p *Postgres) CreateSession(ctx context.Context, userID uuid.UUID, tokenHas
 	if device, ok := ctx.Value(loginDeviceKey{}).(LoginDevice); ok {
 		metadata, _ = json.Marshal(device)
 	}
+	var version sessionCacheVersion
+	if p.sessionCache != nil {
+		_, _, version = p.sessionCache.get(ctx, tokenHash)
+	}
+	id := uuid.New()
 	_, err := p.pool.Exec(ctx, `WITH session AS (
 	 INSERT INTO user_sessions (id, token_hash, user_id, expires_at, created_at) VALUES ($1, $2, $3, $4, NOW()) RETURNING user_id
-	) UPDATE users SET last_login_device=COALESCE($5::jsonb,last_login_device) WHERE id IN (SELECT user_id FROM session)`, uuid.New(), tokenHash, userID, expiresAt, metadata)
+	) UPDATE users SET last_login_device=COALESCE($5::jsonb,last_login_device) WHERE id IN (SELECT user_id FROM session)`, id, tokenHash, userID, expiresAt, metadata)
 	if isUniqueViolation(err) {
 		return ErrConflict
 	}
 	if err != nil {
 		return fmt.Errorf("create session: %w", err)
 	}
+	if p.sessionCache != nil {
+		p.sessionCache.set(ctx, tokenHash, Session{ID: id, UserID: userID, ExpiresAt: expiresAt}, version)
+	}
 	return nil
 }
 
 func (p *Postgres) SessionByHash(ctx context.Context, tokenHash string) (Session, error) {
+	var version sessionCacheVersion
+	if p.sessionCache != nil {
+		if session, ok, snapshot := p.sessionCache.get(ctx, tokenHash); ok {
+			return session, nil
+		} else {
+			version = snapshot
+		}
+	}
 	var s Session
 	err := p.pool.QueryRow(ctx, `SELECT s.id, s.user_id, s.expires_at, s.revoked_at FROM user_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND u.is_active = true`, tokenHash).Scan(&s.ID, &s.UserID, &s.ExpiresAt, &s.RevokedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -126,6 +159,9 @@ func (p *Postgres) SessionByHash(ctx context.Context, tokenHash string) (Session
 	}
 	if err != nil {
 		return Session{}, fmt.Errorf("find session: %w", err)
+	}
+	if p.sessionCache != nil {
+		p.sessionCache.set(ctx, tokenHash, s, version)
 	}
 	return s, nil
 }
@@ -135,7 +171,16 @@ func (p *Postgres) RevokeSession(ctx context.Context, tokenHash string) error {
 	if err != nil {
 		return fmt.Errorf("revoke session: %w", err)
 	}
+	if p.sessionCache != nil {
+		p.sessionCache.delete(ctx, tokenHash)
+	}
 	return nil
+}
+
+func (p *Postgres) invalidateUserSessionCache(ctx context.Context, userID uuid.UUID) {
+	if p.sessionCache != nil {
+		p.sessionCache.invalidateUser(ctx, userID)
+	}
 }
 
 func scanPasskey(row pgx.Row) (PasskeyCredential, error) {

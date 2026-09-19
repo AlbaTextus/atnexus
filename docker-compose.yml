@@ -1,4 +1,16 @@
 services:
+  redis:
+    image: redis:7-alpine
+    profiles: ["redis"]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -21,6 +33,10 @@ services:
       APP_ENV: development
       HTTP_ADDR: :8080
       DATABASE_URL: postgresql://oauth:oauth@postgres:5432/oauth?sslmode=disable
+      REDIS_ENABLED: ${REDIS_ENABLED:-false}
+      REDIS_URL: ${REDIS_COMPOSE_URL:-redis://redis:6379/0}
+      REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-albatextus:connect}
+      REDIS_SESSION_TTL: ${REDIS_SESSION_TTL:-30s}
       ISSUER_URL: http://localhost:3000
       AUTH_UI_URL: http://localhost:3000
       COOKIE_SECURE: "false"

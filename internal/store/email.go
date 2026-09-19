@@ -187,5 +187,11 @@ func (p *Postgres) CompleteEmailVerification(ctx context.Context, in EmailComple
 	if _, err := tx.Exec(ctx, `DELETE FROM email_challenges WHERE id=$1`, in.ID); err != nil {
 		return User{}, err
 	}
-	return user, tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return User{}, err
+	}
+	if in.Purpose == "account" && previousEmail != in.Email {
+		p.invalidateUserSessionCache(ctx, in.UserID)
+	}
+	return user, nil
 }

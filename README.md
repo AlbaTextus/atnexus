@@ -111,7 +111,7 @@ SMTP_PASS=your-smtp-auth-code
 
 ## 快速开始
 
-以下命令在仓库根目录执行。需要 Go 1.25+、Node.js（建议 22+）、pnpm 和 PostgreSQL。仓库通过 `packageManager` 固定 pnpm 版本；Docker Compose 使用 PostgreSQL 16。
+以下命令在仓库根目录执行。需要 Go 1.25+、Node.js（建议 22+）、pnpm 和 PostgreSQL；Redis 为可选的会话缓存。仓库通过 `packageManager` 固定 pnpm 版本；Docker Compose 使用 PostgreSQL 16 和可选的 Redis 7。
 
 ### 1. 准备环境
 
@@ -147,6 +147,12 @@ WEBAUTHN_RP_ORIGINS=http://localhost:3000
 
 ```bash
 docker compose up -d postgres
+```
+
+如需启用 Redis 会话缓存，在 `.env` 设置 `REDIS_ENABLED=true`，再启动可选容器；不开启时 Go 服务不会连接 Redis：
+
+```bash
+docker compose --profile redis up -d redis
 ```
 
 数据库就绪后执行：
@@ -351,6 +357,10 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 | 变量 | 用途 |
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL 连接地址，必填 |
+| `REDIS_ENABLED` | 是否启用 Redis 会话缓存，默认 `false`；关闭时不建立 Redis 连接 |
+| `REDIS_URL` | Redis 连接地址，默认 `redis://localhost:6379/0`；支持 `redis://` 与 `rediss://` |
+| `REDIS_KEY_PREFIX` | Redis 键前缀，默认 `albatextus:connect` |
+| `REDIS_SESSION_TTL` | 会话缓存时长，默认 `30s`，且不会超过会话剩余有效期 |
 | `CLIENT_SECRET_ENCRYPTION_KEY` | 客户端密钥与 PKCE verifier 加密密钥，必填并保持稳定 |
 | `APP_ENV` | 本地为 `development`，生产为 `production` |
 | `HTTP_ADDR` | Go 监听地址，默认 `:8080` |
@@ -377,6 +387,8 @@ docker compose up --build -d
 ```
 
 当前 [docker-compose.yml](docker-compose.yml) 是本地开发配置，固定使用本地地址和开发环境，并不自动执行迁移。Go 容器只接收 `environment` 中列出的变量：**目前未透传 `TURNSTILE_*` 和 `CUSTOM_OAUTH_AVATAR_FIELD`**，使用这些功能时需在 Compose 配置或覆盖文件中补充。只修改根目录 `.env` 不会把未列出的变量自动注入容器。
+
+Redis 服务位于 Compose 的 `redis` profile 中，默认不会启动。启用缓存时使用 `docker compose --profile redis up --build -d`；禁用时继续使用普通的 `docker compose up --build -d`。Compose 内部默认连接 `redis://redis:6379/0`，如需覆盖可设置 `REDIS_COMPOSE_URL`。
 
 ### 构建与运行
 

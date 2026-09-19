@@ -5,11 +5,12 @@ import { AccountEntryLink } from "@/components/account-entry-link"
 import { BrandWordmark } from "@/components/brand-wordmark"
 import { wikiUrl } from "@/lib/wiki"
 import { NotFoundScreen } from "@/components/not-found-screen"
+import { SiteFooter } from "@/components/site-footer"
 
 export const metadata: Metadata = {
   title: "ALBATEXTUS",
   robots: { index: false, follow: false },
-  description: "这一页断开连接了。把插头插回去，或返回 ALBATEXTUS 首页与用户中心。",
+  description: "这一页偏离了轨道。听听空白的回声，或返回 ALBATEXTUS 首页与用户中心。",
 }
 
 export default function NotFoundPage() {
@@ -32,10 +33,7 @@ export default function NotFoundPage() {
         <NotFoundScreen />
       </main>
 
-      <footer className="not-found-footer home-container">
-        <p>© 2026 ALBATEXTUS</p>
-        <nav aria-label="法律信息"><a href={wikiUrl("/privacy")}>隐私政策</a><a href={wikiUrl("/terms")}>服务条款</a></nav>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

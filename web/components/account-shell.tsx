@@ -34,7 +34,7 @@ const userNavigation: NavigationItem[] = [
   { href: "/account", title: "用户中心", icon: House },
   { href: "/account/profile", title: "个人资料", icon: UserRound },
   { href: "/account/security", title: "账户安全", icon: ShieldCheck },
-  { href: "/account/wallet", title: "我的钱包", icon: WalletCards },
+  { href: (process.env.NEXT_PUBLIC_CREDIT_URL || "http://localhost:3300") + "/account/wallet", title: "我的积分", icon: WalletCards },
 ]
 const adminNavigation: NavigationItem[] = [
   { href: "/admin/users", title: "用户管理", icon: Users },
@@ -52,7 +52,7 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
   const admin = Boolean(user && isAdminRole(user.role))
   const denied = area === "admin" && Boolean(user) && !admin
   const accountPath = user ? `/account/${user.numeric_id}` : "/account"
-  const navigation = area === "admin" && !denied ? adminNavigation : userNavigation.map(item => ({ ...item, href: item.href.replace("/account", accountPath) }))
+  const navigation = area === "admin" && !denied ? adminNavigation : userNavigation.map(item => ({ ...item, href: item.href.startsWith("/") ? item.href.replace("/account", accountPath) : item.href }))
   const active = navigation.find(item => item.href === accountPath ? pathname === item.href : pathname.startsWith(item.href))
   const title = area === "admin" && !denied ? "管理后台" : "用户中心"
   const areaLink: NavigationItem = area === "admin"

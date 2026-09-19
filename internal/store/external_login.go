@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/AlbaTextus/connect/internal/security"
+	"github.com/AlbaTextus/oauth/internal/security"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )

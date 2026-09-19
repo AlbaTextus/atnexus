@@ -5,7 +5,6 @@ import { ChevronRight, KeyRound, LogOut, Settings2 } from "lucide-react"
 import { useAccountUser } from "@/components/account-shell"
 import { UserAvatar } from "@/components/user-avatar"
 import { UserIdentityCard } from "@/components/account-identity-card"
-import { UserCredits } from "@/components/user-credits"
 import { UserManagementDialog, type UserAction } from "@/components/user-management-dialog"
 import { canManageUser, type ManagedUser } from "@/lib/users"
 import { Badge } from "@/components/ui/badge"
@@ -17,7 +16,7 @@ export function UserDetailsRow({ user, onSaved }: { user: ManagedUser; onSaved: 
   const actor = useAccountUser()
   const [open, setOpen] = useState(false)
   const [action, setAction] = useState<UserAction | null>(null)
-  const [creditsLocked, setCreditsLocked] = useState(false)
+  const creditsLocked = false
   const name = user.display_name || (user.email_is_alias ? "第三方登录用户" : user.email.split("@")[0])
   const self = actor.id === user.id
   const manageable = canManageUser(actor, user)
@@ -48,7 +47,7 @@ export function UserDetailsRow({ user, onSaved }: { user: ManagedUser; onSaved: 
           </section>
         </div>
         <UserDeviceCard device={user.last_login_device} />
-        {open && actor.role === "SUPER_ADMIN" && <UserCredits userID={user.numeric_id} onLockedChange={setCreditsLocked} />}
+        {actor.role === "SUPER_ADMIN" && <a href={(process.env.NEXT_PUBLIC_CREDIT_URL || "http://localhost:3300") + "/admin/wallet?user=" + user.numeric_id}>在 Credit 管理积分</a>}
       </div>
       {action && <UserManagementDialog action={action} onClose={() => setAction(null)} onSaved={message => { setAction(null); setOpen(false); onSaved(message) }} />}
     </DialogContent>

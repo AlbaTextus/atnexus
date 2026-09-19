@@ -68,10 +68,6 @@ model User {
   externalIdentities ExternalIdentity[]
   externalLoginFlows ExternalLoginFlow[]
   consentRequests OAuthConsentRequest[]
-  wallet Wallet?
-  paymentOrders PaymentOrder[] @relation("PaymentPayer")
-  receivedOrders PaymentOrder[] @relation("PaymentPayee")
-  walletAdjustments WalletEntry[] @relation("WalletAdjustmentActor")
 
   @@map("users")
 }
@@ -226,7 +222,6 @@ model OAuthClient {
   tokens            OAuthToken[]
   owner             User?               @relation("ApplicationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   consentRequests   OAuthConsentRequest[]
-  paymentOrders PaymentOrder[]
 
   @@index([ownerId])
   @@map("oauth_clients")
@@ -288,71 +283,4 @@ model OAuthToken {
   @@index([accessExpiresAt])
   @@index([refreshExpiresAt])
   @@map("oauth_tokens")
-}
-
-model Wallet {
-  userId String @id @map("user_id") @db.Uuid
-  balance BigInt @default(0)
-  pendingBalance BigInt @default(0) @map("pending_balance")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  entries WalletEntry[]
-  settlements WalletSettlement[]
-  @@map("wallets")
-}
-
-model PaymentOrder {
-  id String @id @db.Uuid
-  clientId String @map("client_id") @db.VarChar(100)
-  clientName String @map("client_name") @db.VarChar(100)
-  externalOrderId String @map("external_order_id") @db.VarChar(100)
-  payerId String @map("payer_id") @db.Uuid
-  payeeId String @map("payee_id") @db.Uuid
-  title String @db.VarChar(100)
-  amount BigInt
-  status String @default("pending") @db.VarChar(20)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
-  paidAt DateTime? @map("paid_at") @db.Timestamptz(6)
-  client OAuthClient @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  payer User @relation("PaymentPayer", fields: [payerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  payee User @relation("PaymentPayee", fields: [payeeId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  entries WalletEntry[]
-  settlement WalletSettlement?
-  @@unique([clientId, externalOrderId])
-  @@index([payerId, createdAt(sort: Desc), id(sort: Desc)])
-  @@index([payeeId, createdAt(sort: Desc), id(sort: Desc)])
-  @@map("payment_orders")
-}
-
-model WalletEntry {
-  id String @id @db.Uuid
-  userId String @map("user_id") @db.Uuid
-  orderId String? @map("order_id") @db.Uuid
-  amount BigInt
-  balanceAfter BigInt @map("balance_after")
-  kind String @db.VarChar(20)
-  description String @db.VarChar(200)
-  actorId String? @map("actor_id") @db.Uuid
-  idempotencyKey String? @map("idempotency_key") @db.VarChar(100)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  wallet Wallet @relation(fields: [userId], references: [userId], onDelete: Restrict, onUpdate: NoAction)
-  order PaymentOrder? @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  actor User? @relation("WalletAdjustmentActor", fields: [actorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  @@unique([orderId, userId])
-  @@unique([actorId, idempotencyKey])
-  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
-  @@map("wallet_entries")
-}
-
-model WalletSettlement {
-  orderId String @id @map("order_id") @db.Uuid
-  userId String @map("user_id") @db.Uuid
-  amount BigInt
-  settlesAt DateTime @map("settles_at") @db.Timestamptz(6)
-  settledAt DateTime? @map("settled_at") @db.Timestamptz(6)
-  order PaymentOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  wallet Wallet @relation(fields: [userId], references: [userId], onDelete: Restrict, onUpdate: NoAction)
-  @@index([userId, settlesAt])
-  @@map("wallet_settlements")
 }

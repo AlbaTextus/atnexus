@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/AlbaTextus/connect/internal/email"
-	"github.com/AlbaTextus/connect/internal/store"
+	"github.com/AlbaTextus/oauth/internal/email"
+	"github.com/AlbaTextus/oauth/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )

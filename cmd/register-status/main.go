@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/connect/internal/security"
-	"github.com/AlbaTextus/connect/internal/store"
+	"github.com/AlbaTextus/oauth/internal/security"
+	"github.com/AlbaTextus/oauth/internal/store"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 )
@@ -189,7 +189,7 @@ func run(appURL, issuerURL, adminID, output string, migrateOwnerAllowlist bool) 
 		}
 	}
 
-	values["STATUS_OAUTH_NAME"] = "ALBATEXTUS Connect"
+	values["STATUS_OAUTH_NAME"] = "ALBATEXTUS OAuth"
 	values["STATUS_OAUTH_CLIENT_ID"] = clientID
 	values["STATUS_OAUTH_CLIENT_SECRET"] = secret
 	values["STATUS_OAUTH_ISSUER"] = issuerURL

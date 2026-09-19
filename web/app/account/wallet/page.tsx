@@ -1,3 +1,2 @@
-import { redirectToAccount } from "@/lib/account-session"
-
-export default async function WalletPage() { return redirectToAccount("/wallet") }
+import { redirect } from "next/navigation"
+export default function Page() { redirect((process.env.NEXT_PUBLIC_CREDIT_URL || "http://localhost:3300").replace(/\/$/, "") + "/account/wallet") }

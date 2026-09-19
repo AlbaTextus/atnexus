@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/connect/internal/security"
+	"github.com/AlbaTextus/oauth/internal/security"
 )
 
 type Config struct {

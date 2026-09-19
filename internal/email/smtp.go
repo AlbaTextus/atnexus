@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/connect/internal/config"
+	"github.com/AlbaTextus/oauth/internal/config"
 )
 
 type Sender interface {

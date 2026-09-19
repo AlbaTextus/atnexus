@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/connect/internal/oauth"
-	"github.com/AlbaTextus/connect/internal/security"
-	"github.com/AlbaTextus/connect/internal/store"
+	"github.com/AlbaTextus/oauth/internal/oauth"
+	"github.com/AlbaTextus/oauth/internal/security"
+	"github.com/AlbaTextus/oauth/internal/store"
 )
 
 func (a *API) consentStore(w http.ResponseWriter) (store.ConsentStore, bool) {
@@ -212,6 +212,7 @@ func (a *API) consentError(w http.ResponseWriter, err error) {
 func consentUserInfo(user store.User, scopes []string) map[string]any {
 	view := map[string]any{"id": user.ID, "sub": user.ID}
 	if slices.Contains(scopes, "profile") {
+		view["numeric_id"] = user.NumericID
 		view["display_name"] = user.DisplayName
 		view["role"] = user.Role
 		view["created_at"] = user.CreatedAt

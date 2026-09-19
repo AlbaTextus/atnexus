@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/connect/internal/config"
-	"github.com/AlbaTextus/connect/internal/email"
-	"github.com/AlbaTextus/connect/internal/federation"
-	"github.com/AlbaTextus/connect/internal/oauth"
-	"github.com/AlbaTextus/connect/internal/passkey"
-	"github.com/AlbaTextus/connect/internal/security"
-	"github.com/AlbaTextus/connect/internal/store"
-	"github.com/AlbaTextus/connect/internal/turnstile"
+	"github.com/AlbaTextus/oauth/internal/config"
+	"github.com/AlbaTextus/oauth/internal/email"
+	"github.com/AlbaTextus/oauth/internal/federation"
+	"github.com/AlbaTextus/oauth/internal/oauth"
+	"github.com/AlbaTextus/oauth/internal/passkey"
+	"github.com/AlbaTextus/oauth/internal/security"
+	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/oauth/internal/turnstile"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -106,17 +106,6 @@ func (a *API) Router() http.Handler {
 	r.Post("/api/v1/account/avatar", a.uploadAvatar)
 	r.Post("/api/v1/account/avatar/preview", a.previewAvatarGIF)
 	r.Post("/api/v1/account/password", a.changePassword)
-	r.Get("/api/v1/account/wallet", a.getWallet)
-	r.Get("/api/v1/account/wallet/view", a.walletView)
-	r.Get("/api/v1/account/wallet/entries", a.listWalletEntries)
-	r.Get("/api/v1/account/wallet/orders", a.listPaymentOrders)
-	r.Get("/api/v1/account/wallet/orders/{id}", a.getAccountPaymentOrder)
-	r.Post("/api/v1/account/wallet/orders/{id}/pay", a.payOrder)
-	r.Post("/api/v1/account/wallet/orders/{id}/cancel", a.cancelPaymentOrder)
-	r.Post("/api/v1/payments/orders", a.createPaymentOrder)
-	r.Get("/api/v1/payments/orders/{id}", a.getClientPaymentOrder)
-	r.Post("/api/v1/admin/wallet/adjustments", a.adjustWallet)
-	r.Get("/api/v1/admin/wallet/users/{id}", a.getAdminWallet)
 	r.Get("/api/v1/applications", a.listApplications)
 	r.Post("/api/v1/applications", a.createApplication)
 	r.Get("/api/v1/applications/{id}", a.getApplication)

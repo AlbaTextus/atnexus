@@ -1,4 +1,4 @@
-# ALBATEXTUS Connect
+# ALBATEXTUS OAuth
 
 **一个账户，让连接更简单。**
 
@@ -21,63 +21,23 @@ ALBATEXTUS 是面向社区应用的账户中心与 OAuth 2.0 授权服务。用�
 | OAuth 服务 | 授权码、S256 PKCE、刷新令牌轮换、客户端凭证、令牌撤销与自省 |
 | 授权确认 | 展示应用与申请权限，用户明确允许后才签发授权码 |
 | 管理后台 | 应用接入、客户端密钥、最低访问角色、用户管理、协议编辑 |
-| 钱包 | 平台积分余额、分页收支流水、订单确认支付 |
-| 支付 | 应用创建订单、用户核对与密码确认、原子扣款及收款、幂等查询 |
 
 本项目提供 OAuth 2.0 服务，**不签发 OpenID Connect ID Token**。访问令牌是不透明字符串；应用通过 `/api/v1/user` 获取用户身份，不应将令牌当作 JWT 解码。
 
-## 钱包与支付
+## 服务拆分
 
-钱包直接集成在本项目，共用用户、会话、应用和 PostgreSQL。用户入口为 `/account/wallet`，超级管理员入口为 `/admin/wallet`。余额默认零，单位为平台积分；超级管理员可按用户编号查询流水、增加或扣除余额，必须填写原因，操作带幂等键。没有引入参考项目的红包、排行榜、社区等级或争议系统，也没有法币充值、提现和自动退款。
+本仓库由 `AlbaTextus/connect` 更名为 `AlbaTextus/oauth`，负责账户、认证和 OAuth 授权。
+积分、支付、管理调整与 24 小时结算已迁移至独立仓库 [AlbaTextus/credit](https://github.com/AlbaTextus/credit)，使用独立数据库。
+账户中心的积分入口和旧支付页面跳转到 `NEXT_PUBLIC_CREDIT_URL`（本地默认 `http://localhost:3300`）。
+钱包及支付 API 不再由本服务提供；调用方应切换到 Credit。
 
-**启用方式：** 执行 `pnpm db:deploy` 应用钱包、整数积分和 `20260910000000_wallet_settlements` 迁移，重启 Go 服务并重新构建前端。已有用户首次读取或使用钱包时创建零余额钱包。数据库约束阻止负余额，并保留订单与流水；已有订单的应用只能停用，不能删除。
+Credit 在应用管理中注册为机密 OAuth 客户端：回调地址 `http://localhost:3300/api/v1/auth/callback`，
+授权类型 `authorization_code`，scope `profile`，生产环境将地址换为 Credit 的 HTTPS 域名。
+`profile` 用户信息包含稳定 UUID、数字用户编号、昵称、头像及角色；Credit 不接收账户密码或登录 Cookie。
 
-钱包页面现已通过同源服务端接口 `/account/wallet/data` 读取 Go 后端与 PostgreSQL，不再读取本地模拟文件，也不需要 `BALANCE_PREVIEW_ENABLED`。页面样式与支付页面保持不变。总积分为可用积分与未来积分之和，支付只能使用可用积分。
-
-**未来积分：** 新支付成功后，付款方立即扣款，收款方先计入未来积分，从 `paid_at` 起满 **24 小时** 后转入可用积分。Go 服务每 15 秒扫描到期记录；钱包读取、统计查询和后续记账也会先结算已到期积分。服务重启后会补处理，多个实例或重复请求不会重复入账。到账时间由服务器确定，页面可查看确切时间。升级前已到账的余额及旧订单不重新冻结；超级管理员的积分调整仍即时生效。可用与未来积分之和不能超过余额上限。
-
-7 天统计按上海时区统计今日及此前六天，以实际可用余额流水为依据：支出计入付款日，收入计入预定到账日；尚未到账的未来积分不计入收入，空白日期补零。管理调整也纳入对应日期的收入或支出。统计独立于活动列表的筛选和分页。
-
-用户登录后在订单页核对商品与金额，点击确认支付即可扣除积分。钱包页展示余额、流水和订单；第三方登录用户也可以直接确认支付。付款接口验证当前账户会话、请求来源和订单归属。
-
-### 应用支付接口
-
-机密应用使用现有 Client ID / Client Secret 进行 HTTP Basic 认证，服务端创建订单，收款人为应用所有者。公开客户端、未指定所有者的应用、已停用应用和自付订单无法创建。付款用户必须满足应用最低角色。钱包 API 使用账户会话与账户中心请求头，应用密钥或 OAuth 令牌不能代替用户确认支付。
-
-`POST /api/v1/payments/orders`，`Content-Type: application/json`：
-
-```json
-{
-  "external_order_id": "purchase-20260909-001",
-  "payer_id": "用户接口返回的 UUID",
-  "title": "服务积分消费",
-  "amount": "12"
-}
-```
-
-服务端响应 `{ "order": { ... }, "checkout_url": "https://账户中心/pay/订单UUID" }`。新订单返回 201，相同订单重试返回 200。金额必须是整数字符串，正数上限为 `90000000000`；小数输入直接拒绝。数据库保留原有 100 倍存储单位以兼容已有余额，并通过约束确保积分为整数。
-
-将用户引导到 `checkout_url`，用户核对应用、商品和金额后点击确认支付。订单 15 分钟有效。支付事务同时完成付款方扣款及流水、应用所有者未来积分增加、24 小时到账记录及订单状态更新，使用行锁防止并发透支。到期时原子减少未来积分、增加可用积分并写入唯一收款流水。重复确认不会重复扣款；金额、付款人或商品不同的同订单号请求返回 409。
-
-应用服务端用相同 Basic 认证查询 `GET /api/v1/payments/orders/{id}`，只在 `status=paid` 时按订单 UUID 幂等发货。其余状态为 `pending`、`cancelled`、`expired`。查询仅限本应用订单；本次不提供异步回调。不要将浏览器跳转或客户端提示视为支付凭据。服务端下单金额必须从可信商品配置计算。
-
-| 账户接口 | 用途 |
-| --- | --- |
-| `GET /api/v1/account/wallet` | 可用余额 `balance`、未来余额 `pending_balance` |
-| `GET /api/v1/account/wallet/view?resource=user` | 当前登录用户的积分卡片数据和一天到账配置 |
-| `GET /api/v1/account/wallet/view?resource=daily-stats` | 7 天收入、支出及总计，积分以整数字符串返回 |
-| `GET /api/v1/account/wallet/view?resource=transactions` | 兼容活动列表及小票的数据，分页与类型、状态、时间筛选 |
-| `GET /api/v1/account/wallet/entries?offset=0` | 流水，每页 20 条，返回 `has_more` |
-| `GET /api/v1/account/wallet/orders?offset=0` | 付款订单，每页 20 条 |
-| `GET /api/v1/account/wallet/orders/{id}` | 本人付款订单详情 |
-| `POST /api/v1/account/wallet/orders/{id}/pay` | 无需请求体，使用当前账户会话和 `X-AlbaTextus-Client: account-center` 请求头确认扣款 |
-| `POST /api/v1/account/wallet/orders/{id}/cancel` | 取消尚未支付且未过期的订单 |
-| `GET /api/v1/admin/wallet/users/{numericId}?offset=0` | 超级管理员查看指定用户钱包和流水 |
-| `POST /api/v1/admin/wallet/adjustments` | 超级管理员提交 `user_numeric_id`、字符串 `amount`（正负）、`reason`、`idempotency_key` |
-
-主要错误：余额不足 `insufficient_balance`（409）、订单关闭 `order_closed`（409）、幂等键冲突 `idempotency_conflict`（409）。超时或网络失败后，创建订单和调整余额必须沿用原幂等键重试，先核对结果再发起新操作。
-
-活动查询支持 `page`（从 1 开始）、`page_size`（1–100，默认 20）、逗号分隔的 `types` / `statuses`、RFC3339 格式的 `startTime` / `endTime`。默认查询近 30 天，最大偏移 100000；返回 `{orders,total,page,page_size}`。按创建时间和 UUID 倒序稳定排序，空页返回空数组及完整总数。付款订单映射为 `payment`，已确认的收款为 `receive`，平台管理调整为 `community`；未付款订单不向收款方展示。取消订单在兼容视图中显示 `failed`，小票备注为“订单已取消”，原支付 API 仍返回 `cancelled`。编号使用现有订单或流水 UUID。接口只读取当前会话所属钱包，不接受用户 ID 指定其他账户，也不输出邮箱、密码摘要或客户端密钥。
+历史迁移文件保持原样，升级使用 `pnpm db:deploy`。旧钱包表保留为只读迁移来源，
+不会自动删除、清空或在本服务继续结算。迁移步骤见 Credit 的 `MIGRATION.md`。
+旧数据库的 `prisma migrate dev` 可能提出删除已移出的表，完成迁移及核对前不要接受这种删除。
 
 ## 邮箱认证（SMTP）
 
@@ -409,7 +369,7 @@ pnpm web:build
 pnpm web:start
 ```
 
-Go 服务可用 `go build -o release/connect ./cmd/server` 构建，Windows 可将输出命名为 `release/connect.exe`。运行时提供 `.env` 或进程环境变量。已有实例升级只需应用新迁移并更新服务，不需要重复 seed。
+Go 服务可用 `go build -o release/oauth ./cmd/server` 构建，Windows 可将输出命名为 `release/oauth.exe`。运行时提供 `.env` 或进程环境变量。已有实例升级只需应用新迁移并更新服务，不需要重复 seed。
 
 正式部署应使用同源 HTTPS 入口，正确设置 `ISSUER_URL`、`AUTH_UI_URL`、`WEBAUTHN_RP_ID`、`WEBAUTHN_RP_ORIGINS` 和 `COOKIE_SECURE=true`。反向代理保留 `/api/`、`/oauth/`、`/.well-known/` 的转发；健康检查直接请求 Go 的 `/healthz`。启用 CSP 时，为 Turnstile 放行 `https://challenges.cloudflare.com` 的脚本与 iframe。
 
@@ -543,6 +503,6 @@ Prisma schema 与迁移是数据库结构的来源；Go 服务没有 Prisma Clie
 
 相邻的 ALBATEXTUS 图床可通过 `go run ./cmd/register-imgbed` 联调注册。该工具会登记客户端并写入相邻图床的本地配置，运行前请核对 [工具源码](cmd/register-imgbed/main.go) 中的目录、端口与回调约定。
 
-相邻的 Status 后台可通过 `go run ./cmd/register-status` 接入当前 Connect。工具创建独立机密应用 `albatextus-status`，最低角色为 `ADMIN`，仅申请 `profile`；默认回调为 `http://127.0.0.1:3100/api/auth/callback`，凭据写入 `../status/.dev.vars`。应用所有者使用 `SEED_ADMIN_EMAIL` 对应的现有管理员，也可在首次登记时用 `-admin-id <UUID>` 指定。Status 默认按服务端用户资料中的 `role` 允许 `ADMIN`、`SUPER_ADMIN`，符合条件的其他账号也能登录；Connect 应用更严格的 `SUPER_ADMIN` 最低角色会保留。支持 `-app-url`、`-issuer-url`、`-output`；重复运行保留已有密钥、回调、Status 管理密钥和自定义允许名单。旧版仅允许所有者 UUID 的配置，可运行 `go run ./cmd/register-status -migrate-owner-allowlist` 切换到角色授权；该选项拒绝自动清理自定义账号名单。登记后在 Status 执行 `npm run db:migrate:local` 并重启开发服务。工具不会重置用户、运行 seed 或修改其他应用。
+相邻的 Status 后台可通过 `go run ./cmd/register-status` 接入当前 OAuth。工具创建独立机密应用 `albatextus-status`，最低角色为 `ADMIN`，仅申请 `profile`；默认回调为 `http://127.0.0.1:3100/api/auth/callback`，凭据写入 `../status/.dev.vars`。应用所有者使用 `SEED_ADMIN_EMAIL` 对应的现有管理员，也可在首次登记时用 `-admin-id <UUID>` 指定。Status 默认按服务端用户资料中的 `role` 允许 `ADMIN`、`SUPER_ADMIN`，符合条件的其他账号也能登录；OAuth 应用更严格的 `SUPER_ADMIN` 最低角色会保留。支持 `-app-url`、`-issuer-url`、`-output`；重复运行保留已有密钥、回调、Status 管理密钥和自定义允许名单。旧版仅允许所有者 UUID 的配置，可运行 `go run ./cmd/register-status -migrate-owner-allowlist` 切换到角色授权；该选项拒绝自动清理自定义账号名单。登记后在 Status 执行 `npm run db:migrate:local` 并重启开发服务。工具不会重置用户、运行 seed 或修改其他应用。
 
-目前未提供邮箱验证码绑定、OIDC ID Token 或跨子系统统一登出。功能问题和接入反馈可提交到 [GitHub Issues](https://github.com/AlbaTextus/connect/issues)。
+目前未提供邮箱验证码绑定、OIDC ID Token 或跨子系统统一登出。功能问题和接入反馈可提交到 [GitHub Issues](https://github.com/AlbaTextus/oauth/issues)。

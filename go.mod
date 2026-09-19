@@ -1,4 +1,4 @@
-module github.com/AlbaTextus/connect
+module github.com/AlbaTextus/oauth
 
 go 1.25.0
 

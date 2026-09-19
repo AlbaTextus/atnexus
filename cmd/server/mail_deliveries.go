@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/AlbaTextus/connect/internal/config"
-	"github.com/AlbaTextus/connect/internal/email"
-	"github.com/AlbaTextus/connect/internal/store"
+	"github.com/AlbaTextus/oauth/internal/config"
+	"github.com/AlbaTextus/oauth/internal/email"
+	"github.com/AlbaTextus/oauth/internal/store"
 )
 
 func runMailDeliveries(ctx context.Context, st *store.Postgres, cfg config.SMTP, logger *slog.Logger) {

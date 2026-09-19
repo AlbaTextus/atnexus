@@ -3,7 +3,7 @@ package httpapi
 import (
 	"testing"
 
-	"github.com/AlbaTextus/connect/internal/store"
+	"github.com/AlbaTextus/oauth/internal/store"
 )
 
 func TestUserLevelContract(t *testing.T) {

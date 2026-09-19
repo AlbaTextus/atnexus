@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/AlbaTextus/connect/internal/store"
+	"github.com/AlbaTextus/oauth/internal/store"
 )
 
 func (a *API) siteFeatures(ctx context.Context) (store.SiteFeatures, error) {

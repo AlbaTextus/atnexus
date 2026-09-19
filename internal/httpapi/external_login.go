@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/connect/internal/security"
-	"github.com/AlbaTextus/connect/internal/store"
+	"github.com/AlbaTextus/oauth/internal/security"
+	"github.com/AlbaTextus/oauth/internal/store"
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/oauth2"
 )

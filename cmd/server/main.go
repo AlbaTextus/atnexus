@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/AlbaTextus/connect/internal/config"
-	"github.com/AlbaTextus/connect/internal/httpapi"
-	"github.com/AlbaTextus/connect/internal/store"
+	"github.com/AlbaTextus/oauth/internal/config"
+	"github.com/AlbaTextus/oauth/internal/httpapi"
+	"github.com/AlbaTextus/oauth/internal/store"
 	"github.com/joho/godotenv"
 )
 
@@ -56,12 +56,9 @@ func main() {
 		serverErr <- server.ListenAndServe()
 	}()
 	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	workerDone := make(chan struct{})
-	go func() { defer close(workerDone); runWalletSettlements(signalCtx, st, logger) }()
 	mailDone := make(chan struct{})
 	go func() { defer close(mailDone); runMailDeliveries(signalCtx, st, cfg.SMTP, logger) }()
 	defer func() { stop(); <-mailDone }()
-	defer func() { stop(); <-workerDone }()
 	select {
 	case err := <-serverErr:
 		if !errors.Is(err, http.ErrServerClosed) {

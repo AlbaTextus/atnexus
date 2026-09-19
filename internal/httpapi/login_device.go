@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/connect/internal/store"
+	"github.com/AlbaTextus/oauth/internal/store"
 )
 
 func (a *API) loginDevice(r *http.Request) store.LoginDevice {

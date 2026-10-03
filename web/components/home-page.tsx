@@ -1,13 +1,14 @@
 "use client"
 
 import { Link as TransitionLink } from "next-view-transitions"
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
+import { useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { motion, useInView } from "framer-motion"
 import { Check, Code2, Fingerprint, Globe2, ShieldCheck, Sparkles, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SiteFooter } from "@/components/site-footer"
 import { CloudflareNetwork } from "@/components/cloudflare-network"
-import { HomeBrand } from "@/components/home-brand"
+import { ServiceArchitecture } from "@/components/service-architecture"
+import { HomeHeader, IconButton } from "@albatextus/ui"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { AnnouncementCenter } from "@/components/announcement-center"
 import { AccountEntryLink } from "@/components/account-entry-link"
@@ -37,43 +38,13 @@ function ScrollReveal({ children, className, delay = 0 }: { children: ReactNode;
 
 export function HomePage() {
   const reducedMotion = useSyncExternalStore(subscribeReducedMotion, getReducedMotion, getServerReducedMotion)
-  const [brandCollapsed, setBrandCollapsed] = useState(false)
-  const [headerCollapsed, setHeaderCollapsed] = useState(false)
-
-  useEffect(() => {
-    let frame = 0
-    function updateSection() {
-      frame = 0
-      // Separate thresholds prevent flicker when scrolling around the boundary.
-      setBrandCollapsed(current => window.scrollY > 80 ? true : window.scrollY < 20 ? false : current)
-      setHeaderCollapsed(current => window.scrollY > 320 ? true : window.scrollY < 260 ? false : current)
-    }
-    function scheduleUpdate() { if (!frame) frame = window.requestAnimationFrame(updateSection) }
-    updateSection()
-    window.addEventListener("scroll", scheduleUpdate, { passive: true })
-    window.addEventListener("resize", scheduleUpdate)
-    window.addEventListener("hashchange", scheduleUpdate)
-    return () => {
-      window.removeEventListener("scroll", scheduleUpdate)
-      window.removeEventListener("resize", scheduleUpdate)
-      window.removeEventListener("hashchange", scheduleUpdate)
-      window.cancelAnimationFrame(frame)
-    }
-  }, [])
-
-
   return <div className="home-shell home-credit-inspired" id="top">
     <a href="#home-main" className="home-skip">跳转到主要内容</a>
-    <header className="home-header" data-collapsed={headerCollapsed}>
-      <div className="home-container home-header-inner">
-        <HomeBrand collapsed={brandCollapsed} />
-        <div className="home-header-actions">
-          <AnnouncementCenter /><ThemeToggle />
-          <Button variant="ghost" size="icon" nativeButton={false} role="link" render={<a href={wikiUrl()} />} aria-label="前往 Wiki" title="前往 Wiki">W</Button>
-          <AccountEntryLink render={<TransitionLink href="/account" />} />
-        </div>
-      </div>
-    </header>
+    <HomeHeader brandHref="#top" LinkComponent={TransitionLink} actions={<>
+      <AnnouncementCenter /><ThemeToggle />
+      <IconButton nativeButton={false} role="link" render={<a href={wikiUrl()} />} label="前往 Wiki">W</IconButton>
+      <AccountEntryLink render={<TransitionLink href="/account" />} />
+    </>} />
 
     <main id="home-main" tabIndex={-1}>
       <section className="landing-hero home-container" aria-labelledby="home-title">
@@ -100,6 +71,10 @@ export function HomePage() {
           <pre aria-label="OAuth 授权请求与重定向响应示例"><code><span className="code-option">GET</span> <span className="code-string">/oauth/authorize</span>{"\n"}<span className="code-comment">?client_id=…&amp;response_type=code&amp;…</span>{"\n\n"}<span className="code-comment"># 已登录 · 跳转授权确认页</span>{"\n"}<span className="code-command">HTTP/1.1</span> <span className="code-value">302 Found</span>{"\n"}<span className="code-property">Location</span>: <span className="code-string">https://…/consent?request=…</span>{"\n"}<span className="code-property">Cache-Control</span>: <span className="code-variable">no-store</span>{"\n\n"}<span className="code-comment">…</span></code></pre>
         </ScrollReveal>
         <ScrollReveal className="landing-developer-copy" delay={0.12}><p className="landing-eyebrow">BUILT FOR COMMUNITY</p><h2 id="developer-title">专为社区打造</h2><p>为社区成员与应用提供统一的账户入口。从登录、个人资料到应用授权，让社区里的每一次连接都更简单。</p><ul><li><Check />一个账户，连接社区里的应用</li><li><Check />安全授权，分享的信息由你决定</li><li><Check />开放源代码，与社区一起完善</li></ul></ScrollReveal>
+      </section>
+
+      <section className="architecture-section home-container" aria-label="服务架构">
+        <ScrollReveal><ServiceArchitecture /></ScrollReveal>
       </section>
 
       <section className="edge-section home-container" aria-labelledby="edge-title">

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { RefreshCw, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { HomeBrand } from "@/components/home-brand"
+import { HomeHeader } from "@albatextus/ui"
 import { SiteFooter } from "@/components/site-footer"
 import { Spinner } from "@/components/ui/spinner"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
@@ -52,12 +52,7 @@ export function MaintenanceScreen({ unavailable = false }: { unavailable?: boole
 
   return <div className="home-shell home-credit-inspired maintenance-shell">
     <a className="home-skip" href="#maintenance-content">跳转到主要内容</a>
-    <header className="home-header maintenance-header">
-      <div className="home-container home-header-inner">
-        <HomeBrand href="/" />
-        <div className="home-header-actions"><ThemeToggle /></div>
-      </div>
-    </header>
+    <HomeHeader actions={<ThemeToggle />} />
     <main id="maintenance-content" tabIndex={-1} className="maintenance-main">
       <Empty className="maintenance-empty">
         <div className="station-scene" data-energized={lights > 0} data-beaming={beaming}>

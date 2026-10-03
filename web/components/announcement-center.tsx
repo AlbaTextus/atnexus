@@ -7,6 +7,7 @@ import { MessageTemplatePreview } from "@/components/email-template-preview"
 import { MessageScrollList } from "@/components/message-scroll-list"
 import { type Communication, messageDate } from "@/lib/communications"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@albatextus/ui"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -53,7 +54,7 @@ export function AnnouncementCenter() {
     try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* Keep read state for this session. */ }
   }
   return <Dialog open={open} onOpenChange={value => { setOpen(value); if (value) { setSelected(null); void load() } }}>
-    <DialogTrigger render={<Button variant="ghost" size="icon" className="announcement-trigger" aria-label={unread ? `全站公告，${unread} 条未读` : "全站公告"} title="全站公告" />}>
+    <DialogTrigger render={<IconButton className="announcement-trigger" label={unread ? `全站公告，${unread} 条未读` : "全站公告"} />}>
       <Mail />{unread > 0 && <span className="announcement-dot" aria-hidden="true" />}
     </DialogTrigger>
     <DialogContent className="announcement-dialog sm:max-w-2xl">

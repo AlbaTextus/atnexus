@@ -4,6 +4,7 @@ const backend = process.env.OAUTH_BACKEND_URL || "http://localhost:8080"
 const wiki = (process.env.NEXT_PUBLIC_WIKI_URL || "http://localhost:3200").replace(/\/+$/, "")
 
 const nextConfig = {
+  transpilePackages: ["@albatextus/ui"],
   distDir: process.env.NEXT_OUTPUT_DIR || ".next",
   async redirects() {
     return [
@@ -23,6 +24,7 @@ const nextConfig = {
   },
   async rewrites() {
     return [
+      { source: "/healthz", destination: `${backend}/healthz` },
       { source: "/api/:path*", destination: `${backend}/api/:path*` },
       { source: "/oauth/:path*", destination: `${backend}/oauth/:path*` },
       { source: "/.well-known/:path*", destination: `${backend}/.well-known/:path*` },

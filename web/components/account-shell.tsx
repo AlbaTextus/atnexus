@@ -6,7 +6,7 @@ import { Link } from "next-view-transitions"
 import { usePathname } from "next/navigation"
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from "react"
 import { motion, useAnimationControls, useReducedMotion } from "framer-motion"
-import { AlertCircle, House, LayoutGrid, LogOut, Mail, Settings2, ShieldCheck, ShieldX, UserRound, Users, WalletCards } from "lucide-react"
+import { AlertCircle, House, LayoutGrid, LogOut, Mail, Settings2, ShieldCheck, ShieldX, UserRound, Users } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import { isAdminRole, managementError } from "@/lib/applications"
 import { profileSetupPath } from "@/lib/profile-setup"
@@ -34,7 +34,6 @@ const userNavigation: NavigationItem[] = [
   { href: "/account", title: "用户中心", icon: House },
   { href: "/account/profile", title: "个人资料", icon: UserRound },
   { href: "/account/security", title: "账户安全", icon: ShieldCheck },
-  { href: (process.env.NEXT_PUBLIC_CREDIT_URL || "http://localhost:3300") + "/account/wallet", title: "我的积分", icon: WalletCards },
 ]
 const adminNavigation: NavigationItem[] = [
   { href: "/admin/users", title: "用户管理", icon: Users },

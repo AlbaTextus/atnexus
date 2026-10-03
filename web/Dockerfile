@@ -5,6 +5,7 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY web/package.json ./web/package.json
+COPY release/albatextus-ui-0.1.0.tgz ./release/albatextus-ui-0.1.0.tgz
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY web ./web

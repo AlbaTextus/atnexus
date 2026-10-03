@@ -19,3 +19,8 @@ temps/
 release/
 temp/
 web/temp/
+
+# Keep the shared UI package available for independent installs.
+!/release/
+/release/*
+!/release/albatextus-ui-0.1.0.tgz

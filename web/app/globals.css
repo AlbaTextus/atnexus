@@ -1,10 +1,57 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 @import "../styles/site.css";
+@import "@albatextus/ui/styles.css";
 
 /* Keep the header centered at the same position on short and scrollable pages. */
 html { scrollbar-gutter: stable; }
+
+/* Match ATHub NetworkIntro's palette, opacity, dots and selection frames. */
+.architecture-section { width: 100%; padding-block: 8px 64px; }
+.architecture-card {
+  --architecture-line: #c5c9cb;
+  --architecture-node: #bfc3c5;
+  --architecture-dot: #dedfe1;
+  --architecture-core: #ff3347;
+  --architecture-apps: #00c800;
+  --architecture-data: #2684ff;
+  --network-diagram-line-color: var(--architecture-line);
+  --network-diagram-muted-color: var(--architecture-node);
+  --card-spacing: 0px;
+  gap: 0;
+}
+.architecture-viewport {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.architecture-viewport::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, var(--architecture-dot) .7px, transparent .9px);
+  background-size: 10px 10px;
+  background-position: center;
+  opacity: .65;
+  mask-image: radial-gradient(ellipse at center, #000 12%, #0009 48%, transparent 78%);
+}
+.architecture-canvas { position: relative; display: block; flex: none; }
+.architecture-canvas .lucide { color: inherit; }
+.architecture-frame { stroke: currentColor; stroke-width: 1; fill: none; }
+.architecture-handle { fill: var(--background); }
+.architecture-tile { fill: color-mix(in srgb, currentColor 12%, transparent); stroke: currentColor; stroke-width: 1; stroke-dasharray: 2 1.5; }
+.architecture-muted .architecture-tile { fill: none; stroke-dasharray: 2 2; }
+.architecture-core > .architecture-frame > rect:first-child { fill: color-mix(in srgb, var(--architecture-core) 3%, transparent); }
+.architecture-core { color: var(--architecture-core); }
+.architecture-movable { cursor: grab; touch-action: none; user-select: none; }
+.architecture-movable[data-node="apps"] { color: var(--architecture-apps); }
+.architecture-movable[data-node="data"] { color: var(--architecture-data); }
+.architecture-movable[data-dragging] { cursor: grabbing; }
+.architecture-movable:focus { outline: none; box-shadow: none; }
+.architecture-movable:focus-visible .architecture-tile { stroke-width: 2; }
+@media (max-width: 760px) {
+  .architecture-section { padding-bottom: 40px; }
+}
 
 /* Connect announcements and email workspace. */
 .announcement-trigger { position: relative; }

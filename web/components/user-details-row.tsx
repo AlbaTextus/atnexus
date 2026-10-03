@@ -47,7 +47,6 @@ export function UserDetailsRow({ user, onSaved }: { user: ManagedUser; onSaved: 
           </section>
         </div>
         <UserDeviceCard device={user.last_login_device} />
-        {actor.role === "SUPER_ADMIN" && <a href={(process.env.NEXT_PUBLIC_CREDIT_URL || "http://localhost:3300") + "/admin/wallet?user=" + user.numeric_id}>在 Credit 管理积分</a>}
       </div>
       {action && <UserManagementDialog action={action} onClose={() => setAction(null)} onSaved={message => { setAction(null); setOpen(false); onSaved(message) }} />}
     </DialogContent>

@@ -44,7 +44,7 @@ func main() {
 	accessTTL := getInt("SEED_ACCESS_TOKEN_TTL", 900)
 	refreshTTL := getInt("SEED_REFRESH_TOKEN_TTL", 2592000)
 	// Client seeding is intentionally SQL-backed; Prisma remains the schema/migration owner.
-	if err := seedClient(ctx, st, clientID, name, secretHash, encryptedSecret, splitEnv("SEED_CLIENT_REDIRECT_URIS", "http://localhost:3000/auth/callback"), splitEnv("SEED_CLIENT_GRANT_TYPES", "authorization_code,refresh_token,client_credentials"), splitEnv("SEED_CLIENT_SCOPES", "openid,profile,email,offline_access"), accessTTL, refreshTTL); err != nil {
+	if err := seedClient(ctx, st, clientID, name, secretHash, encryptedSecret, splitEnv("SEED_CLIENT_REDIRECT_URIS", "http://localhost:3288/auth/callback"), splitEnv("SEED_CLIENT_GRANT_TYPES", "authorization_code,refresh_token,client_credentials"), splitEnv("SEED_CLIENT_SCOPES", "openid,profile,email,offline_access"), accessTTL, refreshTTL); err != nil {
 		panic(err)
 	}
 	fmt.Printf("seeded confidential OAuth client %q\nclient_secret=%s\n", clientID, secret)

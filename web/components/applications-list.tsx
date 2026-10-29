@@ -12,8 +12,8 @@ import { SiteFeatureControls } from "@/components/site-feature-controls"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, StatCard } from "@/components/ui/card"
+import { EmptyState } from "@/components/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
@@ -53,7 +53,11 @@ export function ApplicationsList() {
   return <div className="flex flex-col gap-7">
     {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error} <Button variant="link" onClick={load}>重试</Button></AlertDescription></Alert>}
     <div className="application-stats grid grid-cols-3 gap-3 sm:gap-4">
-      {[{ label: admin ? "全部应用" : "我的应用", count: apps.length, icon: LayoutGrid, tone: "blue", note: admin ? "管理员可管理全部应用" : "你创建并管理的应用" }, { label: "已启用", count: activeCount, icon: Check, tone: "green", note: "可以进行登录授权" }, { label: "已停用", count: apps.length - activeCount, icon: Settings2, tone: "orange", note: "已暂停新的登录授权" }].map(item => <Card key={item.label} className="gap-2 sm:gap-4"><CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-3 sm:px-4"><CardDescription>{item.label}</CardDescription><span className="application-stat-icon" data-tone={item.tone} aria-hidden="true"><item.icon size={18} /></span></CardHeader><CardContent className="px-3 sm:px-4"><div className="center-stat">{loading ? "—" : item.count}</div><p className="mt-1 hidden text-xs text-muted-foreground sm:block">{item.note}</p></CardContent></Card>)}
+      {([
+        { label: admin ? "全部应用" : "我的应用", count: apps.length, icon: LayoutGrid, tone: "blue", note: admin ? "管理员可管理全部应用" : "你创建并管理的应用" },
+        { label: "已启用", count: activeCount, icon: Check, tone: "green", note: "可以进行登录授权" },
+        { label: "已停用", count: apps.length - activeCount, icon: Settings2, tone: "orange", note: "已暂停新的登录授权" },
+      ] as const).map(item => <StatCard key={item.label} label={item.label} value={loading ? null : item.count} icon={<item.icon size={18} />} tone={item.tone} note={item.note} />)}
     </div>
     <div className="flex flex-wrap items-center justify-between gap-4">
       <div className="flex flex-wrap items-center gap-4">
@@ -79,7 +83,11 @@ export function ApplicationsList() {
         </Badge>
         <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       </div>
-    )}</div> : <Card><CardContent><Empty className="py-12"><EmptyHeader><EmptyMedia variant="icon"><LayoutGrid /></EmptyMedia><EmptyTitle>{apps.length ? "没有找到匹配的应用" : "接入你的第一个应用"}</EmptyTitle><EmptyDescription>{apps.length ? "试试其他搜索词或状态筛选。" : "创建应用，配置回调地址，即可使用统一账户登录你的子系统。"}</EmptyDescription></EmptyHeader><EmptyContent>{apps.length ? <Button variant="outline" onClick={() => { setSearch(""); setFilter("all") }}>清除筛选</Button> : <Button nativeButton={false} role="link" render={<Link href="/admin/applications/new" />}><Plus data-icon="inline-start" />创建应用</Button>}</EmptyContent></Empty></CardContent></Card>}
+    )}</div> : <Card><CardContent><EmptyState className="py-12" icon={<LayoutGrid />}
+      title={apps.length ? "没有找到匹配的应用" : "接入你的第一个应用"}
+      description={apps.length ? "试试其他搜索词或状态筛选。" : "创建应用，配置回调地址，即可使用统一账户登录你的子系统。"}>
+      {apps.length ? <Button variant="outline" onClick={() => { setSearch(""); setFilter("all") }}>清除筛选</Button> : <Button nativeButton={false} role="link" render={<Link href="/admin/applications/new" />}><Plus data-icon="inline-start" />创建应用</Button>}
+    </EmptyState></CardContent></Card>}
     <Card><CardHeader><CardTitle>第一次接入？</CardTitle><CardDescription>查看授权流程、接口地址和回调处理说明。</CardDescription></CardHeader><CardContent><Button variant="link" nativeButton={false} role="link" render={<a href={wikiUrl("/integration")} />} className="px-0">阅读接入指南<ArrowUpRight data-icon="inline-end" /></Button></CardContent></Card>
     <SiteFeatureControls />
   </div>

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM node:22-alpine
 
 WORKDIR /app
@@ -5,7 +6,8 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY web/package.json ./web/package.json
-COPY release/albatextus-ui-0.1.0.tgz ./release/albatextus-ui-0.1.0.tgz
+COPY --from=atui /package.json /atui/package.json
+COPY --from=atui /src /atui/src
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY web ./web
@@ -17,5 +19,5 @@ ARG NEXT_PUBLIC_CREDIT_URL=http://localhost:3300
 ENV NEXT_PUBLIC_CREDIT_URL=$NEXT_PUBLIC_CREDIT_URL
 RUN pnpm web:build
 
-EXPOSE 3000
+EXPOSE 3288
 CMD ["pnpm", "web:start"]

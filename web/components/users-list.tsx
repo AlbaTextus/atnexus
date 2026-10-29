@@ -12,8 +12,8 @@ import { UserDetailsRow } from "@/components/user-details-row"
 import { UserManagementDialog, type UserAction } from "@/components/user-management-dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { StatCard } from "@/components/ui/card"
+import { EmptyState } from "@/components/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
@@ -60,7 +60,11 @@ export function UsersList() {
     {notice && <Alert role="status"><Check /><AlertDescription>{notice}</AlertDescription></Alert>}
     {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error} <Button variant="link" onClick={() => setReload(value => value + 1)}>重新加载</Button></AlertDescription></Alert>}
     <div className="user-stats grid grid-cols-3 gap-3 sm:gap-4">
-      {[{ label: "全部用户", count: result?.stats.total, icon: Users, tone: "blue", note: "统一账户中心的所有用户" }, { label: "已启用", count: result?.stats.active, icon: Check, tone: "green", note: "可以登录并使用应用" }, { label: "管理人员", count: result?.stats.admins, icon: ShieldCheck, tone: "orange", note: "管理员与超级管理员" }].map(item => <Card key={item.label} className="gap-2 sm:gap-4"><CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-3 sm:px-4"><CardDescription>{item.label}</CardDescription><span className="application-stat-icon" data-tone={item.tone} aria-hidden="true"><item.icon size={18} /></span></CardHeader><CardContent className="px-3 sm:px-4"><div className="center-stat">{item.count ?? "—"}</div><p className="mt-1 hidden text-xs text-muted-foreground sm:block">{item.note}</p></CardContent></Card>)}
+      {([
+        { label: "全部用户", count: result?.stats.total, icon: Users, tone: "blue", note: "统一账户中心的所有用户" },
+        { label: "已启用", count: result?.stats.active, icon: Check, tone: "green", note: "可以登录并使用应用" },
+        { label: "管理人员", count: result?.stats.admins, icon: ShieldCheck, tone: "orange", note: "管理员与超级管理员" },
+      ] as const).map(item => <StatCard key={item.label} label={item.label} value={item.count} icon={<item.icon size={18} />} tone={item.tone} note={item.note} />)}
     </div>
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -88,7 +92,7 @@ export function UsersList() {
         <AnimatePresence initial={false} mode="popLayout">
           {!result && loading ? <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={transition} className="flex flex-col gap-4" aria-label="正在加载用户"><Skeleton className="h-36 w-full" /><Skeleton className="h-36 w-full" /><Skeleton className="h-36 w-full" /></motion.div>
             : result?.users.length ? result.users.map(user => <AnimatedUserRow key={user.id} user={user} reducedMotion={reducedMotion} onSaved={message => { setNotice(message); setReload(value => value + 1) }} />)
-            : result && <motion.div key="empty" layout={!reducedMotion} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={transition}><Empty className="min-h-64"><EmptyHeader><EmptyMedia variant="icon"><Users /></EmptyMedia><EmptyTitle>没有找到匹配的用户</EmptyTitle><EmptyDescription>试试其他搜索词，或调整角色与状态筛选。</EmptyDescription></EmptyHeader><EmptyContent><Button variant="outline" onClick={clearFilters}>清除筛选</Button></EmptyContent></Empty></motion.div>}
+            : result && <motion.div key="empty" layout={!reducedMotion} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={transition}><EmptyState className="min-h-64" icon={<Users />} title="没有找到匹配的用户" description="试试其他搜索词，或调整角色与状态筛选。"><Button variant="outline" onClick={clearFilters}>清除筛选</Button></EmptyState></motion.div>}
         </AnimatePresence>
       </motion.div>
       {result && <motion.nav layout={reducedMotion ? false : "position"} transition={transition} aria-label="用户列表分页" className="mt-auto flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-muted-foreground" aria-live="polite">共 {result.total} 位用户 · 第 {result.page} / {pages} 页</p><div className="flex gap-2"><Button variant="outline" size="sm" disabled={loading || result.page <= 1} onClick={() => setPage(result.page - 1)}><ChevronLeft data-icon="inline-start" />上一页</Button><Button variant="outline" size="sm" disabled={loading || result.page >= pages} onClick={() => setPage(result.page + 1)}>下一页<ChevronRight data-icon="inline-end" /></Button></div></motion.nav>}

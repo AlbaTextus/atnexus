@@ -99,7 +99,7 @@ func run(appURL, backendURL, output string) error {
 	}
 	issuer := strings.TrimRight(os.Getenv("ISSUER_URL"), "/")
 	if issuer == "" {
-		issuer = "http://localhost:3000"
+		issuer = "http://localhost:3288"
 	}
 	values["OAUTH_ENABLED"] = "true"
 	values["OAUTH_ISSUER"] = issuer

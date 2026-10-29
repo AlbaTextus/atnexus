@@ -94,11 +94,11 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ```dotenv
 DATABASE_URL=postgresql://oauth:oauth@localhost:5432/oauth?sslmode=disable
-ISSUER_URL=http://localhost:3000
-AUTH_UI_URL=http://localhost:3000
+ISSUER_URL=http://localhost:3288
+AUTH_UI_URL=http://localhost:3288
 COOKIE_SECURE=false
 WEBAUTHN_RP_ID=localhost
-WEBAUTHN_RP_ORIGINS=http://localhost:3000
+WEBAUTHN_RP_ORIGINS=http://localhost:3288
 ```
 
 ### 2. 初始化数据库
@@ -131,7 +131,7 @@ pnpm db:seed
 | 管理员角色 | `ADMIN` |
 | 示例 Client ID | `albatextus-web` |
 | 示例 Client Secret | `development-secret-change-me` |
-| 示例回调 | `http://localhost:3000/auth/callback` |
+| 示例回调 | `http://localhost:3288/auth/callback` |
 
 可用 `SEED_ADMIN_EMAIL`、`SEED_ADMIN_PASSWORD`、`SEED_ADMIN_NAME`、`SEED_CLIENT_ID`、`SEED_CLIENT_SECRET`、`SEED_CLIENT_REDIRECT_URIS` 覆盖默认值。Seed 会输出开发凭据，也会更新已有记录；不要把它作为每次部署必跑的迁移步骤。
 
@@ -151,9 +151,9 @@ go run ./cmd/server
 pnpm web:dev
 ```
 
-访问 [首页](http://localhost:3000/)、[登录页](http://localhost:3000/login) 或 [用户中心](http://localhost:3000/account)。Go API 默认监听 `8080`，健康检查为 [http://localhost:8080/healthz](http://localhost:8080/healthz)。
+访问 [首页](http://localhost:3288/)、[登录页](http://localhost:3288/login) 或 [用户中心](http://localhost:3288/account)。Go API 默认监听 `8080`，健康检查为 [http://localhost:8080/healthz](http://localhost:8080/healthz)。
 
-浏览器统一通过 `localhost:3000` 访问：Next.js 将 `/api/*`、`/oauth/*` 和 `/.well-known/*` 转发至 Go 服务，使页面与登录会话保持同源。不要混用 `localhost` 和 `127.0.0.1`，否则 Cookie 和 Passkey 的来源校验可能不一致。
+浏览器统一通过 `localhost:3288` 访问：Next.js 将 `/api/*`、`/oauth/*` 和 `/.well-known/*` 转发至 Go 服务，使页面与登录会话保持同源。不要混用 `localhost` 和 `127.0.0.1`，否则 Cookie 和 Passkey 的来源校验可能不一致。
 
 ## 登录与账户
 
@@ -181,9 +181,9 @@ pnpm web:dev
 
 | 平台 | 必要配置 | 本地回调地址 |
 | --- | --- | --- |
-| GitHub OAuth App | `GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET` | `http://localhost:3000/api/v1/auth/providers/github/callback` |
-| [LINUX DO Connect](https://connect.linux.do/) | `LINUXDO_CLIENT_ID`、`LINUXDO_CLIENT_SECRET` | `http://localhost:3000/api/v1/auth/providers/linuxdo/callback` |
-| 自定义 OAuth | `CUSTOM_OAUTH_CLIENT_ID`、`CUSTOM_OAUTH_CLIENT_SECRET` 及端点 URL | `http://localhost:3000/api/v1/auth/providers/custom/callback` |
+| GitHub OAuth App | `GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET` | `http://localhost:3288/api/v1/auth/providers/github/callback` |
+| [LINUX DO Connect](https://connect.linux.do/) | `LINUXDO_CLIENT_ID`、`LINUXDO_CLIENT_SECRET` | `http://localhost:3288/api/v1/auth/providers/linuxdo/callback` |
+| 自定义 OAuth | `CUSTOM_OAUTH_CLIENT_ID`、`CUSTOM_OAUTH_CLIENT_SECRET` 及端点 URL | `http://localhost:3288/api/v1/auth/providers/custom/callback` |
 
 自定义平台需设置 `CUSTOM_OAUTH_AUTHORIZATION_URL`、`CUSTOM_OAUTH_TOKEN_URL`、`CUSTOM_OAUTH_USERINFO_URL`，支持授权码、S256 PKCE 和 `client_secret_post`。用户信息接口须接受 Bearer Token 并返回 JSON。默认字段为 `sub`、`email`、`email_verified`、`name`、`picture`，可通过 `CUSTOM_OAUTH_*_FIELD` 修改，支持 `data.id` 等点分路径。
 
@@ -267,7 +267,7 @@ Go 服务在注册、密码登录、第三方登录发起、通行密钥登录�
 授权请求示意（各参数均需正确 URL 编码）：
 
 ```text
-http://localhost:3000/oauth/authorize
+http://localhost:3288/oauth/authorize
   ?response_type=code
   &client_id=YOUR_CLIENT_ID
   &redirect_uri=YOUR_REGISTERED_CALLBACK
@@ -280,14 +280,14 @@ http://localhost:3000/oauth/authorize
 以下是服务端客户端的 Bash / curl 示例，将占位值替换为应用实际值：
 
 ```bash
-curl http://localhost:3000/oauth/token \
+curl http://localhost:3288/oauth/token \
   --user 'YOUR_CLIENT_ID:YOUR_CLIENT_SECRET' \
   --data-urlencode 'grant_type=authorization_code' \
   --data-urlencode 'code=AUTHORIZATION_CODE' \
   --data-urlencode 'redirect_uri=YOUR_REGISTERED_CALLBACK' \
   --data-urlencode 'code_verifier=YOUR_ORIGINAL_VERIFIER'
 
-curl http://localhost:3000/api/v1/user \
+curl http://localhost:3288/api/v1/user \
   --header 'Authorization: Bearer YOUR_ACCESS_TOKEN'
 ```
 
@@ -298,7 +298,7 @@ curl http://localhost:3000/api/v1/user \
 ### 刷新、撤销与自省
 
 ```bash
-curl http://localhost:3000/oauth/token \
+curl http://localhost:3288/oauth/token \
   --user 'YOUR_CLIENT_ID:YOUR_CLIENT_SECRET' \
   --data-urlencode 'grant_type=refresh_token' \
   --data-urlencode 'refresh_token=YOUR_REFRESH_TOKEN'
@@ -324,7 +324,7 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 | `CLIENT_SECRET_ENCRYPTION_KEY` | 客户端密钥与 PKCE verifier 加密密钥，必填并保持稳定 |
 | `APP_ENV` | 本地为 `development`，生产为 `production` |
 | `HTTP_ADDR` | Go 监听地址，默认 `:8080` |
-| `ISSUER_URL` | 对外 OAuth 地址；本地应为 `http://localhost:3000` |
+| `ISSUER_URL` | 对外 OAuth 地址；本地应为 `http://localhost:3288` |
 | `AUTH_UI_URL` | 认证前端对外地址 |
 | `COOKIE_SECURE` | HTTPS 部署设为 `true` |
 | `SESSION_TTL` | 中心会话有效期，默认 `24h` |
@@ -506,3 +506,15 @@ Prisma schema 与迁移是数据库结构的来源；Go 服务没有 Prisma Clie
 相邻的 Status 后台可通过 `go run ./cmd/register-status` 接入当前 OAuth。工具创建独立机密应用 `albatextus-status`，最低角色为 `ADMIN`，仅申请 `profile`；默认回调为 `http://127.0.0.1:3100/api/auth/callback`，凭据写入 `../status/.dev.vars`。应用所有者使用 `SEED_ADMIN_EMAIL` 对应的现有管理员，也可在首次登记时用 `-admin-id <UUID>` 指定。Status 默认按服务端用户资料中的 `role` 允许 `ADMIN`、`SUPER_ADMIN`，符合条件的其他账号也能登录；OAuth 应用更严格的 `SUPER_ADMIN` 最低角色会保留。支持 `-app-url`、`-issuer-url`、`-output`；重复运行保留已有密钥、回调、Status 管理密钥和自定义允许名单。旧版仅允许所有者 UUID 的配置，可运行 `go run ./cmd/register-status -migrate-owner-allowlist` 切换到角色授权；该选项拒绝自动清理自定义账号名单。登记后在 Status 执行 `npm run db:migrate:local` 并重启开发服务。工具不会重置用户、运行 seed 或修改其他应用。
 
 目前未提供邮箱验证码绑定、OIDC ID Token 或跨子系统统一登出。功能问题和接入反馈可提交到 [GitHub Issues](https://github.com/AlbaTextus/oauth/issues)。
+
+## UI 与字体维护
+
+Web 的共享组件、主题、字体与页面展示样式统一由同级 `../atui` 管理。`web/components/ui/` 仅保留兼容重导出；认证卡片、画布、字标、头像、Markdown、密码输入和复制字段使用 ATUI 实现，API、权限、会话与重定向逻辑仍保留在 OAuth。
+
+应用、用户与消息管理使用共享 `StatCard`；列表和公告使用 `EmptyState`；删除通行密钥、解绑账号、删除应用、重置密钥及消息发布使用 `ConfirmDialog`。这些组合归在原有 card / empty / dialog 组件组中，不再在页面内重复维护骨架。请求、统计和名称二次确认仍在 OAuth，密钥按需读取与隐藏清除的逻辑保持不变。
+
+ATUI 文档按独立组件展示，输入框、密码输入、复制字段和多行输入共用一个中文入口；文档目录精简不代表删除包内的兼容导出，OAuth 仍可使用卡片、字段容器及认证组合。PasswordInput 与 CopyField 的静态密钥显隐共用 InputGroupPassword；OAuth 的 ClientSecretField 继续独立负责按需读取及隐藏时清除服务端密钥，不将其改为预加载静态字段。
+
+首页授权示例使用 `@albatextus/ui/code` 的 `CodeHighlighted`，保留深色终端外观，只为该示例加载 HTTP 语法，不在全局初始化高亮引擎。个人简介及编辑预览中的 Markdown 代码块由 ATUI 按需高亮，沿用全站明暗主题、中文复制反馈和纯文本回退；OAuth 不再维护手工语法配色。
+
+`web/app/globals.css` 只引入 `@albatextus/ui/styles/oauth.css`，不要另行安装字体、复制 `public/fonts` 或重复声明主题 token。ATUI 新增组件、依赖或修改样式和字体后，在 OAuth 根目录运行 `pnpm install --no-frozen-lockfile` 更新本地包快照及锁文件，再运行 `pnpm web:typecheck` 和 `pnpm web:build`。已有开发或生产预览需重新启动才能加载更新后的包。字体资源与许可证随 ATUI 发布包安装，构建时自动生成静态资源地址；部署安装使用同步后的锁文件执行 `pnpm install --frozen-lockfile`。

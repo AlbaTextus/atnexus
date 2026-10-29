@@ -13,9 +13,9 @@ import { MessageTemplatePreview } from "@/components/email-template-preview"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, StatCard } from "@/components/ui/card"
+import { ConfirmDialog } from "@/components/ui/dialog"
+import { EmptyState } from "@/components/ui/empty"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -111,7 +111,11 @@ export function CommunicationsManager() {
   return <div className="communications-page">
     {error && <Alert variant="destructive"><AlertDescription>{error}<Button variant="link" onClick={() => void load()}>重新加载</Button></AlertDescription></Alert>}
     <div className="application-stats grid grid-cols-3 gap-3 sm:gap-4">
-      {[{ label: "展示中的公告", count: data ? published : "—", icon: Mail, tone: "blue", note: "右上角的信封，随时可见" }, { label: "已发送邮件", count: data ? sent : "—", icon: CheckCheck, tone: "green", note: failed ? failed + " 封发送失败或结果未确认" : "全部消息的邮件发送统计" }, { label: "可触达邮箱", count: data?.audience.all ?? "—", icon: Users, tone: "orange", note: "已验证且正常使用的邮箱" }].map(item => <Card key={item.label} className="gap-2 sm:gap-4"><CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-3 sm:px-4"><CardDescription>{item.label}</CardDescription><span className="application-stat-icon" data-tone={item.tone} aria-hidden="true"><item.icon size={18} /></span></CardHeader><CardContent className="px-3 sm:px-4"><div className="center-stat">{item.count}</div><p className="mt-1 hidden text-xs text-muted-foreground sm:block">{item.note}</p></CardContent></Card>)}
+      {([
+        { label: "展示中的公告", count: data ? published : null, icon: Mail, tone: "blue", note: "右上角的信封，随时可见" },
+        { label: "已发送邮件", count: data ? sent : null, icon: CheckCheck, tone: "green", note: failed ? failed + " 封发送失败或结果未确认" : "全部消息的邮件发送统计" },
+        { label: "可触达邮箱", count: data?.audience.all, icon: Users, tone: "orange", note: "已验证且正常使用的邮箱" },
+      ] as const).map(item => <StatCard key={item.label} label={item.label} value={item.count} icon={<item.icon size={18} />} tone={item.tone} note={item.note} />)}
     </div>
     <div className="communications-compose">
       <Card className="communications-editor border">
@@ -137,9 +141,13 @@ export function CommunicationsManager() {
     </div>
     <section className="communications-history">
       <div className="communications-history-heading"><div><h2>发布记录</h2><p className="message-meta">全部 {items.length} 条消息，可滚动查看。</p></div><div className="flex items-center gap-2"><ToggleGroup variant="pill" size="lg" spacing={1} value={[filter]} onValueChange={values => { if (values[0]) setFilter(values[0]) }} aria-label="记录筛选"><ToggleGroupItem value="all">全部</ToggleGroupItem><ToggleGroupItem value="draft">草稿</ToggleGroupItem><ToggleGroupItem value="done">已发布</ToggleGroupItem></ToggleGroup><Button variant="ghost" size="icon-sm" aria-label="刷新记录" onClick={() => void load()}><RefreshCw /></Button></div></div>
-      {!data && !error ? <Skeleton className="h-32 w-full" /> : visible.length ? <MessageScrollList label="发布记录列表">{visible.map(item => <button type="button" className="communications-record managed-user-row" key={item.id} disabled={busy} onClick={() => setRecordId(item.id)} title={item.title}><strong className="managed-user-name">{item.title}</strong><time dateTime={item.updated_at}>{messageDate(item.updated_at)}</time></button>)}</MessageScrollList> : <Empty><EmptyHeader><EmptyMedia variant="icon"><FileText /></EmptyMedia><EmptyTitle>{filter === "all" ? "第一条消息，从这里开始" : "暂无相关记录"}</EmptyTitle><EmptyDescription>保存或发布后，公告和邮件会出现在同一份记录里。</EmptyDescription></EmptyHeader></Empty>}
+      {!data && !error ? <Skeleton className="h-32 w-full" /> : visible.length ? <MessageScrollList label="发布记录列表">{visible.map(item => <button type="button" className="communications-record managed-user-row" key={item.id} disabled={busy} onClick={() => setRecordId(item.id)} title={item.title}><strong className="managed-user-name">{item.title}</strong><time dateTime={item.updated_at}>{messageDate(item.updated_at)}</time></button>)}</MessageScrollList> : <EmptyState icon={<FileText />} title={filter === "all" ? "第一条消息，从这里开始" : "暂无相关记录"} description="保存或发布后，公告和邮件会出现在同一份记录里。" />}
     </section>
     <MessageRecordDialog item={record} busy={recordBusy} onClose={() => setRecordId(null)} onArchive={() => void archiveRecord()} onEdit={() => { if (record && choose(record)) setRecordId(null) }} />
-    <Dialog open={confirm} onOpenChange={value => { if (!busy) setConfirm(value) }}><DialogContent><DialogHeader><DialogTitle>{announcement ? "发布公告并推送邮件？" : "确认发送这封邮件？"}</DialogTitle><DialogDescription>{announcement && "公告将对全站用户可见。"}邮件发给「{audienceNames[draft.audience]}」，预计 {recipientCount} 位收件人；提交后邮件无法撤回。</DialogDescription></DialogHeader><p className="break-words font-medium">{draft.title}</p><DialogFooter><Button variant="outline" disabled={busy} onClick={() => setConfirm(false)}>继续编辑</Button><Button disabled={busy} onClick={() => void persist(true)}><Send data-icon="inline-start" />{busy ? "正在发布…" : "确认发布"}</Button></DialogFooter></DialogContent></Dialog>
+    <ConfirmDialog open={confirm} onOpenChange={setConfirm} title={announcement ? "发布公告并推送邮件？" : "确认发送这封邮件？"}
+      description={<>{announcement && "公告将对全站用户可见。"}邮件发给「{audienceNames[draft.audience]}」，预计 {recipientCount} 位收件人；提交后邮件无法撤回。</>}
+      cancelLabel="继续编辑" confirmLabel={busy ? "正在发布…" : "确认发布"} variant="default" busy={busy} onConfirm={() => persist(true)}>
+      <p className="break-words font-medium">{draft.title}</p>
+    </ConfirmDialog>
   </div>
 }

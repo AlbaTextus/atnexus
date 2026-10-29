@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -140,6 +140,13 @@ export function ApplicationEditor({ id }: { id?: string }) {
       </div>
     </>}
     <Dialog open={secretOpen} onOpenChange={open => { if (!open) closeSecret() }}><DialogContent className="center-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"><DialogHeader><DialogTitle>Client Secret 已生成</DialogTitle><DialogDescription>管理员可随时在接入信息中查看或复制密钥。请将它配置到子系统服务端。</DialogDescription></DialogHeader><FieldGroup>{app && <CopyField label="Client ID" value={app.id} />}<CopyField key={secretRevision} label="Client Secret" value={secret} secret /></FieldGroup><DialogFooter><Button onClick={closeSecret}>完成</Button></DialogFooter></DialogContent></Dialog>
-    <Dialog open={confirm !== null} onOpenChange={open => { if (!open && !busy) setConfirm(null) }}><DialogContent showCloseButton={!busy} className="center-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto"><DialogHeader><DialogTitle>{confirm === "delete" ? "删除这个应用？" : "重置客户端密钥？"}</DialogTitle><DialogDescription>{confirm === "delete" ? "应用配置及其授权将被永久删除。请输入应用名称确认。" : "旧密钥和已有授权会立即失效，请在重置后更新子系统配置。"}</DialogDescription></DialogHeader>{confirmError && <Alert variant="destructive"><AlertDescription>{confirmError}</AlertDescription></Alert>}{confirm === "delete" && <Field><FieldLabel htmlFor="delete-app-name">应用名称：{app?.name}</FieldLabel><Input id="delete-app-name" value={deleteName} onChange={event => setDeleteName(event.target.value)} disabled={busy} /></Field>}<DialogFooter><Button variant="outline" disabled={busy} onClick={() => setConfirm(null)}>取消</Button><Button variant="destructive" disabled={busy || (confirm === "delete" && deleteName !== app?.name)} onClick={confirmAction}>{busy && <Spinner data-icon="inline-start" aria-hidden="true" />}{confirm === "delete" ? "确认删除" : "确认重置"}</Button></DialogFooter></DialogContent></Dialog>
+    <ConfirmDialog open={confirm !== null} onOpenChange={open => { if (!open) setConfirm(null) }} className="center-dialog"
+      title={confirm === "delete" ? "删除这个应用？" : "重置客户端密钥？"}
+      description={confirm === "delete" ? "应用配置及其授权将被永久删除。请输入应用名称确认。" : "旧密钥和已有授权会立即失效，请在重置后更新子系统配置。"}
+      confirmLabel={confirm === "delete" ? "确认删除" : "确认重置"} busy={busy}
+      disabled={confirm === "delete" && deleteName !== app?.name} onConfirm={confirmAction}>
+      {confirmError && <Alert variant="destructive"><AlertDescription>{confirmError}</AlertDescription></Alert>}
+      {confirm === "delete" && <Field><FieldLabel htmlFor="delete-app-name">应用名称：{app?.name}</FieldLabel><Input id="delete-app-name" value={deleteName} onChange={event => setDeleteName(event.target.value)} disabled={busy} /></Field>}
+    </ConfirmDialog>
   </div>
 }

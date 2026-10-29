@@ -56,7 +56,7 @@ func run(appURL, issuerURL, adminID, output string, migrateOwnerAllowlist bool) 
 		issuerURL = os.Getenv("ISSUER_URL")
 	}
 	if issuerURL == "" {
-		issuerURL = "http://localhost:3000"
+		issuerURL = "http://localhost:3288"
 	}
 	var err error
 	if appURL, err = origin(appURL); err != nil {

@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 
@@ -82,6 +82,8 @@ export function LinkedAccounts() {
       })}</div>}
       {!hasPassword && identities.length > 0 && <p className="text-xs text-muted-foreground">请先设置登录密码，再解绑第三方账号，以便继续登录。</p>}
     </CardContent>
-    <Dialog open={Boolean(unlinking)} onOpenChange={open => { if (!open && !busy) setUnlinking(null) }}><DialogContent className="center-dialog" showCloseButton={!busy}><DialogHeader><DialogTitle>解绑 {unlinking?.name}？</DialogTitle><DialogDescription>解绑后，该第三方账号无法再登录此账户。你仍可使用邮箱密码登录。</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" disabled={Boolean(busy)} onClick={() => setUnlinking(null)}>取消</Button><Button variant="destructive" disabled={Boolean(busy)} onClick={() => void unlink()}>{busy && <Spinner data-icon="inline-start" aria-hidden="true" />}确认解绑</Button></DialogFooter></DialogContent></Dialog>
+    <ConfirmDialog open={Boolean(unlinking)} onOpenChange={open => { if (!open) setUnlinking(null) }} className="center-dialog"
+      title={<>解绑 {unlinking?.name}？</>} description="解绑后，该第三方账号无法再登录此账户。你仍可使用邮箱密码登录。"
+      confirmLabel="确认解绑" busy={Boolean(busy)} onConfirm={unlink} />
   </Card>
 }

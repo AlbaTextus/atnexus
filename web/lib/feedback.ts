@@ -1,9 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Toast } from "@base-ui/react/toast"
+import { createToastManager } from "@albatextus/ui/components/toast"
 
-export const toastManager = Toast.createToastManager()
+export const toastManager = createToastManager()
 type FeedbackKind = "success" | "error"
 const flashKey = "albatextus.operation-feedback"
 const externalLoginKey = "albatextus.pending-login"

@@ -26,7 +26,8 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "tsBuildInfoFile": "./temp/typecheck.tsbuildinfo"
   },
   "include": [
     "next-env.d.ts",
@@ -41,7 +42,21 @@
     "temp/next-athub-login/types/**/*.ts",
     "temp/next-athub-login/dev/types/**/*.ts",
     "temp/dev-3000-20261003/types/**/*.ts",
-    "temp/dev-3000-20261003/dev/types/**/*.ts"
+    "temp/dev-3000-20261003/dev/types/**/*.ts",
+    "temp/dev-3288-20261028/types/**/*.ts",
+    "temp/dev-3288-20261028/dev/types/**/*.ts",
+    "temp/atui-consolidation-build/types/**/*.ts",
+    "temp/atui-consolidation-build/dev/types/**/*.ts",
+    "temp/dev-3288-20261029/types/**/*.ts",
+    "temp/dev-3288-20261029/dev/types/**/*.ts",
+    "temp/dev-webpack-3288-20261029/types/**/*.ts",
+    "temp/dev-webpack-3288-20261029/dev/types/**/*.ts",
+    "release/ui-dedup-web/types/**/*.ts",
+    "release/ui-dedup-web/dev/types/**/*.ts",
+    "release/ui-adaptation-web/types/**/*.ts",
+    "release/ui-adaptation-web/dev/types/**/*.ts",
+    "temp/ui-adaptation-dev/types/**/*.ts",
+    "temp/ui-adaptation-dev/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

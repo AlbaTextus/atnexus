@@ -9,11 +9,21 @@ import { SiteFooter } from "@/components/site-footer"
 import { CloudflareNetwork } from "@/components/cloudflare-network"
 import { ServiceArchitecture } from "@/components/service-architecture"
 import { HomeHeader, IconButton } from "@albatextus/ui"
+import { CodeHighlighted, ShikiProvider } from "@albatextus/ui/code"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { AnnouncementCenter } from "@/components/announcement-center"
 import { AccountEntryLink } from "@/components/account-entry-link"
 import { wikiUrl } from "@/lib/wiki"
 
+const authorizationExample = `GET /oauth/authorize
+?client_id=…&response_type=code&…
+
+# 已登录 · 跳转授权确认页
+HTTP/1.1 302 Found
+Location: https://…/consent?request=…
+Cache-Control: no-store
+
+…`
 
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)"
 function subscribeReducedMotion(onChange: () => void) {
@@ -66,9 +76,13 @@ export function HomePage() {
         </motion.div>
       </section>
       <section className="landing-developer home-container" aria-labelledby="developer-title">
-        <ScrollReveal className="landing-code">
-          <div className="landing-code-bar"><span className="code-window-dots" aria-hidden="true"><i /><i /><i /></span><span className="code-window-title"><Code2 size={14} aria-hidden="true" />HTTP API</span><span aria-hidden="true" /></div>
-          <pre aria-label="OAuth 授权请求与重定向响应示例"><code><span className="code-option">GET</span> <span className="code-string">/oauth/authorize</span>{"\n"}<span className="code-comment">?client_id=…&amp;response_type=code&amp;…</span>{"\n\n"}<span className="code-comment"># 已登录 · 跳转授权确认页</span>{"\n"}<span className="code-command">HTTP/1.1</span> <span className="code-value">302 Found</span>{"\n"}<span className="code-property">Location</span>: <span className="code-string">https://…/consent?request=…</span>{"\n"}<span className="code-property">Cache-Control</span>: <span className="code-variable">no-store</span>{"\n\n"}<span className="code-comment">…</span></code></pre>
+        <ScrollReveal className="landing-code dark">
+          <div className="landing-code-bar"><span className="code-window-dots" aria-hidden="true"><i /><i /><i /></span><span className="code-window-title"><Code2 size={14} aria-hidden="true" />授权接口示例</span><span aria-hidden="true" /></div>
+          <section aria-label="OAuth 授权请求与重定向响应示例">
+            <ShikiProvider engine="javascript" languages={["http"]}>
+              <CodeHighlighted code={authorizationExample} lang="http" variant="plain" />
+            </ShikiProvider>
+          </section>
         </ScrollReveal>
         <ScrollReveal className="landing-developer-copy" delay={0.12}><p className="landing-eyebrow">BUILT FOR COMMUNITY</p><h2 id="developer-title">专为社区打造</h2><p>为社区成员与应用提供统一的账户入口。从登录、个人资料到应用授权，让社区里的每一次连接都更简单。</p><ul><li><Check />一个账户，连接社区里的应用</li><li><Check />安全授权，分享的信息由你决定</li><li><Check />开放源代码，与社区一起完善</li></ul></ScrollReveal>
       </section>

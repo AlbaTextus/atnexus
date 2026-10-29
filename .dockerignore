@@ -13,7 +13,3 @@ release
 bin
 coverage.out
 README.md
-
-!release
-release/*
-!release/albatextus-ui-0.1.0.tgz

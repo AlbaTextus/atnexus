@@ -9,7 +9,7 @@ import { type Communication, messageDate } from "@/lib/communications"
 import { Button } from "@/components/ui/button"
 import { IconButton } from "@albatextus/ui"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { EmptyState } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
@@ -69,7 +69,7 @@ export function AnnouncementCenter() {
         <MessageScrollList label="全站公告列表">{items.map(item => <button type="button" key={item.id} className="communications-record" title={item.title} onClick={() => { setSelected(item.id); mark([item]) }}>
           <strong>{item.title}</strong><time dateTime={item.published_at || item.updated_at}>{messageDate(item.published_at || item.updated_at)}</time>
         </button>)}</MessageScrollList>
-      </> : !error && <Empty><EmptyHeader><EmptyMedia variant="icon"><Mail /></EmptyMedia><EmptyTitle>暂时没有新公告</EmptyTitle><EmptyDescription>有新消息时，信封会亮起红点。</EmptyDescription></EmptyHeader></Empty>}
+      </> : !error && <EmptyState icon={<Mail />} title="暂时没有新公告" description="有新消息时，信封会亮起红点。" />}
     </DialogContent>
   </Dialog>
 }

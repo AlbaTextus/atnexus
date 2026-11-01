@@ -6,7 +6,7 @@ import { Link } from "next-view-transitions"
 import { usePathname } from "next/navigation"
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from "react"
 import { motion, useAnimationControls, useReducedMotion } from "framer-motion"
-import { AlertCircle, House, LayoutGrid, LogOut, Mail, Settings2, ShieldCheck, ShieldX, UserRound, Users } from "lucide-react"
+import { AlertCircle, House, LayoutGrid, LogOut, Settings2, ShieldCheck, ShieldX, UserRound, Users } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import { isAdminRole, managementError } from "@/lib/applications"
 import { profileSetupPath } from "@/lib/profile-setup"
@@ -18,7 +18,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { SiteHeader, navigationTransition, type NavigationItem } from "@/components/site-header"
 import { MaintenanceControl } from "@/components/maintenance-control"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { AnnouncementCenter } from "@/components/announcement-center"
 
 export type AccountUser = { id: string; numeric_id: number; bio?: string; email: string; email_verified?: boolean; profile_setup_required?: boolean; display_name?: string | null; role: string; level: 1 | 3 | 4; created_at?: string; has_password?: boolean; email_is_alias?: boolean; avatar_source?: string; avatar_url?: string; custom_avatar_url?: string }
 const AccountContext = createContext<{ user: AccountUser; updateUser: (user: AccountUser) => void } | null>(null)
@@ -38,7 +37,6 @@ const userNavigation: NavigationItem[] = [
 const adminNavigation: NavigationItem[] = [
   { href: "/admin/users", title: "用户管理", icon: Users },
   { href: "/admin/applications", title: "应用接入", icon: LayoutGrid },
-  { href: "/admin/notifications", title: "消息发布", icon: Mail },
 ]
 
 export function AccountShell({ children, area = "account", initialUser }: { children: ReactNode; area?: "account" | "admin"; initialUser?: AccountUser }) {
@@ -98,7 +96,7 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
       <a className="center-skip" href="#center-content">跳转到主要内容</a>
       <SiteHeader items={admin ? [...navigation, areaLink] : navigation} activeHref={active?.href}
         navigationLabel={title + "导航"} routeKey={pathname} LinkComponent={Link}
-        actions={<><AnnouncementCenter /><ThemeToggle />{user?.role === "SUPER_ADMIN" && <MaintenanceControl />}<Button variant="ghost" size="icon" aria-label="退出登录" disabled={!user || leaving} onClick={logout}><LogOut /></Button></>} />
+        actions={<><ThemeToggle />{user?.role === "SUPER_ADMIN" && <MaintenanceControl />}<Button variant="ghost" size="icon" aria-label="退出登录" disabled={!user || leaving} onClick={logout}><LogOut /></Button></>} />
       <div className="center-workspace">
         <main id="center-content" tabIndex={-1} className="center-content">
           {error && <Alert variant="destructive" className="mb-6"><AlertCircle /><AlertDescription>{error} <Button variant="link" onClick={() => window.location.reload()}>重新加载</Button></AlertDescription></Alert>}

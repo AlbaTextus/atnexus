@@ -47,14 +47,6 @@ func (s *SMTP) SendCode(ctx context.Context, to, code, purpose string) error {
 	return s.deliver(ctx, to, "ALBATEXTUS 邮箱验证码", content, html)
 }
 
-func (s *SMTP) SendMessage(ctx context.Context, to, subject, content string) error {
-	html, err := RenderMessage(subject, content)
-	if err != nil {
-		return err
-	}
-	return s.deliver(ctx, to, subject, content, html)
-}
-
 func (s *SMTP) deliver(ctx context.Context, to, subject, content, html string) error {
 	if strings.TrimSpace(subject) == "" || strings.ContainsAny(subject, "\r\n\x00") {
 		return errors.New("invalid subject")

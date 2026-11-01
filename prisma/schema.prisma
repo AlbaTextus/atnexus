@@ -3,35 +3,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Communication {
-  id String @id @db.Uuid
-  kind String @db.VarChar(20)
-  title String @db.VarChar(100)
-  content String @db.Text
-  audience String @default("all") @db.VarChar(20)
-  status String @default("draft") @db.VarChar(20)
-  revision Int @default(1)
-  createdBy String @map("created_by") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
-  publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
-  deliveries MailDelivery[]
-  @@index([kind,createdAt(sort: Desc)])
-  @@map("communications")
-}
-
-model MailDelivery {
-  id String @id @db.Uuid
-  communicationId String @map("communication_id") @db.Uuid
-  recipient String @db.VarChar(320)
-  status String @default("pending") @db.VarChar(20)
-  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
-  communication Communication @relation(fields: [communicationId],references: [id],onDelete: Cascade,onUpdate: NoAction)
-  @@unique([communicationId,recipient])
-  @@index([status,updatedAt])
-  @@map("mail_deliveries")
-}
-
 model LegalDocument {
   slug        String   @id @db.VarChar(20)
   title       String   @db.VarChar(100)

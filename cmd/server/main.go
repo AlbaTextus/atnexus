@@ -56,9 +56,7 @@ func main() {
 		serverErr <- server.ListenAndServe()
 	}()
 	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	mailDone := make(chan struct{})
-	go func() { defer close(mailDone); runMailDeliveries(signalCtx, st, cfg.SMTP, logger) }()
-	defer func() { stop(); <-mailDone }()
+	defer stop()
 	select {
 	case err := <-serverErr:
 		if !errors.Is(err, http.ErrServerClosed) {

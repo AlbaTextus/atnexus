@@ -11,7 +11,6 @@ import { ServiceArchitecture } from "@/components/service-architecture"
 import { HomeHeader, IconButton } from "@albatextus/ui"
 import { CodeHighlighted, ShikiProvider } from "@albatextus/ui/code"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { AnnouncementCenter } from "@/components/announcement-center"
 import { AccountEntryLink } from "@/components/account-entry-link"
 import { wikiUrl } from "@/lib/wiki"
 
@@ -51,7 +50,7 @@ export function HomePage() {
   return <div className="home-shell home-credit-inspired" id="top">
     <a href="#home-main" className="home-skip">跳转到主要内容</a>
     <HomeHeader brandHref="#top" LinkComponent={TransitionLink} actions={<>
-      <AnnouncementCenter /><ThemeToggle />
+      <ThemeToggle />
       <IconButton nativeButton={false} role="link" render={<a href={wikiUrl()} />} label="前往 Wiki">W</IconButton>
       <AccountEntryLink render={<TransitionLink href="/account" />} />
     </>} />

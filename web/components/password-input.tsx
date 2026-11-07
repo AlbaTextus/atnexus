@@ -1,1 +1,3 @@
-export * from "@albatextus/ui/components/password-input"
+"use client"
+
+export { InputGroupPassword as PasswordInput, type InputGroupPasswordProps as PasswordInputProps } from "@/components/ui/input-group"

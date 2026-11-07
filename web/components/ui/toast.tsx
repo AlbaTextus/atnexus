@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, type ReactNode } from "react"
-import { ToastProvider as SharedToastProvider } from "@albatextus/ui/components/toast"
+import { ToastProvider as SharedToastProvider } from "@/components/ui/toast-base"
 import { api } from "@/lib/api"
 import { feedback, takeExternalLogin, takeRedirectFeedback, toastManager } from "@/lib/feedback"
 

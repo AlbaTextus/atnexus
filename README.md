@@ -155,6 +155,8 @@ pnpm web:dev
 
 浏览器统一通过 `localhost:3288` 访问：Next.js 将 `/api/*`、`/oauth/*` 和 `/.well-known/*` 转发至 Go 服务，使页面与登录会话保持同源。不要混用 `localhost` 和 `127.0.0.1`，否则 Cookie 和 Passkey 的来源校验可能不一致。
 
+`pnpm web:dev` 默认使用 Turbopack。中文字体的 `regular.css` 和 `medium.css` 在 `web/app/layout.tsx` 中作为独立 CSS 入口加载，不要再通过 `web/styles/fonts.css` 的 `@import` 合并。Windows 本地环境中，两套分片字体及其 source map 合并为大型 PostCSS IPC 结果时会卡住首次编译；分离入口保留相同的字体、字重和样式，并缩小单次转换结果。
+
 ## 登录与账户
 
 ### 登录流程
@@ -497,12 +499,12 @@ Prisma schema 与迁移是数据库结构的来源；Go 服务没有 Prisma Clie
 
 ## UI 与字体维护
 
-Web 的共享组件、主题、字体与页面展示样式统一由同级 `../atui` 管理。`web/components/ui/` 仅保留兼容重导出；认证卡片、画布、字标、头像、Markdown、密码输入和复制字段使用 ATUI 实现，API、权限、会话与重定向逻辑仍保留在 OAuth。
+Web 的组件、主题、字体与页面展示样式在 OAuth 项目内独立维护，不再依赖 `@albatextus/ui` 包或相邻的 ATUI 仓库。迁移使用此前实际安装的组件版本，保留现有外观与交互；独立 ATUI 项目不受影响。基础组件实现位于 `web/components/ui/`，其他展示组件位于 `web/components/`，带业务反馈或路由适配的组件继续包装 `web/components/presentation/` 中的本地实现。
 
 应用与用户管理使用共享 `StatCard`；列表使用 `EmptyState`；删除通行密钥、解绑账号、删除应用及重置密钥使用 `ConfirmDialog`。这些组合归在原有 card / empty / dialog 组件组中，不再在页面内重复维护骨架。请求、统计和名称二次确认仍在 OAuth，密钥按需读取与隐藏清除的逻辑保持不变。
 
-ATUI 文档按独立组件展示，输入框、密码输入、复制字段和多行输入共用一个中文入口；文档目录精简不代表删除包内的兼容导出，OAuth 仍可使用卡片、字段容器及认证组合。PasswordInput 与 CopyField 的静态密钥显隐共用 InputGroupPassword；OAuth 的 ClientSecretField 继续独立负责按需读取及隐藏时清除服务端密钥，不将其改为预加载静态字段。
+PasswordInput 与 CopyField 的静态密钥显隐共用本地 InputGroupPassword；ClientSecretField 继续独立负责按需读取及隐藏时清除服务端密钥，不将其改为预加载静态字段。底层 Base UI、动画和 Markdown 等依赖直接在 `web/package.json` 中声明。
 
-首页授权示例使用 `@albatextus/ui/code` 的 `CodeHighlighted`，保留深色终端外观，只为该示例加载 HTTP 语法，不在全局初始化高亮引擎。个人简介及编辑预览中的 Markdown 代码块由 ATUI 按需高亮，沿用全站明暗主题、中文复制反馈和纯文本回退；OAuth 不再维护手工语法配色。
+首页授权示例使用 `web/components/code-highlighted/` 中的 `CodeHighlighted`，保留深色终端外观，只为该示例加载 HTTP 语法，不在全局初始化高亮引擎。个人简介及编辑预览中的 Markdown 代码块继续按需高亮，沿用全站明暗主题、中文复制反馈和纯文本回退。
 
-`web/app/globals.css` 只引入 `@albatextus/ui/styles/oauth.css`，不要另行安装字体、复制 `public/fonts` 或重复声明主题 token。ATUI 新增组件、依赖或修改样式和字体后，在 OAuth 根目录运行 `pnpm install --no-frozen-lockfile` 更新本地包快照及锁文件，再运行 `pnpm web:typecheck` 和 `pnpm web:build`。已有开发或生产预览需重新启动才能加载更新后的包。字体资源与许可证随 ATUI 发布包安装，构建时自动生成静态资源地址；部署安装使用同步后的锁文件执行 `pnpm install --frozen-lockfile`。
+`web/app/globals.css` 引入本地 `web/styles/oauth.css`，主题 token、页面样式与字体声明均保留在 `web/styles/`。字体文件和 OFL 许可证位于 `web/fonts/`，构建时自动生成静态资源地址，不依赖外部字体服务。修改后运行 `pnpm web:typecheck` 和 `pnpm web:build`；依赖更新时同步锁文件，部署使用 `pnpm install --frozen-lockfile`。Docker 构建只需 OAuth 自身目录，不再需要额外 UI 构建上下文。

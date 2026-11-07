@@ -8,11 +8,10 @@ import { Button } from "@/components/ui/button"
 import { SiteFooter } from "@/components/site-footer"
 import { CloudflareNetwork } from "@/components/cloudflare-network"
 import { ServiceArchitecture } from "@/components/service-architecture"
-import { HomeHeader, IconButton } from "@albatextus/ui"
-import { CodeHighlighted, ShikiProvider } from "@albatextus/ui/code"
+import { HomeHeader } from "@/components/home-header"
+import { CodeHighlighted, ShikiProvider } from "@/components/code-highlighted/index"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { AccountEntryLink } from "@/components/account-entry-link"
-import { wikiUrl } from "@/lib/wiki"
 
 const authorizationExample = `GET /oauth/authorize
 ?client_id=…&response_type=code&…
@@ -51,7 +50,6 @@ export function HomePage() {
     <a href="#home-main" className="home-skip">跳转到主要内容</a>
     <HomeHeader brandHref="#top" LinkComponent={TransitionLink} actions={<>
       <ThemeToggle />
-      <IconButton nativeButton={false} role="link" render={<a href={wikiUrl()} />} label="前往 Wiki">W</IconButton>
       <AccountEntryLink render={<TransitionLink href="/account" />} />
     </>} />
 
@@ -113,6 +111,7 @@ export function HomePage() {
             { name: "Claude", image: "/brands/claude.svg" },
             { name: "OpenAI", image: "/brands/openai.svg" },
             { name: "Gemini", image: "/brands/gemini.svg" },
+            { name: "DeepSeek", image: "/brands/deepseek.svg" },
           ].map((brand, index) => <ScrollReveal key={brand.name} delay={index * 0.12}>
             <div className="agi-brand">
               <img src={brand.image} alt={brand.name} width="64" height="64" loading="lazy" />

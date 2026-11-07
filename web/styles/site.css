@@ -1,2 +1,2 @@
-/* Compatibility entry. ATUI owns all presentation styles. */
-@import "@albatextus/ui/styles/oauth.css";
+/* Compatibility entry for the local OAuth presentation styles. */
+@import "./oauth.css";

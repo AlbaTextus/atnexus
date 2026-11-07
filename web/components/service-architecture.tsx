@@ -3,7 +3,8 @@
 import { useId, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from "react"
 import { Database, Fingerprint, Globe2, Images, KeyRound, MessageSquare, Server, ShieldCheck, UserRound, WalletCards, type LucideIcon } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { NetworkDiagramConnections, NetworkDiagramNode, networkDiagramSizing as sizes, networkDiagramCanvasStyle } from "@albatextus/ui"
+import { NetworkDiagramConnections, NetworkDiagramNode } from "@/components/network-diagram"
+import { networkDiagramSizing as sizes, networkDiagramCanvasStyle } from "@/lib/network-diagram-sizing"
 
 type Position = { x: number; y: number }
 type MovableNode = "apps" | "data"

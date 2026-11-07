@@ -56,7 +56,9 @@
     "release/ui-adaptation-web/types/**/*.ts",
     "release/ui-adaptation-web/dev/types/**/*.ts",
     "temp/ui-adaptation-dev/types/**/*.ts",
-    "temp/ui-adaptation-dev/dev/types/**/*.ts"
+    "temp/ui-adaptation-dev/dev/types/**/*.ts",
+    "temp/next-webpack-20261101/types/**/*.ts",
+    "temp/next-webpack-20261101/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

@@ -67,8 +67,6 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile
-      additional_contexts:
-        atui: ../atui
       args:
         OAUTH_BACKEND_URL: http://oauth:8080
         NEXT_PUBLIC_WIKI_URL: ${NEXT_PUBLIC_WIKI_URL:-http://localhost:3200}

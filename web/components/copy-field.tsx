@@ -1,6 +1,6 @@
 "use client"
 
-import { CopyField as SharedCopyField, type CopyFieldProps } from "@albatextus/ui/components/copy-field"
+import { CopyField as SharedCopyField, type CopyFieldProps } from "@/components/presentation/copy-field"
 import { feedback } from "@/lib/feedback"
 
 export function CopyField(props: Pick<CopyFieldProps, "label" | "value" | "secret">) {

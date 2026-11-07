@@ -4,8 +4,7 @@ const backend = process.env.OAUTH_BACKEND_URL || "http://localhost:8080"
 const wiki = (process.env.NEXT_PUBLIC_WIKI_URL || "http://localhost:3200").replace(/\/+$/, "")
 
 const nextConfig = {
-  // Shiki is owned by ATUI; bundle it instead of resolving it from OAuth's root.
-  transpilePackages: ["@albatextus/ui", "shiki"],
+  transpilePackages: ["shiki"],
   distDir: process.env.NEXT_OUTPUT_DIR || ".next",
   async redirects() {
     return [

@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { createToastManager } from "@albatextus/ui/components/toast"
+import { createToastManager } from "@/components/ui/toast-base"
 
 export const toastManager = createToastManager()
 type FeedbackKind = "success" | "error"

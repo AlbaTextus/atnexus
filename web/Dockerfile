@@ -6,8 +6,6 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY web/package.json ./web/package.json
-COPY --from=atui /package.json /atui/package.json
-COPY --from=atui /src /atui/src
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY web ./web

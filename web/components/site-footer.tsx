@@ -1,9 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { SiteFooter as SharedSiteFooter } from "@albatextus/ui"
-import { wikiUrl } from "@/lib/wiki"
+import { SiteFooter as SharedSiteFooter } from "@/components/presentation/site-footer"
 
 export function SiteFooter() {
-  return <SharedSiteFooter LinkComponent={Link} wikiOrigin={wikiUrl()} />
+  return <SharedSiteFooter LinkComponent={Link} />
 }

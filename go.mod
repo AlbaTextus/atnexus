@@ -1,13 +1,16 @@
 module github.com/AlbaTextus/oauth
 
-go 1.25.0
+go 1.26.1
+
+replace albatextus/athub => ./modules/athub
 
 require (
+	albatextus/athub v0.0.0
 	github.com/alicebob/miniredis/v2 v2.39.0
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-webauthn/webauthn v0.18.0
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.7.6
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.22.0
 	golang.org/x/crypto v0.55.0

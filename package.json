@@ -3,6 +3,12 @@
   "private": true,
   "packageManager": "pnpm@11.17.0",
   "scripts": {
+    "server:dev": "go run ./cmd/server",
+    "test:go": "go test ./... && go -C modules/athub test ./...",
+    "db:athub:install": "npm --prefix modules/athub ci",
+    "db:athub:validate": "npm --prefix modules/athub run db:validate",
+    "db:athub:deploy": "npm --prefix modules/athub run db:deploy",
+    "db:athub:studio": "npm --prefix modules/athub run db:studio",
     "db:format": "prisma format",
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate dev",

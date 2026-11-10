@@ -39,8 +39,50 @@ model User {
   externalIdentities ExternalIdentity[]
   externalLoginFlows ExternalLoginFlow[]
   consentRequests OAuthConsentRequest[]
+  athubKeys ATHubAPIKey[]
+  athubCalls ATHubAPICall[]
 
   @@map("users")
+}
+
+model ATHubAPIKey {
+  id String @id @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  name String @db.VarChar(100)
+  tokenHash String @unique @map("token_hash") @db.Char(64)
+  prefix String @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calls ATHubAPICall[]
+
+  @@index([userId, createdAt])
+  @@map("athub_api_keys")
+}
+
+model ATHubAPICall {
+  id String @id @db.Uuid
+  userId String? @map("user_id") @db.Uuid
+  keyId String? @map("key_id") @db.Uuid
+  requestId String @unique @map("request_id") @db.Uuid
+  method String @db.VarChar(16)
+  path String @db.VarChar(255)
+  port Int
+  authenticated Boolean
+  status Int?
+  durationMs BigInt? @map("duration_ms")
+  responseBytes BigInt? @map("response_bytes")
+  startedAt DateTime @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  key ATHubAPIKey? @relation(fields: [keyId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startedAt])
+  @@index([keyId, startedAt])
+  @@index([startedAt])
+  @@map("athub_api_calls")
 }
 
 model EmailChallenge {

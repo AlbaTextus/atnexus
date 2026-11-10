@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum NovelStatus {
+  ONGOING
+  COMPLETED
+}
+
+model Platform {
+  id      Int      @id @default(autoincrement())
+  name    String
+  url     String?
+  authors Author[]
+  novels  Novel[]
+}
+
+model Author {
+  id         Int      @id @default(autoincrement())
+  platformId Int
+  platform   Platform @relation(fields: [platformId], references: [id], onDelete: Restrict)
+  novels     Novel[]
+
+  @@index([platformId])
+}
+
+model Novel {
+  id         Int         @id @default(autoincrement())
+  platformId Int
+  authorId   Int?
+  title      String
+  summary    String?     @db.Text
+  coverUrl   String?
+  status     NovelStatus @default(ONGOING)
+  createdAt  DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime    @updatedAt @db.Timestamptz(3)
+  platform   Platform    @relation(fields: [platformId], references: [id], onDelete: Restrict)
+  author     Author?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  volumes    Volume[]
+  chapters   Chapter[]
+
+  @@index([platformId])
+  @@index([authorId])
+}
+
+model Volume {
+  id        Int       @id @default(autoincrement())
+  novelId   Int
+  order     Int
+  title     String
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  novel     Novel     @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  chapters  Chapter[]
+
+  @@unique([novelId, order])
+  @@unique([id, novelId])
+}
+
+model Chapter {
+  id        Int      @id @default(autoincrement())
+  novelId   Int
+  volumeId  Int?
+  order     Int
+  title     String
+  content   String   @db.Text
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  novel     Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  volume    Volume?  @relation(fields: [volumeId, novelId], references: [id, novelId], onDelete: NoAction)
+
+  @@unique([novelId, order])
+  @@index([volumeId, novelId])
+}

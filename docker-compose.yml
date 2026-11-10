@@ -27,12 +27,30 @@ services:
       timeout: 5s
       retries: 10
 
+  athub-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: athub
+      POSTGRES_PASSWORD: athub
+      POSTGRES_DB: athub
+    ports:
+      - "5433:5432"
+    volumes:
+      - athub-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U athub -d athub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   oauth:
     build: .
     environment:
       APP_ENV: development
-      HTTP_ADDR: :8080
+      HTTP_ADDR: :8001
+      ATHUB_HTTP_ADDR: :8003
       DATABASE_URL: postgresql://oauth:oauth@postgres:5432/oauth?sslmode=disable
+      ATHUB_DATABASE_URL: postgresql://athub:athub@athub-postgres:5432/athub?sslmode=disable
       REDIS_ENABLED: ${REDIS_ENABLED:-false}
       REDIS_URL: ${REDIS_COMPOSE_URL:-redis://redis:6379/0}
       REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-albatextus:connect}
@@ -58,9 +76,12 @@ services:
       CUSTOM_OAUTH_EMAIL_VERIFIED_FIELD: ${CUSTOM_OAUTH_EMAIL_VERIFIED_FIELD:-email_verified}
       CUSTOM_OAUTH_NAME_FIELD: ${CUSTOM_OAUTH_NAME_FIELD:-name}
     ports:
-      - "8080:8080"
+      - "8001:8001"
+      - "8003:8003"
     depends_on:
       postgres:
+        condition: service_healthy
+      athub-postgres:
         condition: service_healthy
 
   web:
@@ -68,10 +89,12 @@ services:
       context: .
       dockerfile: web/Dockerfile
       args:
-        OAUTH_BACKEND_URL: http://oauth:8080
+        OAUTH_BACKEND_URL: http://oauth:8001
+        ATHUB_BACKEND_URL: http://oauth:8003
         NEXT_PUBLIC_WIKI_URL: ${NEXT_PUBLIC_WIKI_URL:-http://localhost:3200}
     environment:
-      OAUTH_BACKEND_URL: http://oauth:8080
+      OAUTH_BACKEND_URL: http://oauth:8001
+      ATHUB_BACKEND_URL: http://oauth:8003
     ports:
       - "3288:3288"
     depends_on:
@@ -79,3 +102,4 @@ services:
 
 volumes:
   oauth-postgres:
+  athub-postgres:

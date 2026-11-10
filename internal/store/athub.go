@@ -1,0 +1,238 @@
+package store
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+)
+
+var ErrATHubKeyLimit = errors.New("maximum 20 active ATHub keys")
+
+type ATHubKey struct {
+	ID         uuid.UUID  `json:"id"`
+	UserID     uuid.UUID  `json:"user_id"`
+	Name       string     `json:"name"`
+	TokenHash  string     `json:"-"`
+	Prefix     string     `json:"prefix"`
+	CreatedAt  time.Time  `json:"created_at"`
+	ExpiresAt  *time.Time `json:"expires_at"`
+	RevokedAt  *time.Time `json:"revoked_at"`
+	LastUsedAt *time.Time `json:"last_used_at"`
+	TotalCalls int64      `json:"total_calls"`
+}
+
+type ATHubIdentity struct {
+	KeyID  uuid.UUID
+	UserID uuid.UUID
+	Active bool
+}
+
+type ATHubCall struct {
+	ID            uuid.UUID  `json:"id"`
+	UserID        *uuid.UUID `json:"user_id"`
+	KeyID         *uuid.UUID `json:"key_id"`
+	RequestID     uuid.UUID  `json:"request_id"`
+	Method        string     `json:"method"`
+	Path          string     `json:"path"`
+	Port          int        `json:"port"`
+	Authenticated bool       `json:"authenticated"`
+	Status        *int       `json:"status"`
+	DurationMS    *int64     `json:"duration_ms"`
+	ResponseBytes *int64     `json:"response_bytes"`
+	StartedAt     time.Time  `json:"started_at"`
+	CompletedAt   *time.Time `json:"completed_at"`
+}
+
+type ATHubUsageGroup struct {
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Port   int    `json:"port"`
+	Status *int   `json:"status"`
+	Calls  int64  `json:"calls"`
+}
+
+type ATHubUsage struct {
+	Total     int64             `json:"total_calls"`
+	Success   int64             `json:"successful_calls"`
+	Failed    int64             `json:"failed_calls"`
+	Pending   int64             `json:"pending_calls"`
+	Endpoints []ATHubUsageGroup `json:"endpoints"`
+}
+
+// ATHubStore lives entirely in the account database. The content module knows no users.
+type ATHubStore interface {
+	CreateATHubKey(context.Context, ATHubKey) (ATHubKey, error)
+	ListATHubKeys(context.Context, uuid.UUID) ([]ATHubKey, error)
+	RevokeATHubKey(context.Context, uuid.UUID, uuid.UUID) error
+	ResolveATHubKey(context.Context, string) (ATHubIdentity, error)
+	BeginATHubCall(context.Context, ATHubCall) error
+	FinishATHubCall(context.Context, uuid.UUID, int, int64, int64) error
+	ListATHubCalls(context.Context, uuid.UUID, int, int) ([]ATHubCall, error)
+	ATHubUsage(context.Context, uuid.UUID) (ATHubUsage, error)
+}
+
+func (p *Postgres) CheckATHubSchema(ctx context.Context) error {
+	for _, query := range []string{
+		`SELECT id,user_id,name,token_hash,prefix,created_at,expires_at,revoked_at,last_used_at FROM athub_api_keys LIMIT 0`,
+		`SELECT id,user_id,key_id,request_id,method,path,port,authenticated,status,duration_ms,response_bytes,started_at,completed_at FROM athub_api_calls LIMIT 0`,
+	} {
+		rows, err := p.pool.Query(ctx, query)
+		if err != nil {
+			return errors.New("ATHub authentication schema is not ready; run pnpm db:deploy in the host repository")
+		}
+		rows.Close()
+	}
+	return nil
+}
+
+func (p *Postgres) CreateATHubKey(ctx context.Context, key ATHubKey) (ATHubKey, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return key, err
+	}
+	defer tx.Rollback(ctx)
+	var active bool
+	// Serialize key creation per user so concurrent requests cannot exceed the limit.
+	if err := tx.QueryRow(ctx, `SELECT is_active FROM users WHERE id=$1 FOR UPDATE`, key.UserID).Scan(&active); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return key, ErrNotFound
+		}
+		return key, err
+	}
+	if !active {
+		return key, ErrNotFound
+	}
+	var count int
+	if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM athub_api_keys WHERE user_id=$1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now())`, key.UserID).Scan(&count); err != nil {
+		return key, err
+	}
+	if count >= 20 {
+		return key, ErrATHubKeyLimit
+	}
+	err = tx.QueryRow(ctx, `INSERT INTO athub_api_keys(id,user_id,name,token_hash,prefix,expires_at)
+		VALUES($1,$2,$3,$4,$5,$6) RETURNING created_at`, key.ID, key.UserID, key.Name, key.TokenHash, key.Prefix, key.ExpiresAt).Scan(&key.CreatedAt)
+	if err != nil {
+		return key, err
+	}
+	return key, tx.Commit(ctx)
+}
+
+func (p *Postgres) ListATHubKeys(ctx context.Context, userID uuid.UUID) ([]ATHubKey, error) {
+	rows, err := p.pool.Query(ctx, `SELECT k.id,k.user_id,k.name,k.prefix,k.created_at,k.expires_at,k.revoked_at,k.last_used_at,
+		(SELECT COUNT(*) FROM athub_api_calls c WHERE c.key_id=k.id)
+		FROM athub_api_keys k WHERE k.user_id=$1 ORDER BY k.created_at DESC,k.id DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	keys := make([]ATHubKey, 0)
+	for rows.Next() {
+		var key ATHubKey
+		if err := rows.Scan(&key.ID, &key.UserID, &key.Name, &key.Prefix, &key.CreatedAt, &key.ExpiresAt, &key.RevokedAt, &key.LastUsedAt, &key.TotalCalls); err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, rows.Err()
+}
+
+func (p *Postgres) RevokeATHubKey(ctx context.Context, userID, keyID uuid.UUID) error {
+	tag, err := p.pool.Exec(ctx, `UPDATE athub_api_keys SET revoked_at=COALESCE(revoked_at,now()) WHERE id=$1 AND user_id=$2`, keyID, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (p *Postgres) ResolveATHubKey(ctx context.Context, hash string) (ATHubIdentity, error) {
+	var identity ATHubIdentity
+	err := p.pool.QueryRow(ctx, `SELECT k.id,k.user_id,
+		(u.is_active AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>now()))
+		FROM athub_api_keys k JOIN users u ON u.id=k.user_id WHERE k.token_hash=$1`, hash).Scan(&identity.KeyID, &identity.UserID, &identity.Active)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity, ErrNotFound
+	}
+	return identity, err
+}
+
+func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,port,authenticated)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, call.ID, call.UserID, call.KeyID, call.RequestID, call.Method, call.Path, call.Port, call.Authenticated)
+	if err != nil {
+		return err
+	}
+	if call.Authenticated {
+		if _, err := tx.Exec(ctx, `UPDATE athub_api_keys SET last_used_at=now() WHERE id=$1`, call.KeyID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+func (p *Postgres) FinishATHubCall(ctx context.Context, id uuid.UUID, status int, duration, bytes int64) error {
+	tag, err := p.pool.Exec(ctx, `UPDATE athub_api_calls SET status=$2,duration_ms=$3,response_bytes=$4,completed_at=now() WHERE id=$1 AND completed_at IS NULL`, id, status, duration, bytes)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
+}
+
+func (p *Postgres) ListATHubCalls(ctx context.Context, userID uuid.UUID, limit, offset int) ([]ATHubCall, error) {
+	rows, err := p.pool.Query(ctx, `SELECT id,user_id,key_id,request_id,method,path,port,authenticated,status,duration_ms,response_bytes,started_at,completed_at
+		FROM athub_api_calls WHERE user_id=$1 ORDER BY started_at DESC,id DESC LIMIT $2 OFFSET $3`, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	calls := make([]ATHubCall, 0)
+	for rows.Next() {
+		var c ATHubCall
+		if err := rows.Scan(&c.ID, &c.UserID, &c.KeyID, &c.RequestID, &c.Method, &c.Path, &c.Port, &c.Authenticated, &c.Status, &c.DurationMS, &c.ResponseBytes, &c.StartedAt, &c.CompletedAt); err != nil {
+			return nil, err
+		}
+		calls = append(calls, c)
+	}
+	return calls, rows.Err()
+}
+
+func (p *Postgres) ATHubUsage(ctx context.Context, userID uuid.UUID) (ATHubUsage, error) {
+	// One snapshot for totals and groups, including calls still pending completion.
+	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return ATHubUsage{}, err
+	}
+	defer tx.Rollback(ctx)
+	result := ATHubUsage{Endpoints: make([]ATHubUsageGroup, 0)}
+	if err := tx.QueryRow(ctx, `SELECT COUNT(*),COUNT(*) FILTER(WHERE status BETWEEN 200 AND 399),
+		COUNT(*) FILTER(WHERE status>=400),COUNT(*) FILTER(WHERE status IS NULL) FROM athub_api_calls WHERE user_id=$1`, userID).Scan(&result.Total, &result.Success, &result.Failed, &result.Pending); err != nil {
+		return result, err
+	}
+	rows, err := tx.Query(ctx, `SELECT method,path,port,status,COUNT(*) FROM athub_api_calls WHERE user_id=$1 GROUP BY method,path,port,status ORDER BY COUNT(*) DESC,method,path,port,status`, userID)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var g ATHubUsageGroup
+		if err := rows.Scan(&g.Method, &g.Path, &g.Port, &g.Status, &g.Calls); err != nil {
+			return result, err
+		}
+		result.Endpoints = append(result.Endpoints, g)
+	}
+	if err := rows.Err(); err != nil {
+		return result, err
+	}
+	rows.Close()
+	return result, tx.Commit(ctx)
+}

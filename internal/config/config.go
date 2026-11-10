@@ -15,7 +15,9 @@ type Config struct {
 	TrustedProxyCIDRs         []string
 	Env                       string
 	HTTPAddr                  string
+	ATHubHTTPAddr             string
 	DatabaseURL               string
+	ATHubDatabaseURL          string
 	IssuerURL                 string
 	AuthUIURL                 string
 	CookieSecure              bool
@@ -42,8 +44,10 @@ func Load() (Config, error) {
 	c := Config{
 		TrustedProxyCIDRs:         getList("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128"),
 		Env:                       getenv("APP_ENV", "development"),
-		HTTPAddr:                  getenv("HTTP_ADDR", ":8080"),
+		HTTPAddr:                  getenv("HTTP_ADDR", ":8001"),
+		ATHubHTTPAddr:             getenv("ATHUB_HTTP_ADDR", ":8003"),
 		DatabaseURL:               os.Getenv("DATABASE_URL"),
+		ATHubDatabaseURL:          os.Getenv("ATHUB_DATABASE_URL"),
 		IssuerURL:                 strings.TrimRight(getenv("ISSUER_URL", "http://localhost:3288"), "/"),
 		AuthUIURL:                 strings.TrimRight(getenv("AUTH_UI_URL", "http://localhost:3288"), "/"),
 		SessionTTL:                getDuration("SESSION_TTL", 24*time.Hour),

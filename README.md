@@ -1,8 +1,8 @@
-# ALBATEXTUS OAuth
+# ALBATEXTUS 服务（仓库名暂为 OAuth）
 
-**一个账户，让连接更简单。**
-
-ALBATEXTUS 是面向社区应用的账户中心与 OAuth 2.0 授权服务。用户可以管理个人资料、登录方式和应用授权；管理员可以管理用户、接入应用及公开协议。
+本仓库承载统一 Go 服务：v1 是账户中心与 OAuth 2.0 授权，v2 是 ATHub 内容存储。
+两套功能编译成一个程序，由 `cmd/server` 一起初始化，OAuth 监听 `8001`，ATHub 监听 `8003`，分别连接各自数据库。
+仓库名与 Go module 路径暂时保留，后续再确定新名称。
 
 后端使用 Go，前端使用 Next.js、React 和 shadcn/ui，数据存储于 PostgreSQL。Prisma 负责数据库结构与迁移，Go 运行时通过 pgx 访问数据库。
 
@@ -21,8 +21,57 @@ ALBATEXTUS 是面向社区应用的账户中心与 OAuth 2.0 授权服务。用�
 | OAuth 服务 | 授权码、S256 PKCE、刷新令牌轮换、客户端凭证、令牌撤销与自省 |
 | 授权确认 | 展示应用与申请权限，用户明确允许后才签发授权码 |
 | 管理后台 | 应用接入、客户端密钥、最低访问角色、用户管理、协议编辑 |
+| 内容存储（v2） | 平台、作者、小说、卷、章节、全书目录与批量上传 |
+
+## 模块维护与路由
+
+OAuth 业务继续使用 `/api/v1/*`，OAuth 协议端点 `/oauth/*` 和发现端点保持原路径。
+ATHub 代码合入 [`modules/athub/`](modules/athub/README.md)，直接使用 `/api/v2/content`、
+`/api/v2/upload` 等路径，不加 `/athub`。同一进程开两个监听器，模块之间没有内部 HTTP 转发。
+v1 与 v2 在这里代表不同功能模块。
+
+ATHub 保留独立 `go.mod`、存储实现、测试和 Prisma 迁移；根模块通过本地 `replace` 引用。
+维护内容功能时修改该目录，再重新构建统一程序。普通 Git 克隆即可取得全部源码，
+不需要相邻 ATHub 目录或初始化子模块。原 ATHub 工作目录保留。
+
+v2 使用登录用户在 `8001/api/v1/account/key` 创建的个人 API Key，不接受原全局密钥、
+OAuth access token 或账户 Cookie。每个 Key 归属一个用户，创建时仅返回一次明文，账户库只保存哈希。
+账户维护模式沿用 v1 范围；v2 内容请求不经过账户维护拦截。
+`8001/healthz` 检查账户库，账户维护状态仍返回 `433`；`8003/healthz` 检查内容库，
+数据库不可用返回 `503`。任一端口绑定失败会释放已绑定端口并退出整个程序。
 
 本项目提供 OAuth 2.0 服务，**不签发 OpenID Connect ID Token**。访问令牌是不透明字符串；应用通过 `/api/v1/user` 获取用户身份，不应将令牌当作 JWT 解码。
+
+## ATHub 用户密钥与调用记录
+
+以下账户接口在 OAuth `8001` 端口，要求有效登录会话；创建和撤销还需
+`X-AlbaTextus-Client: account-center`，不接受跨站请求。只能管理自己的 Key 和查看自己的记录。
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| POST | `/api/v1/account/key` | `{"name":"采集任务","expires_at":"2027-01-01T00:00:00Z"}`；有效期可省略，创建后只返回一次 `api_key` 明文。 |
+| GET | `/api/v1/account/key` | 列出自己的 Key、前缀、最后使用时间、过期/撤销时间和调用次数；不返回密钥明文或哈希。 |
+| DELETE | `/api/v1/account/key/{id}` | 撤销自己的 Key，保留调用历史。 |
+| GET | `/api/v1/account/athub/usage` | 总次数、成功/失败/待完成次数，以及方法、接口、端口和状态码分组统计。 |
+| GET | `/api/v1/account/athub/calls?limit=50&offset=0` | 分页调用记录；limit 1–100，offset 0–1000000。 |
+
+Key 为 `ath_` 加 32 个随机字节的 Base64URL 编码，账户库仅保存 SHA-256 哈希和显示前缀。
+每个用户最多 20 个未过期且未撤销的 Key。撤销、过期或用户停用后即拒绝后续调用。
+调用 ATHub 时使用 `Authorization: Bearer <api_key>`；这是调用方的个人凭据，
+不再需要配置宿主全局 `ATHUB_API_TOKEN`。
+
+根目录 `prisma/` 定义 `athub_api_keys` 和 `athub_api_calls`，均存入账户 `DATABASE_URL`。
+内容库 `ATHUB_DATABASE_URL` 只保存平台、作者、小说、卷和章节。
+内容请求先在账户库写入待完成记录，再执行内容读写，最后补齐状态码、耗时和响应字节数。
+统计按调用次数计数，不把上传的章节数量当成调用次数；可归属 Key 的失败调用也计数。
+缺失/未知 Key 的失败调用以匿名记录保存，不出现在任何用户的个人统计里。
+不保存 Authorization、查询字符串、请求体和小说正文；未知路由归类为 `/api/v2/{unknown}`。
+健康检查和账户管理请求不计入内容调用次数。账户库无法校验或无法开始记录时，
+返回 `503` 并停止内容业务；完成记录失败或进程中断时，保留 `status=null` 的待完成记录。
+Key 目前拥有共享内容库读写权限，用户归属用于鉴权与统计，不会自动按用户隔离小说。
+
+部署先在账户库应用 `20261110000000_athub_user_keys` 迁移，再更新统一程序。
+迁移只新增两张表与索引，不修改内容库和用户数据。服务启动会检查这些表是否就绪。
 
 ## 服务拆分
 
@@ -71,13 +120,14 @@ SMTP_PASS=your-smtp-auth-code
 
 ## 快速开始
 
-以下命令在仓库根目录执行。需要 Go 1.25+、Node.js（建议 22+）、pnpm 和 PostgreSQL；Redis 为可选的会话缓存。仓库通过 `packageManager` 固定 pnpm 版本；Docker Compose 使用 PostgreSQL 16 和可选的 Redis 7。
+以下命令在仓库根目录执行。需要 Go 1.26.1+、Node.js 24+、pnpm 和 PostgreSQL；Redis 为可选的会话缓存。仓库通过 `packageManager` 固定 pnpm 版本；Docker Compose 使用 PostgreSQL 16 和可选的 Redis 7。
 
 ### 1. 准备环境
 
 ```bash
 cp .env.example .env
 pnpm install --frozen-lockfile
+npm run db:athub:install
 ```
 
 PowerShell 可用 `Copy-Item .env.example .env` 复制配置。已有 `.env` 时直接编辑，不要覆盖现有凭据。
@@ -94,6 +144,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ```dotenv
 DATABASE_URL=postgresql://oauth:oauth@localhost:5432/oauth?sslmode=disable
+ATHUB_DATABASE_URL=postgresql://athub:athub@localhost:5433/athub?sslmode=disable
+HTTP_ADDR=:8001
+ATHUB_HTTP_ADDR=:8003
 ISSUER_URL=http://localhost:3288
 AUTH_UI_URL=http://localhost:3288
 COOKIE_SECURE=false
@@ -103,10 +156,12 @@ WEBAUTHN_RP_ORIGINS=http://localhost:3288
 
 ### 2. 初始化数据库
 
-已有 PostgreSQL 时，将 `DATABASE_URL` 改为实际地址。也可以使用仓库提供的数据库容器：
+已有 PostgreSQL 时，分别配置账户库 `DATABASE_URL` 和内容库 `ATHUB_DATABASE_URL`。
+接入已有 ATHub 数据时直接使用原内容库连接地址，不需要复制小说数据；个人 Key 在账户库重新创建。
+也可以使用仓库提供的两个数据库容器：
 
 ```bash
-docker compose up -d postgres
+docker compose up -d postgres athub-postgres
 ```
 
 如需启用 Redis 会话缓存，在 `.env` 设置 `REDIS_ENABLED=true`，再启动可选容器；不开启时 Go 服务不会连接 Redis：
@@ -119,10 +174,15 @@ docker compose --profile redis up -d redis
 
 ```bash
 pnpm db:deploy
+npm run db:athub:deploy
 pnpm db:seed
 ```
 
 `db:deploy` 应用全部已提交的迁移。`db:seed` 是开发初始化命令，会创建或更新以下账户和示例客户端：
+
+`db:athub:deploy` 只迁移内容库。迁移前备份数据库；其中保留的
+`20261103000000_remove_user_api` 会删除旧 `ApiUser`、`ApiKey` 和 `ApiUsage` 表及数据，
+保留内容数据。统一服务启动只检查两套数据库，任何一套初始化失败都不会开始监听。
 
 | 项目 | 默认值 |
 | --- | --- |
@@ -151,9 +211,9 @@ go run ./cmd/server
 pnpm web:dev
 ```
 
-访问 [首页](http://localhost:3288/)、[登录页](http://localhost:3288/login) 或 [用户中心](http://localhost:3288/account)。Go API 默认监听 `8080`，健康检查为 [http://localhost:8080/healthz](http://localhost:8080/healthz)。
+访问 [首页](http://localhost:3288/)、[登录页](http://localhost:3288/login) 或 [用户中心](http://localhost:3288/account)。OAuth 默认监听 `8001`，ATHub 默认监听 `8003`，两个端口均提供 `/healthz`。内容接口例如 `http://localhost:8003/api/v2/content?novelId=1&order=1`。
 
-浏览器统一通过 `localhost:3288` 访问：Next.js 将 `/api/*`、`/oauth/*` 和 `/.well-known/*` 转发至 Go 服务，使页面与登录会话保持同源。不要混用 `localhost` 和 `127.0.0.1`，否则 Cookie 和 Passkey 的来源校验可能不一致。
+浏览器统一通过 `localhost:3288` 访问：Next.js 优先将 `/api/v2/*` 转发至 `ATHUB_BACKEND_URL`（默认 `http://localhost:8003`），其余 `/api/*`、`/oauth/*` 和 `/.well-known/*` 转发至 `OAUTH_BACKEND_URL`（默认 `http://localhost:8001`），使页面与登录会话保持同源。不要混用 `localhost` 和 `127.0.0.1`，否则 Cookie 和 Passkey 的来源校验可能不一致。
 
 `pnpm web:dev` 默认使用 Turbopack。中文字体的 `regular.css` 和 `medium.css` 在 `web/app/layout.tsx` 中作为独立 CSS 入口加载，不要再通过 `web/styles/fonts.css` 的 `@import` 合并。Windows 本地环境中，两套分片字体及其 source map 合并为大型 PostCSS IPC 结果时会卡住首次编译；分离入口保留相同的字体、字重和样式，并缩小单次转换结果。
 
@@ -319,13 +379,15 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 | 变量 | 用途 |
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL 连接地址，必填 |
+| `ATHUB_DATABASE_URL` | 内容库 PostgreSQL 连接地址，必填，与账户库分开 |
 | `REDIS_ENABLED` | 是否启用 Redis 会话缓存，默认 `false`；关闭时不建立 Redis 连接 |
 | `REDIS_URL` | Redis 连接地址，默认 `redis://localhost:6379/0`；支持 `redis://` 与 `rediss://` |
 | `REDIS_KEY_PREFIX` | Redis 键前缀，默认 `albatextus:connect` |
 | `REDIS_SESSION_TTL` | 会话缓存时长，默认 `30s`，且不会超过会话剩余有效期 |
 | `CLIENT_SECRET_ENCRYPTION_KEY` | 客户端密钥与 PKCE verifier 加密密钥，必填并保持稳定 |
 | `APP_ENV` | 本地为 `development`，生产为 `production` |
-| `HTTP_ADDR` | Go 监听地址，默认 `:8080` |
+| `HTTP_ADDR` | OAuth 监听地址，默认 `:8001` |
+| `ATHUB_HTTP_ADDR` | ATHub 监听地址，默认 `:8003` |
 | `ISSUER_URL` | 对外 OAuth 地址；本地应为 `http://localhost:3288` |
 | `AUTH_UI_URL` | 认证前端对外地址 |
 | `COOKIE_SECURE` | HTTPS 部署设为 `true` |
@@ -334,7 +396,8 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 | `WEBAUTHN_RP_ID` | Passkey 所属域名，不带协议和端口 |
 | `WEBAUTHN_RP_ORIGINS` | 允许的完整前端 Origin，逗号分隔 |
 | `PASSKEY_CHALLENGE_TTL` | Passkey 挑战有效期，默认 `5m` |
-| `OAUTH_BACKEND_URL` | Next.js 转发到的 Go 地址，默认 `http://localhost:8080` |
+| `OAUTH_BACKEND_URL` | Next.js 转发到账户功能的地址，默认 `http://localhost:8001` |
+| `ATHUB_BACKEND_URL` | Next.js 转发到内容功能的地址，默认 `http://localhost:8003` |
 | `NEXT_PUBLIC_WIKI_URL` | 独立 Wiki 服务的公开地址，用于文档、接入指南与协议链接及 `/wiki/*` 跳转，默认 `http://localhost:3200`；构建时内联，修改后需重新构建 |
 | `NEXT_OUTPUT_DIR` | Next.js 构建目录，相对于 `web/`，默认 `.next` |
 
@@ -379,7 +442,9 @@ Go 服务可用 `go build -o release/oauth ./cmd/server` 构建，Windows 可将
 
 ## API
 
-完整路由以 [internal/httpapi/api.go](internal/httpapi/api.go) 为准。以下路径中的 `{id}`、`{provider}` 为参数；协议 `{slug}` 仅支持 `privacy`、`terms`。
+账户与 OAuth 路由以 [internal/httpapi/api.go](internal/httpapi/api.go) 为准；
+内容路由见 [ATHub 模块接口](modules/athub/README.md#http-接口)。
+以下路径中的 `{id}`、`{provider}` 为参数；协议 `{slug}` 仅支持 `privacy`、`terms`。
 
 ### OAuth 与公开接口
 
@@ -470,6 +535,7 @@ Go 服务可用 `go build -o release/oauth ./cmd/server` 构建，Windows 可将
 ```text
 cmd/                  服务入口、开发 seed 与本地图床接入工具
 internal/             配置、HTTP API、OAuth、Passkey、第三方登录、存储
+modules/athub/        独立维护的内容模块、测试及内容库迁移
 prisma/               数据库 schema 与迁移
 web/app/              Next.js 页面与全局样式
 web/components/       账户、管理后台与基础 UI 组件
@@ -480,6 +546,9 @@ release/              本地构建与发布产物
 
 | 命令 | 用途 |
 | --- | --- |
+| `npm run server:dev` | 一个进程启动 OAuth 8001 与 ATHub 8003 |
+| `npm run test:go` | 运行宿主与 ATHub 两个 Go 模块的测试 |
+| `npm run db:athub:deploy` | 应用内容库迁移 |
 | `pnpm web:dev` | 前端开发服务 |
 | `pnpm web:typecheck` | TypeScript 类型检查 |
 | `pnpm db:validate` | 校验 Prisma schema |
@@ -487,7 +556,7 @@ release/              本地构建与发布产物
 | `pnpm db:migrate` | 在开发数据库创建、应用迁移 |
 | `pnpm db:deploy` | 应用已提交的迁移 |
 | `pnpm db:studio` | 打开数据库管理界面 |
-| `go test ./...` | 运行 Go 测试 |
+| `go test ./...` | 仅运行宿主 Go 模块测试；不遍历独立 ATHub 模块 |
 
 Prisma schema 与迁移是数据库结构的来源；Go 服务没有 Prisma Client，也不会在启动时自动建表。首次检查前端或更换构建目录时，先完成一次前端构建，生成 Next.js 路由类型。
 

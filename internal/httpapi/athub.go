@@ -41,24 +41,30 @@ func (a *API) listATHubKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) createATHubKey(w http.ResponseWriter, r *http.Request) {
+	a.provisionATHubKey(w, r, false)
+}
+
+func (a *API) resetATHubKey(w http.ResponseWriter, r *http.Request) {
+	a.provisionATHubKey(w, r, true)
+}
+
+func (a *API) provisionATHubKey(w http.ResponseWriter, r *http.Request, reset bool) {
 	user, st, ok := a.athubActor(w, r)
 	if !ok {
 		return
 	}
 	var input struct {
-		Name      string     `json:"name"`
-		ExpiresAt *time.Time `json:"expires_at"`
+		Name *string `json:"name"`
 	}
 	if !readAccountJSON(w, r, &input) {
 		return
 	}
-	input.Name = strings.TrimSpace(input.Name)
-	if input.Name == "" || utf8.RuneCountInString(input.Name) > 100 || strings.ContainsRune(input.Name, 0) {
-		writeJSON(w, 400, map[string]string{"error": "invalid_key_name"})
-		return
+	name := "ATHub"
+	if input.Name != nil {
+		name = strings.TrimSpace(*input.Name)
 	}
-	if input.ExpiresAt != nil && !input.ExpiresAt.After(time.Now()) {
-		writeJSON(w, 400, map[string]string{"error": "invalid_expiry"})
+	if name == "" || utf8.RuneCountInString(name) > 100 || strings.ContainsRune(name, 0) {
+		writeJSON(w, 400, map[string]string{"error": "invalid_key_name"})
 		return
 	}
 	random, err := security.RandomToken(32)
@@ -67,15 +73,20 @@ func (a *API) createATHubKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := "ath_" + random
-	key, err := st.CreateATHubKey(r.Context(), store.ATHubKey{
-		ID: uuid.New(), UserID: user.ID, Name: input.Name, TokenHash: security.HashToken(token), Prefix: token[:12], ExpiresAt: input.ExpiresAt,
-	})
-	if errors.Is(err, store.ErrATHubKeyLimit) {
-		writeJSON(w, 409, map[string]string{"error": "api_key_limit", "error_description": "最多保留 20 个未过期且未撤销的密钥。"})
-		return
+	key := store.ATHubKey{ID: uuid.New(), UserID: user.ID, Name: name, TokenHash: security.HashToken(token), Prefix: token[:12]}
+	created := true
+	if reset {
+		key, err = st.ResetATHubKey(r.Context(), key)
+	} else {
+		key, created, err = st.EnsureATHubKey(r.Context(), key)
 	}
 	if err != nil {
 		a.applicationError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	if !created {
+		writeJSON(w, 200, map[string]any{"key": key})
 		return
 	}
 	writeJSON(w, 201, map[string]any{"key": key, "api_key": token})

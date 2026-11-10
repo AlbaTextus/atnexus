@@ -53,12 +53,14 @@ func athubTestStore(t *testing.T) *Postgres {
 	if _, err := pool.Exec(ctx, `CREATE TABLE users(id uuid PRIMARY KEY,is_active boolean NOT NULL DEFAULT true)`); err != nil {
 		t.Fatal(err)
 	}
-	sql, err := os.ReadFile("../../prisma/migrations/20261110000000_athub_user_keys/migration.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, string(sql), pgx.QueryExecModeSimpleProtocol); err != nil {
-		t.Fatal(err)
+	for _, migration := range []string{"20261110000000_athub_user_keys", "20261110010000_athub_single_key"} {
+		sql, err := os.ReadFile("../../prisma/migrations/" + migration + "/migration.sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, string(sql), pgx.QueryExecModeSimpleProtocol); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return &Postgres{pool: pool}
 }
@@ -198,8 +200,134 @@ func TestATHubConcurrentKeyLimitIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if created != 20 || limited != 4 {
+	if created != 1 || limited != 23 {
 		t.Fatalf("created=%d limited=%d", created, limited)
+	}
+}
+
+func TestATHubSingleKeyLifecycleIntegration(t *testing.T) {
+	p := athubTestStore(t)
+	ctx := context.Background()
+	user := uuid.New()
+	if _, err := p.pool.Exec(ctx, `INSERT INTO users(id) VALUES($1)`, user); err != nil {
+		t.Fatal(err)
+	}
+	makeKey := func() ATHubKey {
+		id := uuid.New()
+		return ATHubKey{ID: id, UserID: user, Name: "ATHub", TokenHash: security.HashToken(id.String()), Prefix: "ath_test"}
+	}
+	var workers sync.WaitGroup
+	results := make(chan bool, 24)
+	for range 24 {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			key, created, err := p.EnsureATHubKey(ctx, makeKey())
+			if err != nil {
+				t.Error(err)
+			}
+			if key.ExpiresAt != nil {
+				t.Error("key should never expire")
+			}
+			results <- created
+		}()
+	}
+	workers.Wait()
+	close(results)
+	created := 0
+	for result := range results {
+		if result {
+			created++
+		}
+	}
+	if created != 1 {
+		t.Fatalf("created=%d", created)
+	}
+	keys, err := p.ListATHubKeys(ctx, user)
+	if err != nil || len(keys) != 1 {
+		t.Fatalf("keys=%+v err=%v", keys, err)
+	}
+	oldID := keys[0].ID
+	call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &oldID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Port: 8003, Authenticated: true}
+	if err := p.BeginATHubCall(ctx, call); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.FinishATHubCall(ctx, call.ID, 200, 1, 10); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.RevokeATHubKey(ctx, user, oldID); err != nil {
+		t.Fatal(err)
+	}
+	same, wasCreated, err := p.EnsureATHubKey(ctx, makeKey())
+	if err != nil || wasCreated || same.ID != oldID || same.RevokedAt == nil {
+		t.Fatal("disabled key was replaced or enabled")
+	}
+	newKey := makeKey()
+	replacement, err := p.ResetATHubKey(ctx, newKey)
+	if err != nil || replacement.ID == oldID || replacement.RevokedAt != nil || replacement.ExpiresAt != nil {
+		t.Fatalf("replacement=%+v err=%v", replacement, err)
+	}
+	oldIdentity, err := p.ResolveATHubKey(ctx, security.HashToken(oldID.String()))
+	if err != nil || oldIdentity.Active {
+		t.Fatal("old key still active")
+	}
+	newIdentity, err := p.ResolveATHubKey(ctx, newKey.TokenHash)
+	if err != nil || !newIdentity.Active {
+		t.Fatal("new key not active")
+	}
+	keys, err = p.ListATHubKeys(ctx, user)
+	if err != nil || len(keys) != 1 || keys[0].ID != newKey.ID {
+		t.Fatal("multiple current keys")
+	}
+	usage, err := p.ATHubUsage(ctx, user)
+	if err != nil || usage.Total != 1 || usage.Success != 1 {
+		t.Fatal("history lost during reset")
+	}
+	// The database invariant must also reject writes bypassing the service.
+	_, err = p.pool.Exec(ctx, `INSERT INTO athub_api_keys(id,user_id,name,token_hash,prefix) VALUES($1,$2,'bypass',$3,'ath_test')`, uuid.New(), user, security.HashToken(uuid.NewString()))
+	if !isUniqueViolation(err) {
+		t.Fatalf("database allowed a second current key: %v", err)
+	}
+}
+
+func TestATHubSingleKeyMigrationRetainsHistory(t *testing.T) {
+	p := athubTestStore(t)
+	ctx := context.Background()
+	if _, err := p.pool.Exec(ctx, `ALTER TABLE athub_api_keys DROP COLUMN is_current`); err != nil {
+		t.Fatal(err)
+	}
+	user := uuid.New()
+	if _, err := p.pool.Exec(ctx, `INSERT INTO users(id) VALUES($1)`, user); err != nil {
+		t.Fatal(err)
+	}
+	older, newer := uuid.New(), uuid.New()
+	if _, err := p.pool.Exec(ctx, `INSERT INTO athub_api_keys(id,user_id,name,token_hash,prefix,created_at,expires_at,revoked_at)
+		VALUES($1,$3,'usable',$4,'ath_old',now()-interval '1 day',now()+interval '1 day',NULL),
+		      ($2,$3,'disabled',$5,'ath_new',now(),NULL,now())`, older, newer, user, security.HashToken(older.String()), security.HashToken(newer.String())); err != nil {
+		t.Fatal(err)
+	}
+	call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &newer, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Port: 8003}
+	if err := p.BeginATHubCall(ctx, call); err != nil {
+		t.Fatal(err)
+	}
+	sql, err := os.ReadFile("../../prisma/migrations/20261110010000_athub_single_key/migration.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.pool.Exec(ctx, string(sql), pgx.QueryExecModeSimpleProtocol); err != nil {
+		t.Fatal(err)
+	}
+	keys, err := p.ListATHubKeys(ctx, user)
+	if err != nil || len(keys) != 1 || keys[0].ID != older || keys[0].ExpiresAt != nil {
+		t.Fatalf("keys=%+v err=%v", keys, err)
+	}
+	var retained int
+	if err := p.pool.QueryRow(ctx, `SELECT COUNT(*) FROM athub_api_keys WHERE user_id=$1`, user).Scan(&retained); err != nil || retained != 2 {
+		t.Fatal("migration removed keys")
+	}
+	calls, err := p.ListATHubCalls(ctx, user, 10, 0)
+	if err != nil || len(calls) != 1 || calls[0].KeyID == nil || *calls[0].KeyID != newer {
+		t.Fatal("migration removed historical call attribution")
 	}
 }
 

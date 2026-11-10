@@ -93,6 +93,7 @@ func (a *API) Router() http.Handler {
 	r.Get("/api/v1/account/applications", a.availableApplications)
 	r.Get("/api/v1/account/key", a.listATHubKeys)
 	r.Post("/api/v1/account/key", a.createATHubKey)
+	r.Post("/api/v1/account/key/reset", a.resetATHubKey)
 	r.Delete("/api/v1/account/key/{id}", a.revokeATHubKey)
 	r.Get("/api/v1/account/athub/usage", a.athubUsage)
 	r.Get("/api/v1/account/athub/calls", a.athubCalls)

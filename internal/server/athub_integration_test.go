@@ -151,6 +151,10 @@ func TestATHubUserKeyContentFlowIntegration(t *testing.T) {
 	if key.Token == "" || key.Key.UserID != user.ID {
 		t.Fatal("key not assigned to logged-in user")
 	}
+	existing := call(v1, "POST", "/api/v1/account/key", `{}`, cookie, "", 200)
+	if strings.Contains(existing.Body.String(), "api_key") || !strings.Contains(existing.Body.String(), key.Key.ID.String()) {
+		t.Fatal("provisioning did not reuse the existing key")
+	}
 	call(v1, "POST", "/api/v1/account/key", `{"name":"spoof","user_id":"another"}`, cookie, "", 400)
 	call(v1, "DELETE", "/api/v1/account/key/"+key.Key.ID.String(), "", otherCookie, "", 404)
 	call(v2, "GET", "/healthz", "", "", "", 200)
@@ -174,6 +178,7 @@ func TestATHubUserKeyContentFlowIntegration(t *testing.T) {
 	call(v2, "GET", "/api/v2/content?novelId=bad&token=must-not-be-recorded", "", "", key.Token, 400)
 	call(v2, "GET", "/api/v2/athub/content", "", "", key.Token, 404)
 	call(v1, "DELETE", "/api/v1/account/key/"+key.Key.ID.String(), "", cookie, "", 204)
+	call(v1, "POST", "/api/v1/account/key", `{}`, cookie, "", 200)
 	call(v2, "GET", "/api/v2/platforms", "", "", key.Token, 401)
 	call(v2, "GET", "/api/v2/platforms", "", "", strings.Repeat("t", 64), 401)
 	usageResponse := call(v1, "GET", "/api/v1/account/athub/usage", "", cookie, "", 200)
@@ -209,6 +214,26 @@ func TestATHubUserKeyContentFlowIntegration(t *testing.T) {
 	list := call(v1, "GET", "/api/v1/account/key", "", cookie, "", 200)
 	if strings.Contains(list.Body.String(), key.Token) || strings.Contains(list.Body.String(), "token_hash") {
 		t.Fatal("key secret leaked in list")
+	}
+	reset := call(v1, "POST", "/api/v1/account/key/reset", `{}`, cookie, "", 201)
+	var replacement struct {
+		Token string         `json:"api_key"`
+		Key   store.ATHubKey `json:"key"`
+	}
+	if err := json.Unmarshal(reset.Body.Bytes(), &replacement); err != nil {
+		t.Fatal(err)
+	}
+	if replacement.Token == key.Token || replacement.Key.ID == key.Key.ID || replacement.Key.ExpiresAt != nil {
+		t.Fatal("reset failed")
+	}
+	call(v2, "GET", "/api/v2/platforms", "", "", replacement.Token, 200)
+	call(v2, "GET", "/api/v2/platforms", "", "", key.Token, 401)
+	afterReset := call(v1, "GET", "/api/v1/account/key", "", cookie, "", 200)
+	var current struct {
+		Keys []store.ATHubKey `json:"keys"`
+	}
+	if err := json.Unmarshal(afterReset.Body.Bytes(), &current); err != nil || len(current.Keys) != 1 || current.Keys[0].ID != replacement.Key.ID {
+		t.Fatal("reset did not leave exactly one current key")
 	}
 }
 

@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState, type FormEvent } from "react"
-import { Activity, AlertCircle, Check, CheckCircle2, Copy, KeyRound, Plus, RefreshCw, XCircle } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Activity, AlertCircle, Check, CheckCircle2, Copy, KeyRound, RefreshCw, XCircle } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import { feedback } from "@/lib/feedback"
 import { ATHubUsageChart, portColors, type UsagePoint } from "@/components/athub-usage-chart"
@@ -10,14 +10,13 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, StatCard } from "@/components/ui/card"
 import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Spinner } from "@/components/ui/spinner"
 
 type APIKey = {
   id: string; name: string; prefix: string; created_at: string; expires_at: string | null
   revoked_at: string | null; last_used_at: string | null; total_calls: number
 }
+type KeyResult = { key: APIKey; api_key?: string }
 type UsageGroup = { method: string; path: string; port: number; status: number | null; calls: number }
 type Usage = {
   total_calls: number; successful_calls: number; failed_calls: number; pending_calls: number
@@ -32,12 +31,11 @@ const date = (value: string | null) => value ? new Date(value).toLocaleString("z
 function errorMessage(reason: unknown) {
   if (reason instanceof ApiError) {
     if (reason.status === 401) return "登录已过期，请重新登录。"
-    if (reason.code === "api_key_limit") return "最多保留 20 个有效密钥，请先撤销不再使用的密钥。"
   }
   return "暂时无法完成操作，请稍后重试。"
 }
 function keyState(key: APIKey) {
-  return key.revoked_at ? "已撤销" : key.expires_at && Date.parse(key.expires_at) <= Date.now() ? "已过期" : "有效"
+  return key.revoked_at ? "已停用" : "已启用"
 }
 
 export function AccountKeys() {
@@ -47,15 +45,18 @@ export function AccountKeys() {
   const [revision, setRevision] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [createOpen, setCreateOpen] = useState(false)
-  const [name, setName] = useState("")
-  const [expiry, setExpiry] = useState("")
+  const [secretOpen, setSecretOpen] = useState(false)
   const [secret, setSecret] = useState("")
   const [copied, setCopied] = useState(false)
-  const [createError, setCreateError] = useState("")
+  const [copyError, setCopyError] = useState("")
   const [busy, setBusy] = useState(false)
-  const [revoke, setRevoke] = useState<APIKey | null>(null)
-  const [revokeError, setRevokeError] = useState("")
+  const [action, setAction] = useState<"reset" | "disable" | null>(null)
+  const [actionError, setActionError] = useState("")
+  const [keysLoading, setKeysLoading] = useState(true)
+  // Reuse provisioning across Strict Mode effect replay so the one-time secret
+  // is handled by the live effect even if the first effect has been cleaned up.
+  const provision = useRef<{ revision: number; promise: Promise<KeyResult> } | null>(null)
+  const resetButton = useRef<HTMLButtonElement>(null)
   const [calls, setCalls] = useState<Call[]>([])
   const [offset, setOffset] = useState(0)
   const [callsLoading, setCallsLoading] = useState(true)
@@ -64,12 +65,24 @@ export function AccountKeys() {
 
   useEffect(() => {
     let active = true
-    setLoading(true); setError("")
-    void Promise.all([
-      api<{ keys: APIKey[] }>(keyPath),
-      api<Usage>(`${usagePath}/usage?days=${days}`),
-    ]).then(([keyData, usageData]) => {
-      if (active) { setKeys(keyData.keys); setUsage(usageData) }
+    setKeysLoading(true); setError("")
+    if (!provision.current || provision.current.revision !== revision) {
+      provision.current = { revision, promise: api<KeyResult>(keyPath, { method: "POST", body: "{}" }) }
+    }
+    void provision.current.promise.then(result => {
+      if (!active) return
+      setKeys([result.key])
+      if (result.api_key) { setSecret(result.api_key); setCopied(false); setCopyError(""); setSecretOpen(true) }
+    }).catch(reason => { if (active) setError(errorMessage(reason)) })
+      .finally(() => { if (active) setKeysLoading(false) })
+    return () => { active = false }
+  }, [revision])
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    void api<Usage>(`${usagePath}/usage?days=${days}`).then(result => {
+      if (active) setUsage(result)
     }).catch(reason => { if (active) setError(errorMessage(reason)) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
@@ -102,34 +115,28 @@ export function AccountKeys() {
   }, [usage])
   const keyNames = new Map(keys.map(key => [key.id, key.name]))
 
-  function closeCreate(open: boolean) {
-    if (busy) return
-    setCreateOpen(open)
-    if (!open) { setSecret(""); setName(""); setExpiry(""); setCopied(false); setCreateError("") }
-  }
-  async function createKey(event: FormEvent) {
-    event.preventDefault()
-    if (busy) return
-    setBusy(true); setCreateError("")
-    try {
-      const result = await api<{ key: APIKey; api_key: string }>(keyPath, {
-        method: "POST", body: JSON.stringify({ name: name.trim(), ...(expiry ? { expires_at: new Date(expiry).toISOString() } : {}) }),
-      })
-      setSecret(result.api_key); setRevision(value => value + 1)
-    } catch (reason) { setCreateError(errorMessage(reason)) }
-    finally { setBusy(false) }
+  function closeSecret(open: boolean) {
+    setSecretOpen(open)
+    if (!open) { setSecret(""); setCopied(false); setCopyError("") }
   }
   async function copyKey() {
     try { await navigator.clipboard.writeText(secret); setCopied(true); feedback.success("密钥已复制") }
-    catch { setCreateError("复制失败，请手动选中并复制密钥。") }
+    catch { setCopyError("复制失败，请手动选中并复制密钥。") }
   }
-  async function revokeKey() {
-    if (!revoke || busy) return
-    setBusy(true); setRevokeError("")
+  async function manageKey() {
+    if (!action || !keys[0] || busy) return
+    setBusy(true); setActionError("")
     try {
-      await api(`${keyPath}/${revoke.id}`, { method: "DELETE" })
-      setRevoke(null); setRevision(value => value + 1); feedback.success("密钥已撤销")
-    } catch (reason) { setRevokeError(errorMessage(reason)) }
+      if (action === "reset") {
+        const result = await api<KeyResult>(`${keyPath}/reset`, { method: "POST", body: "{}" })
+        setKeys([result.key]); setSecret(result.api_key || ""); setCopied(false); setCopyError(""); setSecretOpen(true)
+        feedback.success("密钥已重置")
+      } else {
+        await api(`${keyPath}/${keys[0].id}`, { method: "DELETE" })
+        feedback.success("密钥已停用")
+      }
+      setAction(null); setRevision(value => value + 1)
+    } catch (reason) { setActionError(errorMessage(reason)) }
     finally { setBusy(false) }
   }
 
@@ -137,8 +144,7 @@ export function AccountKeys() {
     <div className="flex flex-wrap items-center justify-between gap-4">
       <h1 id="account-keys-title" className="text-2xl font-semibold tracking-tight">API 密钥</h1>
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" aria-label="刷新密钥和调用统计" disabled={loading || callsLoading} onClick={() => setRevision(value => value + 1)}><RefreshCw /></Button>
-        <Button onClick={() => setCreateOpen(true)}><Plus />创建密钥</Button>
+        <Button variant="outline" size="icon" aria-label="刷新密钥和调用统计" disabled={loading || callsLoading || keysLoading || busy} onClick={() => setRevision(value => value + 1)}><RefreshCw /></Button>
       </div>
     </div>
     {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}<Button variant="link" onClick={() => setRevision(value => value + 1)}>重试</Button></AlertDescription></Alert>}
@@ -146,18 +152,22 @@ export function AccountKeys() {
     <Card>
       <CardHeader><CardTitle>我的密钥</CardTitle></CardHeader>
       <CardContent>
-        {loading && !keys.length ? <Skeleton className="h-28 w-full" /> : !keys.length ? <div className="flex flex-col items-center gap-3 py-10 text-muted-foreground"><KeyRound className="size-7" /><p>暂无 API 密钥</p><Button variant="outline" onClick={() => setCreateOpen(true)}>创建密钥</Button></div> :
-          <div className="overflow-x-auto"><table className="w-full text-left text-sm">
-            <thead className="text-xs text-muted-foreground"><tr className="border-b">{["名称 / Key", "状态", "累计调用", "最近使用", "到期时间", "操作"].map(label => <th key={label} scope="col" className="whitespace-nowrap px-3 pb-3 font-normal first:pl-0 last:pr-0">{label}</th>)}</tr></thead>
-            <tbody>{keys.map(key => <tr key={key.id} className="border-b last:border-0">
-              <td className="min-w-44 py-4 pr-3"><div className="max-w-64 truncate font-medium" title={key.name}>{key.name}</div><code className="mt-1 block text-xs text-muted-foreground">{key.prefix}••••••••</code></td>
-              <td className="px-3"><Badge variant={keyState(key) === "有效" ? "secondary" : "outline"}>{keyState(key)}</Badge></td>
-              <td className="px-3 tabular-nums">{number(key.total_calls)}</td>
-              <td className="whitespace-nowrap px-3 text-muted-foreground">{date(key.last_used_at)}</td>
-              <td className="whitespace-nowrap px-3 text-muted-foreground">{key.expires_at ? date(key.expires_at) : "永不过期"}</td>
-              <td className="pl-3 text-right"><Button variant="ghost" size="sm" disabled={Boolean(key.revoked_at)} onClick={() => { setRevoke(key); setRevokeError("") }}>撤销</Button></td>
-            </tr>)}</tbody>
-          </table></div>}
+        {keysLoading && !keys.length ? <Skeleton className="h-28 w-full" /> : !keys.length ? <p className="py-6 text-center text-muted-foreground">暂时无法加载密钥</p> :
+          keys.map(key => <div key={key.id} className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3"><KeyRound className="size-5 text-muted-foreground" /><code className="text-sm">{key.prefix}••••••••</code><Badge variant={key.revoked_at ? "outline" : "secondary"}>{keyState(key)}</Badge></div>
+              <div className="flex gap-2">
+                <Button ref={resetButton} variant="outline" disabled={busy || keysLoading} onClick={() => { setAction("reset"); setActionError("") }}><RefreshCw />重置</Button>
+                <Button variant="outline" disabled={busy || keysLoading || Boolean(key.revoked_at)} onClick={() => { setAction("disable"); setActionError("") }}>停用</Button>
+              </div>
+            </div>
+            <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+              <div><dt className="text-muted-foreground">有效期</dt><dd className="mt-1">永久有效</dd></div>
+              <div><dt className="text-muted-foreground">当前 Key 调用</dt><dd className="mt-1 tabular-nums">{number(key.total_calls)}</dd></div>
+              <div><dt className="text-muted-foreground">最近使用</dt><dd className="mt-1">{date(key.last_used_at)}</dd></div>
+              <div><dt className="text-muted-foreground">生成时间</dt><dd className="mt-1">{date(key.created_at)}</dd></div>
+            </dl>
+          </div>)}
       </CardContent>
     </Card>
 
@@ -202,7 +212,7 @@ export function AccountKeys() {
           <thead className="text-xs text-muted-foreground"><tr className="border-b">{["时间", "密钥", "接口", "端口", "状态", "耗时"].map(label => <th key={label} scope="col" className="whitespace-nowrap px-3 pb-3 font-normal first:pl-0 last:pr-0">{label}</th>)}</tr></thead>
           <tbody>{calls.map(call => <tr key={call.id} className="border-b last:border-0">
             <td className="whitespace-nowrap py-3 pr-3 text-xs text-muted-foreground">{date(call.started_at)}</td>
-            <td className="max-w-36 truncate px-3" title={call.key_id ? keyNames.get(call.key_id) : undefined}>{call.key_id ? keyNames.get(call.key_id) || "已删除的密钥" : "—"}</td>
+            <td className="max-w-36 truncate px-3" title={call.key_id ? keyNames.get(call.key_id) : undefined}>{call.key_id ? keyNames.get(call.key_id) || "历史密钥" : "—"}</td>
             <td className="whitespace-nowrap px-3 font-mono text-xs">{call.method} {call.path}</td>
             <td className="px-3 tabular-nums">{call.port}</td>
             <td className="px-3"><Badge variant={call.status && call.status >= 400 ? "outline" : "secondary"}>{call.status ?? "处理中"}</Badge></td>
@@ -216,26 +226,20 @@ export function AccountKeys() {
       </div>
     </CardContent></Card>
 
-    <Dialog open={createOpen} onOpenChange={closeCreate}>
-      <DialogContent className="sm:max-w-md" showCloseButton={!busy} aria-busy={busy}>
-        <DialogHeader><DialogTitle>{secret ? "密钥已创建" : "创建 API 密钥"}</DialogTitle>
-          {secret && <DialogDescription>完整密钥仅显示这一次，请复制并妥善保存。</DialogDescription>}
+    <Dialog open={secretOpen} onOpenChange={closeSecret}>
+      <DialogContent className="sm:max-w-md" finalFocus={resetButton}>
+        <DialogHeader><DialogTitle>密钥已生成</DialogTitle>
+          <DialogDescription>完整密钥仅显示这一次，请复制并妥善保存。丢失后可重置密钥。</DialogDescription>
         </DialogHeader>
-        {createError && <Alert variant="destructive"><AlertCircle /><AlertDescription>{createError}</AlertDescription></Alert>}
-        {secret ? <>
-          <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-3"><code className="min-w-0 flex-1 select-all break-all text-sm">{secret}</code><Button variant="ghost" size="icon-sm" aria-label={copied ? "已复制密钥" : "复制密钥"} onClick={copyKey}>{copied ? <Check /> : <Copy />}</Button></div>
-          <DialogFooter><Button onClick={() => closeCreate(false)}>完成</Button></DialogFooter>
-        </> : <form onSubmit={createKey} className="space-y-5">
-          <div className="space-y-2"><label htmlFor="key-name" className="font-medium">名称</label><Input id="key-name" value={name} onChange={event => setName(event.target.value)} maxLength={100} required disabled={busy} placeholder="例如：小说采集" /></div>
-          <div className="space-y-2"><label htmlFor="key-expiry" className="font-medium">到期时间（可选）</label><Input id="key-expiry" type="datetime-local" value={expiry} onChange={event => setExpiry(event.target.value)} disabled={busy} min={new Date(Date.now() + 60000).toLocaleString("sv-SE").replace(" ", "T").slice(0, 16)} /></div>
-          <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => closeCreate(false)}>取消</Button><Button type="submit" disabled={busy || !name.trim()}>{busy && <Spinner />}创建密钥</Button></DialogFooter>
-        </form>}
+        {copyError && <Alert variant="destructive"><AlertCircle /><AlertDescription>{copyError}</AlertDescription></Alert>}
+        <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-3"><code className="min-w-0 flex-1 select-all break-all text-sm">{secret}</code><Button variant="ghost" size="icon-sm" aria-label={copied ? "已复制密钥" : "复制密钥"} onClick={copyKey}>{copied ? <Check /> : <Copy />}</Button></div>
+        <DialogFooter><Button onClick={() => closeSecret(false)}>完成</Button></DialogFooter>
       </DialogContent>
     </Dialog>
-    <ConfirmDialog open={Boolean(revoke)} onOpenChange={open => { if (!open) setRevoke(null) }} title="撤销密钥"
-      description={`确定撤销「${revoke?.name || ""}」？使用此密钥的请求将立即失效，已有调用记录会保留。`}
-      confirmLabel="撤销密钥" busy={busy} onConfirm={revokeKey}>
-      {revokeError && <Alert variant="destructive"><AlertCircle /><AlertDescription>{revokeError}</AlertDescription></Alert>}
+    <ConfirmDialog open={Boolean(action)} onOpenChange={open => { if (!open) setAction(null) }} title={action === "reset" ? "重置密钥" : "停用密钥"}
+      description={action === "reset" ? "重置后旧密钥立即失效，并生成一个永久有效的新密钥。历史调用记录会保留。" : "停用后，此密钥的请求将立即失效。刷新页面不会重新启用，可通过重置生成新密钥。"}
+      confirmLabel={action === "reset" ? "重置密钥" : "停用密钥"} busy={busy} onConfirm={manageKey}>
+      {actionError && <Alert variant="destructive"><AlertCircle /><AlertDescription>{actionError}</AlertDescription></Alert>}
     </ConfirmDialog>
   </section>
 }

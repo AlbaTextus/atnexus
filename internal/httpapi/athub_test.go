@@ -36,6 +36,17 @@ func (s *keyStore) CreateATHubKey(_ context.Context, key store.ATHubKey) (store.
 	s.key = key
 	return key, nil
 }
+func (s *keyStore) EnsureATHubKey(_ context.Context, key store.ATHubKey) (store.ATHubKey, bool, error) {
+	if s.key.ID != uuid.Nil {
+		return s.key, false, nil
+	}
+	s.key = key
+	return key, true, nil
+}
+func (s *keyStore) ResetATHubKey(_ context.Context, key store.ATHubKey) (store.ATHubKey, error) {
+	s.key = key
+	return key, nil
+}
 func (s *keyStore) ListATHubKeys(_ context.Context, user uuid.UUID) ([]store.ATHubKey, error) {
 	s.queriedUser = user
 	return []store.ATHubKey{s.key}, nil
@@ -129,6 +140,23 @@ func TestATHubKeyCreationReturnsSecretOnlyOnce(t *testing.T) {
 	}
 	if s.queriedUser != s.user.ID {
 		t.Fatal("list was not scoped to current user")
+	}
+	w = httptest.NewRecorder()
+	a.createATHubKey(w, keyRequest("POST", `{}`))
+	if w.Code != 200 || strings.Contains(w.Body.String(), "api_key") || s.key.ID != created.Key.ID {
+		t.Fatal("repeated provisioning changed key or exposed secret")
+	}
+	now := time.Now()
+	s.key.RevokedAt = &now
+	w = httptest.NewRecorder()
+	a.createATHubKey(w, keyRequest("POST", `{}`))
+	if w.Code != 200 || s.key.RevokedAt == nil {
+		t.Fatal("provisioning reenabled disabled key")
+	}
+	w = httptest.NewRecorder()
+	a.resetATHubKey(w, keyRequest("POST", `{}`))
+	if w.Code != 201 || s.key.ID == created.Key.ID || s.key.RevokedAt != nil || s.key.ExpiresAt != nil {
+		t.Fatal("reset did not replace disabled key with permanent key")
 	}
 }
 

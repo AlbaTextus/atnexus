@@ -46,6 +46,8 @@ model User {
 }
 
 model ATHubAPIKey {
+  // The migration enforces one current key with a partial unique user_id index.
+  isCurrent Boolean @default(true) @map("is_current")
   id String @id @db.Uuid
   userId String @map("user_id") @db.Uuid
   name String @db.VarChar(100)

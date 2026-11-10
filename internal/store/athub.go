@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-var ErrATHubKeyLimit = errors.New("maximum 20 active ATHub keys")
+var ErrATHubKeyLimit = errors.New("one current ATHub key per user")
 
 type ATHubKey struct {
 	ID         uuid.UUID  `json:"id"`
@@ -80,6 +80,8 @@ type ATHubUsageReader interface {
 // ATHubStore lives entirely in the account database. The content module knows no users.
 type ATHubStore interface {
 	CreateATHubKey(context.Context, ATHubKey) (ATHubKey, error)
+	EnsureATHubKey(context.Context, ATHubKey) (ATHubKey, bool, error)
+	ResetATHubKey(context.Context, ATHubKey) (ATHubKey, error)
 	ListATHubKeys(context.Context, uuid.UUID) ([]ATHubKey, error)
 	RevokeATHubKey(context.Context, uuid.UUID, uuid.UUID) error
 	ResolveATHubKey(context.Context, string) (ATHubIdentity, error)
@@ -91,7 +93,7 @@ type ATHubStore interface {
 
 func (p *Postgres) CheckATHubSchema(ctx context.Context) error {
 	for _, query := range []string{
-		`SELECT id,user_id,name,token_hash,prefix,created_at,expires_at,revoked_at,last_used_at FROM athub_api_keys LIMIT 0`,
+		`SELECT id,user_id,name,token_hash,prefix,created_at,expires_at,revoked_at,last_used_at,is_current FROM athub_api_keys LIMIT 0`,
 		`SELECT id,user_id,key_id,request_id,method,path,port,authenticated,status,duration_ms,response_bytes,started_at,completed_at FROM athub_api_calls LIMIT 0`,
 	} {
 		rows, err := p.pool.Query(ctx, query)
@@ -104,41 +106,70 @@ func (p *Postgres) CheckATHubSchema(ctx context.Context) error {
 }
 
 func (p *Postgres) CreateATHubKey(ctx context.Context, key ATHubKey) (ATHubKey, error) {
+	result, created, err := p.manageATHubKey(ctx, key, false)
+	if err == nil && !created {
+		return result, ErrATHubKeyLimit
+	}
+	return result, err
+}
+
+func (p *Postgres) EnsureATHubKey(ctx context.Context, key ATHubKey) (ATHubKey, bool, error) {
+	return p.manageATHubKey(ctx, key, false)
+}
+
+func (p *Postgres) ResetATHubKey(ctx context.Context, key ATHubKey) (ATHubKey, error) {
+	result, _, err := p.manageATHubKey(ctx, key, true)
+	return result, err
+}
+
+func (p *Postgres) manageATHubKey(ctx context.Context, key ATHubKey, reset bool) (ATHubKey, bool, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return key, err
+		return key, false, err
 	}
 	defer tx.Rollback(ctx)
 	var active bool
-	// Serialize key creation per user so concurrent requests cannot exceed the limit.
+	// Serialize provisioning and rotation for this user's single current slot.
 	if err := tx.QueryRow(ctx, `SELECT is_active FROM users WHERE id=$1 FOR UPDATE`, key.UserID).Scan(&active); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return key, ErrNotFound
+			return key, false, ErrNotFound
 		}
-		return key, err
+		return key, false, err
 	}
 	if !active {
-		return key, ErrNotFound
+		return key, false, ErrNotFound
 	}
-	var count int
-	if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM athub_api_keys WHERE user_id=$1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now())`, key.UserID).Scan(&count); err != nil {
-		return key, err
+	if !reset {
+		var current ATHubKey
+		err := tx.QueryRow(ctx, `SELECT k.id,k.user_id,k.name,k.prefix,k.created_at,k.expires_at,k.revoked_at,k.last_used_at,
+			(SELECT COUNT(*) FROM athub_api_calls c WHERE c.key_id=k.id)
+			FROM athub_api_keys k WHERE k.user_id=$1 AND k.is_current`, key.UserID).Scan(
+			&current.ID, &current.UserID, &current.Name, &current.Prefix, &current.CreatedAt, &current.ExpiresAt, &current.RevokedAt, &current.LastUsedAt, &current.TotalCalls)
+		if err == nil {
+			return current, false, tx.Commit(ctx)
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return key, false, err
+		}
+	} else {
+		if _, err := tx.Exec(ctx, `UPDATE athub_api_keys SET is_current=false,revoked_at=COALESCE(revoked_at,now())
+			WHERE user_id=$1 AND is_current`, key.UserID); err != nil {
+			return key, false, err
+		}
 	}
-	if count >= 20 {
-		return key, ErrATHubKeyLimit
-	}
-	err = tx.QueryRow(ctx, `INSERT INTO athub_api_keys(id,user_id,name,token_hash,prefix,expires_at)
-		VALUES($1,$2,$3,$4,$5,$6) RETURNING created_at`, key.ID, key.UserID, key.Name, key.TokenHash, key.Prefix, key.ExpiresAt).Scan(&key.CreatedAt)
+	key.ExpiresAt = nil
+	err = tx.QueryRow(ctx, `INSERT INTO athub_api_keys(id,user_id,name,token_hash,prefix,expires_at,is_current)
+		VALUES($1,$2,$3,$4,$5,NULL,true) RETURNING created_at`, key.ID, key.UserID, key.Name, key.TokenHash, key.Prefix).Scan(&key.CreatedAt)
 	if err != nil {
-		return key, err
+		return key, false, err
 	}
-	return key, tx.Commit(ctx)
+	return key, true, tx.Commit(ctx)
 }
 
 func (p *Postgres) ListATHubKeys(ctx context.Context, userID uuid.UUID) ([]ATHubKey, error) {
 	rows, err := p.pool.Query(ctx, `SELECT k.id,k.user_id,k.name,k.prefix,k.created_at,k.expires_at,k.revoked_at,k.last_used_at,
 		(SELECT COUNT(*) FROM athub_api_calls c WHERE c.key_id=k.id)
-		FROM athub_api_keys k WHERE k.user_id=$1 ORDER BY k.created_at DESC,k.id DESC`, userID)
+		FROM athub_api_keys k WHERE k.user_id=$1 AND k.is_current ORDER BY k.created_at DESC,k.id DESC`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +199,7 @@ func (p *Postgres) RevokeATHubKey(ctx context.Context, userID, keyID uuid.UUID) 
 func (p *Postgres) ResolveATHubKey(ctx context.Context, hash string) (ATHubIdentity, error) {
 	var identity ATHubIdentity
 	err := p.pool.QueryRow(ctx, `SELECT k.id,k.user_id,
-		(u.is_active AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>now()))
+		(u.is_active AND k.is_current AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>now()))
 		FROM athub_api_keys k JOIN users u ON u.id=k.user_id WHERE k.token_hash=$1`, hash).Scan(&identity.KeyID, &identity.UserID, &identity.Active)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return identity, ErrNotFound

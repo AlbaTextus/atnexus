@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Activity, AlertCircle, Check, CheckCircle2, Copy, KeyRound, RefreshCw, XCircle } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import { feedback } from "@/lib/feedback"
-import { ATHubUsageChart, portColors, type UsagePoint } from "@/components/athub-usage-chart"
+import { ATHubUsageChart, type UsagePoint } from "@/components/athub-usage-chart"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogFooter, 
 import { Skeleton } from "@/components/ui/skeleton"
 
 type APIKey = {
+  admin_disabled: boolean
   id: string; name: string; prefix: string; created_at: string; expires_at: string | null
   revoked_at: string | null; last_used_at: string | null; total_calls: number
 }
@@ -31,11 +32,12 @@ const date = (value: string | null) => value ? new Date(value).toLocaleString("z
 function errorMessage(reason: unknown) {
   if (reason instanceof ApiError) {
     if (reason.status === 401) return "登录已过期，请重新登录。"
+    if (reason.code === "athub_admin_disabled") return "API 密钥已被管理员禁用，无法自行重置或启用。"
   }
   return "暂时无法完成操作，请稍后重试。"
 }
 function keyState(key: APIKey) {
-  return key.revoked_at ? "已停用" : "已启用"
+  return key.admin_disabled ? "管理员已禁用" : key.revoked_at ? "已停用" : "已启用"
 }
 
 export function AccountKeys() {
@@ -99,15 +101,10 @@ export function AccountKeys() {
     return () => { active = false }
   }, [offset, revision])
 
-  const ports = useMemo(() => {
-    const totals = new Map<number, number>()
-    for (const item of usage?.endpoints || []) totals.set(item.port, (totals.get(item.port) || 0) + item.calls)
-    return Array.from(totals, ([port, calls]) => ({ port, calls })).sort((a, b) => b.calls - a.calls || a.port - b.port)
-  }, [usage])
   const endpoints = useMemo(() => {
-    const totals = new Map<string, { method: string; path: string; port: number; calls: number }>()
+    const totals = new Map<string, { method: string; path: string; calls: number }>()
     for (const item of usage?.endpoints || []) {
-      const id = `${item.port}:${item.method}:${item.path}`
+      const id = `${item.method}:${item.path}`
       const total = totals.get(id)
       totals.set(id, { ...item, calls: (total?.calls || 0) + item.calls })
     }
@@ -155,14 +152,14 @@ export function AccountKeys() {
         {keysLoading && !keys.length ? <Skeleton className="h-28 w-full" /> : !keys.length ? <p className="py-6 text-center text-muted-foreground">暂时无法加载密钥</p> :
           keys.map(key => <div key={key.id} className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3"><KeyRound className="size-5 text-muted-foreground" /><code className="text-sm">{key.prefix}••••••••</code><Badge variant={key.revoked_at ? "outline" : "secondary"}>{keyState(key)}</Badge></div>
+              <div className="flex flex-wrap items-center gap-3"><KeyRound className="size-5 text-muted-foreground" /><code className="text-sm">{key.prefix}••••••••</code><Badge variant={key.admin_disabled || key.revoked_at ? "outline" : "secondary"}>{keyState(key)}</Badge></div>
               <div className="flex gap-2">
-                <Button ref={resetButton} variant="outline" disabled={busy || keysLoading} onClick={() => { setAction("reset"); setActionError("") }}><RefreshCw />重置</Button>
-                <Button variant="outline" disabled={busy || keysLoading || Boolean(key.revoked_at)} onClick={() => { setAction("disable"); setActionError("") }}>停用</Button>
+                <Button ref={resetButton} variant="outline" disabled={busy || keysLoading || key.admin_disabled} onClick={() => { setAction("reset"); setActionError("") }}><RefreshCw />重置</Button>
+                <Button variant="outline" disabled={busy || keysLoading || key.admin_disabled || Boolean(key.revoked_at)} onClick={() => { setAction("disable"); setActionError("") }}>停用</Button>
               </div>
             </div>
-            <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-              <div><dt className="text-muted-foreground">有效期</dt><dd className="mt-1">永久有效</dd></div>
+            {key.admin_disabled && <p className="text-sm text-muted-foreground">此密钥已被管理员禁用，需由管理员解除限制后才能重置。</p>}
+            <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
               <div><dt className="text-muted-foreground">当前 Key 调用</dt><dd className="mt-1 tabular-nums">{number(key.total_calls)}</dd></div>
               <div><dt className="text-muted-foreground">最近使用</dt><dd className="mt-1">{date(key.last_used_at)}</dd></div>
               <div><dt className="text-muted-foreground">生成时间</dt><dd className="mt-1">{date(key.created_at)}</dd></div>
@@ -180,27 +177,20 @@ export function AccountKeys() {
       </div>
       {loading ? <div className="space-y-5"><div className="grid grid-cols-2 gap-4 lg:grid-cols-4">{[0, 1, 2, 3].map(value => <Skeleton key={value} className="h-28" />)}</div><Skeleton className="h-96 w-full" /></div> : usage && <>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="总调用" value={number(usage.total_calls)} icon={<Activity />} tone="blue" />
-          <StatCard label="成功调用" value={number(usage.successful_calls)} icon={<CheckCircle2 />} tone="green" />
-          <StatCard label="失败调用" value={number(usage.failed_calls)} icon={<XCircle />} tone="orange" />
-          <StatCard label="处理中" value={number(usage.pending_calls)} tone="muted" />
+          <StatCard className="border border-border" label="总调用" value={number(usage.total_calls)} icon={<Activity />} tone="blue" />
+          <StatCard className="border border-border" label="成功调用" value={number(usage.successful_calls)} icon={<CheckCircle2 />} tone="green" />
+          <StatCard className="border border-border" label="失败调用" value={number(usage.failed_calls)} icon={<XCircle />} tone="orange" />
+          <StatCard className="border border-border" label="处理中" value={number(usage.pending_calls)} tone="muted" />
         </div>
-        <Card><CardHeader><CardTitle>端口调用趋势</CardTitle></CardHeader><CardContent>
-          {ports.length ? <ATHubUsageChart trend={usage.trend || []} ports={ports} from={usage.from} until={usage.until} bucketSeconds={usage.bucket_seconds} /> :
+        <Card><CardHeader><CardTitle>调用趋势</CardTitle></CardHeader><CardContent>
+          {usage.total_calls ? <ATHubUsageChart trend={usage.trend || []} total={usage.total_calls} from={usage.from} until={usage.until} bucketSeconds={usage.bucket_seconds} /> :
             <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">所选时间范围暂无调用记录</div>}
         </CardContent></Card>
-        <Card><CardHeader><CardTitle>端口调用排行</CardTitle></CardHeader><CardContent>
-          {!ports.length ? <p className="py-6 text-center text-muted-foreground">暂无端口调用</p> : <div className="space-y-5">{ports.map((port, index) => <div key={port.port} className="grid grid-cols-[5rem_1fr_4rem] items-center gap-4 text-sm">
-            <span className="font-medium">:{port.port}</span>
-            <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full min-w-1 rounded-full" style={{ width: `${port.calls / ports[0].calls * 100}%`, backgroundColor: portColors[index % portColors.length] }} /></div>
-            <span className="text-right tabular-nums">{number(port.calls)}</span>
-          </div>)}</div>}
-        </CardContent></Card>
         <Card><CardHeader><CardTitle>接口调用</CardTitle></CardHeader><CardContent>
-          {!endpoints.length ? <p className="py-6 text-center text-muted-foreground">暂无接口调用</p> : <div className="space-y-4">{endpoints.map(item => <div key={`${item.port}:${item.method}:${item.path}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          {!endpoints.length ? <p className="py-6 text-center text-muted-foreground">暂无接口调用</p> : <div className="space-y-4">{endpoints.map(item => <div key={`${item.method}:${item.path}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <Badge variant="outline" className="min-w-14 justify-center">{item.method}</Badge>
             <code className="min-w-0 flex-1 break-all text-xs sm:text-sm">{item.path}</code>
-            <span className="text-muted-foreground">:{item.port}</span><span className="w-14 text-right tabular-nums">{number(item.calls)}</span>
+            <span className="w-14 text-right tabular-nums">{number(item.calls)}</span>
           </div>)}</div>}
         </CardContent></Card>
       </>}
@@ -209,12 +199,11 @@ export function AccountKeys() {
     <Card><CardHeader><CardTitle>最近调用</CardTitle></CardHeader><CardContent>
       {callsError ? <Alert variant="destructive"><AlertCircle /><AlertDescription>{callsError}<Button variant="link" onClick={() => setRevision(value => value + 1)}>重试</Button></AlertDescription></Alert> : callsLoading ? <Skeleton className="h-40 w-full" /> : !calls.length ? <p className="py-6 text-center text-muted-foreground">暂无调用记录</p> :
         <div className="overflow-x-auto"><table className="w-full text-left text-sm">
-          <thead className="text-xs text-muted-foreground"><tr className="border-b">{["时间", "密钥", "接口", "端口", "状态", "耗时"].map(label => <th key={label} scope="col" className="whitespace-nowrap px-3 pb-3 font-normal first:pl-0 last:pr-0">{label}</th>)}</tr></thead>
+          <thead className="text-xs text-muted-foreground"><tr className="border-b">{["时间", "密钥", "接口", "状态", "耗时"].map(label => <th key={label} scope="col" className="whitespace-nowrap px-3 pb-3 font-normal first:pl-0 last:pr-0">{label}</th>)}</tr></thead>
           <tbody>{calls.map(call => <tr key={call.id} className="border-b last:border-0">
             <td className="whitespace-nowrap py-3 pr-3 text-xs text-muted-foreground">{date(call.started_at)}</td>
             <td className="max-w-36 truncate px-3" title={call.key_id ? keyNames.get(call.key_id) : undefined}>{call.key_id ? keyNames.get(call.key_id) || "历史密钥" : "—"}</td>
             <td className="whitespace-nowrap px-3 font-mono text-xs">{call.method} {call.path}</td>
-            <td className="px-3 tabular-nums">{call.port}</td>
             <td className="px-3"><Badge variant={call.status && call.status >= 400 ? "outline" : "secondary"}>{call.status ?? "处理中"}</Badge></td>
             <td className="whitespace-nowrap pl-3 text-right tabular-nums">{call.duration_ms === null ? "—" : `${call.duration_ms} ms`}</td>
           </tr>)}</tbody>
@@ -237,7 +226,7 @@ export function AccountKeys() {
       </DialogContent>
     </Dialog>
     <ConfirmDialog open={Boolean(action)} onOpenChange={open => { if (!open) setAction(null) }} title={action === "reset" ? "重置密钥" : "停用密钥"}
-      description={action === "reset" ? "重置后旧密钥立即失效，并生成一个永久有效的新密钥。历史调用记录会保留。" : "停用后，此密钥的请求将立即失效。刷新页面不会重新启用，可通过重置生成新密钥。"}
+      description={action === "reset" ? "重置后旧密钥立即失效，并生成新密钥。历史调用记录会保留。" : "停用后，此密钥的请求将立即失效。刷新页面不会重新启用，可通过重置生成新密钥。"}
       confirmLabel={action === "reset" ? "重置密钥" : "停用密钥"} busy={busy} onConfirm={manageKey}>
       {actionError && <Alert variant="destructive"><AlertCircle /><AlertDescription>{actionError}</AlertDescription></Alert>}
     </ConfirmDialog>

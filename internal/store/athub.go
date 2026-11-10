@@ -10,18 +10,21 @@ import (
 )
 
 var ErrATHubKeyLimit = errors.New("one current ATHub key per user")
+var ErrATHubAdminDisabled = errors.New("ATHub access disabled by administrator")
+var ErrATHubAccessDenied = errors.New("ATHub access changed before dispatch")
 
 type ATHubKey struct {
-	ID         uuid.UUID  `json:"id"`
-	UserID     uuid.UUID  `json:"user_id"`
-	Name       string     `json:"name"`
-	TokenHash  string     `json:"-"`
-	Prefix     string     `json:"prefix"`
-	CreatedAt  time.Time  `json:"created_at"`
-	ExpiresAt  *time.Time `json:"expires_at"`
-	RevokedAt  *time.Time `json:"revoked_at"`
-	LastUsedAt *time.Time `json:"last_used_at"`
-	TotalCalls int64      `json:"total_calls"`
+	AdminDisabled bool       `json:"admin_disabled"`
+	ID            uuid.UUID  `json:"id"`
+	UserID        uuid.UUID  `json:"user_id"`
+	Name          string     `json:"name"`
+	TokenHash     string     `json:"-"`
+	Prefix        string     `json:"prefix"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ExpiresAt     *time.Time `json:"expires_at"`
+	RevokedAt     *time.Time `json:"revoked_at"`
+	LastUsedAt    *time.Time `json:"last_used_at"`
+	TotalCalls    int64      `json:"total_calls"`
 }
 
 type ATHubIdentity struct {
@@ -93,6 +96,7 @@ type ATHubStore interface {
 
 func (p *Postgres) CheckATHubSchema(ctx context.Context) error {
 	for _, query := range []string{
+		`SELECT athub_disabled FROM users LIMIT 0`,
 		`SELECT id,user_id,name,token_hash,prefix,created_at,expires_at,revoked_at,last_used_at,is_current FROM athub_api_keys LIMIT 0`,
 		`SELECT id,user_id,key_id,request_id,method,path,port,authenticated,status,duration_ms,response_bytes,started_at,completed_at FROM athub_api_calls LIMIT 0`,
 	} {
@@ -128,9 +132,9 @@ func (p *Postgres) manageATHubKey(ctx context.Context, key ATHubKey, reset bool)
 		return key, false, err
 	}
 	defer tx.Rollback(ctx)
-	var active bool
+	var active, adminDisabled bool
 	// Serialize provisioning and rotation for this user's single current slot.
-	if err := tx.QueryRow(ctx, `SELECT is_active FROM users WHERE id=$1 FOR UPDATE`, key.UserID).Scan(&active); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT is_active,athub_disabled FROM users WHERE id=$1 FOR UPDATE`, key.UserID).Scan(&active, &adminDisabled); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return key, false, ErrNotFound
 		}
@@ -139,6 +143,9 @@ func (p *Postgres) manageATHubKey(ctx context.Context, key ATHubKey, reset bool)
 	if !active {
 		return key, false, ErrNotFound
 	}
+	if reset && adminDisabled {
+		return key, false, ErrATHubAdminDisabled
+	}
 	if !reset {
 		var current ATHubKey
 		err := tx.QueryRow(ctx, `SELECT k.id,k.user_id,k.name,k.prefix,k.created_at,k.expires_at,k.revoked_at,k.last_used_at,
@@ -146,6 +153,7 @@ func (p *Postgres) manageATHubKey(ctx context.Context, key ATHubKey, reset bool)
 			FROM athub_api_keys k WHERE k.user_id=$1 AND k.is_current`, key.UserID).Scan(
 			&current.ID, &current.UserID, &current.Name, &current.Prefix, &current.CreatedAt, &current.ExpiresAt, &current.RevokedAt, &current.LastUsedAt, &current.TotalCalls)
 		if err == nil {
+			current.AdminDisabled = adminDisabled
 			return current, false, tx.Commit(ctx)
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -157,6 +165,9 @@ func (p *Postgres) manageATHubKey(ctx context.Context, key ATHubKey, reset bool)
 			return key, false, err
 		}
 	}
+	if adminDisabled {
+		return key, false, ErrATHubAdminDisabled
+	}
 	key.ExpiresAt = nil
 	err = tx.QueryRow(ctx, `INSERT INTO athub_api_keys(id,user_id,name,token_hash,prefix,expires_at,is_current)
 		VALUES($1,$2,$3,$4,$5,NULL,true) RETURNING created_at`, key.ID, key.UserID, key.Name, key.TokenHash, key.Prefix).Scan(&key.CreatedAt)
@@ -167,9 +178,9 @@ func (p *Postgres) manageATHubKey(ctx context.Context, key ATHubKey, reset bool)
 }
 
 func (p *Postgres) ListATHubKeys(ctx context.Context, userID uuid.UUID) ([]ATHubKey, error) {
-	rows, err := p.pool.Query(ctx, `SELECT k.id,k.user_id,k.name,k.prefix,k.created_at,k.expires_at,k.revoked_at,k.last_used_at,
+	rows, err := p.pool.Query(ctx, `SELECT k.id,k.user_id,k.name,k.prefix,k.created_at,k.expires_at,k.revoked_at,k.last_used_at,u.athub_disabled,
 		(SELECT COUNT(*) FROM athub_api_calls c WHERE c.key_id=k.id)
-		FROM athub_api_keys k WHERE k.user_id=$1 AND k.is_current ORDER BY k.created_at DESC,k.id DESC`, userID)
+		FROM athub_api_keys k JOIN users u ON u.id=k.user_id WHERE k.user_id=$1 AND k.is_current ORDER BY k.created_at DESC,k.id DESC`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +188,7 @@ func (p *Postgres) ListATHubKeys(ctx context.Context, userID uuid.UUID) ([]ATHub
 	keys := make([]ATHubKey, 0)
 	for rows.Next() {
 		var key ATHubKey
-		if err := rows.Scan(&key.ID, &key.UserID, &key.Name, &key.Prefix, &key.CreatedAt, &key.ExpiresAt, &key.RevokedAt, &key.LastUsedAt, &key.TotalCalls); err != nil {
+		if err := rows.Scan(&key.ID, &key.UserID, &key.Name, &key.Prefix, &key.CreatedAt, &key.ExpiresAt, &key.RevokedAt, &key.LastUsedAt, &key.AdminDisabled, &key.TotalCalls); err != nil {
 			return nil, err
 		}
 		keys = append(keys, key)
@@ -199,7 +210,7 @@ func (p *Postgres) RevokeATHubKey(ctx context.Context, userID, keyID uuid.UUID) 
 func (p *Postgres) ResolveATHubKey(ctx context.Context, hash string) (ATHubIdentity, error) {
 	var identity ATHubIdentity
 	err := p.pool.QueryRow(ctx, `SELECT k.id,k.user_id,
-		(u.is_active AND k.is_current AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>now()))
+		(u.is_active AND NOT u.athub_disabled AND k.is_current AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>now()))
 		FROM athub_api_keys k JOIN users u ON u.id=k.user_id WHERE k.token_hash=$1`, hash).Scan(&identity.KeyID, &identity.UserID, &identity.Active)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return identity, ErrNotFound
@@ -213,6 +224,26 @@ func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
+	denied := false
+	if call.Authenticated {
+		var userAllowed, keyAllowed bool
+		if call.UserID == nil || call.KeyID == nil {
+			return ErrNotFound
+		}
+		// Use the same lock order as administrator changes and rotations. Recheck
+		// before dispatch so an earlier lookup cannot outlive a committed ban.
+		if err := tx.QueryRow(ctx, `SELECT is_active AND NOT athub_disabled FROM users WHERE id=$1 FOR SHARE`, call.UserID).Scan(&userAllowed); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `SELECT is_current AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now())
+			FROM athub_api_keys WHERE id=$1 AND user_id=$2 FOR UPDATE`, call.KeyID, call.UserID).Scan(&keyAllowed); err != nil {
+			return err
+		}
+		denied = !userAllowed || !keyAllowed
+		if denied {
+			call.Authenticated = false
+		}
+	}
 	_, err = tx.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,port,authenticated)
 		VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, call.ID, call.UserID, call.KeyID, call.RequestID, call.Method, call.Path, call.Port, call.Authenticated)
 	if err != nil {
@@ -223,7 +254,13 @@ func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 			return err
 		}
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	if denied {
+		return ErrATHubAccessDenied
+	}
+	return nil
 }
 
 func (p *Postgres) FinishATHubCall(ctx context.Context, id uuid.UUID, status int, duration, bytes int64) error {

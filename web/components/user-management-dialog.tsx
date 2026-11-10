@@ -101,7 +101,7 @@ export function UserManagementDialog({ action, onClose, onSaved }: {
                 <ToggleGroupItem value="active" aria-label="已启用" title="已启用"><Circle aria-hidden="true" className="text-(--feedback-success)" /></ToggleGroupItem>
                 <ToggleGroupItem value="inactive" aria-label="已停用" title="已停用"><Circle aria-hidden="true" className="text-(--feedback-error)" /></ToggleGroupItem>
               </ToggleGroup>
-              <FieldDescription>停用后，邮箱、第三方账号与通行密钥均无法登录。</FieldDescription>
+              <FieldDescription>停用后，邮箱、第三方账号与通行密钥均无法登录，API Key 同步禁用。解封账户后仍需管理员解除 Key 限制。</FieldDescription>
             </Field>}
           </>}
           {needsPassword && <>

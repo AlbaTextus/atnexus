@@ -168,12 +168,18 @@ func (p *Postgres) UpdateManagedUser(ctx context.Context, actorID, id uuid.UUID,
 	if !canManageUser(actor, input.Role) || (actorID == id && (input.Role != previous.Role || !input.IsActive)) {
 		return ManagedUser{}, ErrUserForbidden
 	}
-	u, err := scanManagedUser(tx.QueryRow(ctx, `UPDATE users SET display_name=$2,role=$3,is_active=$4,updated_at=clock_timestamp() WHERE id=$1 RETURNING `+userColumns+`,users.updated_at,users.last_login_device`, id, input.DisplayName, input.Role, input.IsActive))
+	u, err := scanManagedUser(tx.QueryRow(ctx, `UPDATE users SET display_name=$2,role=$3,is_active=$4,
+		athub_disabled=CASE WHEN NOT $4 THEN true ELSE athub_disabled END,updated_at=clock_timestamp() WHERE id=$1 RETURNING `+userColumns+`,users.updated_at,users.last_login_device`, id, input.DisplayName, input.Role, input.IsActive))
 	if err != nil {
 		return ManagedUser{}, err
 	}
 	if previous.Role != input.Role || previous.IsActive != input.IsActive {
 		if err := revokeManagedUserAccess(ctx, tx, id); err != nil {
+			return ManagedUser{}, err
+		}
+	}
+	if !input.IsActive {
+		if _, err := tx.Exec(ctx, `UPDATE athub_api_keys SET revoked_at=COALESCE(revoked_at,now()) WHERE user_id=$1`, id); err != nil {
 			return ManagedUser{}, err
 		}
 	}

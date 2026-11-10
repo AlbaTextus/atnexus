@@ -70,6 +70,7 @@ func TestAuthenticationAndAccounting(t *testing.T) {
 		{"double space", "Bearer  " + token, true, nil, nil, 401, false},
 		{"lookup unavailable", "Bearer " + token, true, errors.New("offline"), nil, 503, false},
 		{"recording unavailable", "Bearer " + token, true, nil, errors.New("offline"), 503, false},
+		{"admin disabled between lookup and dispatch", "Bearer " + token, true, nil, store.ErrATHubAccessDenied, 401, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &accessStore{identity: store.ATHubIdentity{KeyID: uuid.New(), UserID: uuid.New(), Active: tc.active}, resolveErr: tc.resolveErr, beginErr: tc.beginErr}

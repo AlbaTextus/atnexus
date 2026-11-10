@@ -81,6 +81,10 @@ func (a *API) provisionATHubKey(w http.ResponseWriter, r *http.Request, reset bo
 		key, created, err = st.EnsureATHubKey(r.Context(), key)
 	}
 	if err != nil {
+		if errors.Is(err, store.ErrATHubAdminDisabled) {
+			writeJSON(w, 403, map[string]string{"error": "athub_admin_disabled", "error_description": "API 密钥已被管理员禁用，无法自行重置或启用。"})
+			return
+		}
 		a.applicationError(w, err)
 		return
 	}

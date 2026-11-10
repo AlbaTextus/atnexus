@@ -15,6 +15,7 @@ model LegalDocument {
 }
 
 model User {
+  athubDisabled Boolean @default(false) @map("athub_disabled")
 	lastLoginDevice Json? @map("last_login_device")
   bio          String              @default("") @db.Text
   numericId    Int                 @unique @default(autoincrement()) @map("numeric_id")

@@ -134,6 +134,10 @@ func (a *Access) Wrap(next http.Handler) http.Handler {
 		// produce an unrecorded write; crashes retain a row with status=null.
 		err := a.store.BeginATHubCall(ctx, call)
 		cancel()
+		if errors.Is(err, store.ErrATHubAccessDenied) {
+			call.Authenticated = false
+			err = nil
+		}
 		if err != nil {
 			a.logger.Error("ATHub call recording unavailable", "request_id", requestID)
 			reply(w, 503, "accounting_unavailable")

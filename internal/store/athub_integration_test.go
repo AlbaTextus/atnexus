@@ -53,7 +53,7 @@ func athubTestStore(t *testing.T) *Postgres {
 	if _, err := pool.Exec(ctx, `CREATE TABLE users(id uuid PRIMARY KEY,is_active boolean NOT NULL DEFAULT true)`); err != nil {
 		t.Fatal(err)
 	}
-	for _, migration := range []string{"20261110000000_athub_user_keys", "20261110010000_athub_single_key"} {
+	for _, migration := range []string{"20261110000000_athub_user_keys", "20261110010000_athub_single_key", "20261110020000_athub_admin_disable"} {
 		sql, err := os.ReadFile("../../prisma/migrations/" + migration + "/migration.sql")
 		if err != nil {
 			t.Fatal(err)
@@ -374,5 +374,50 @@ func TestATHubUsageRangeIntegration(t *testing.T) {
 	daily, err := p.ATHubUsageRange(ctx, user, from, until, 86400)
 	if err != nil || len(daily.Trend) != 2 {
 		t.Fatalf("daily=%+v err=%v", daily, err)
+	}
+}
+
+func TestATHubAdminBanBetweenLookupAndDispatch(t *testing.T) {
+	p := athubTestStore(t)
+	ctx := context.Background()
+	user := uuid.New()
+	if _, err := p.pool.Exec(ctx, `INSERT INTO users(id) VALUES($1)`, user); err != nil {
+		t.Fatal(err)
+	}
+	key, err := p.CreateATHubKey(ctx, ATHubKey{ID: uuid.New(), UserID: user, Name: "ATHub", TokenHash: security.HashToken("test"), Prefix: "ath_test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := p.ResolveATHubKey(ctx, key.TokenHash)
+	if err != nil || !identity.Active {
+		t.Fatal("initial authentication failed")
+	}
+	if _, err := p.pool.Exec(ctx, `UPDATE users SET athub_disabled=true WHERE id=$1`, user); err != nil {
+		t.Fatal(err)
+	}
+	call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Port: 8003, Authenticated: true}
+	if err := p.BeginATHubCall(ctx, call); !errors.Is(err, ErrATHubAccessDenied) {
+		t.Fatalf("stale authentication accepted: %v", err)
+	}
+	if err := p.FinishATHubCall(ctx, call.ID, 401, 1, 0); err != nil {
+		t.Fatal(err)
+	}
+	calls, err := p.ListATHubCalls(ctx, user, 10, 0)
+	if err != nil || len(calls) != 1 || calls[0].Authenticated {
+		t.Fatal("denied call audit was not preserved")
+	}
+	if _, err := p.ResetATHubKey(ctx, ATHubKey{ID: uuid.New(), UserID: user}); !errors.Is(err, ErrATHubAdminDisabled) {
+		t.Fatal("reset bypassed admin restriction")
+	}
+	existing, created, err := p.EnsureATHubKey(ctx, ATHubKey{ID: uuid.New(), UserID: user})
+	if err != nil || created || !existing.AdminDisabled || existing.ID != key.ID {
+		t.Fatal("provisioning bypassed admin restriction")
+	}
+	emptyUser := uuid.New()
+	if _, err := p.pool.Exec(ctx, `INSERT INTO users(id,athub_disabled) VALUES($1,true)`, emptyUser); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := p.EnsureATHubKey(ctx, ATHubKey{ID: uuid.New(), UserID: emptyUser}); !errors.Is(err, ErrATHubAdminDisabled) {
+		t.Fatal("blocked user without key obtained one")
 	}
 }

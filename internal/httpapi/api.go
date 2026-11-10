@@ -81,6 +81,8 @@ func (a *API) Router() http.Handler {
 	r.Patch("/api/v1/admin/users/{id}", a.updateManagedUser)
 	r.Post("/api/v1/admin/users/{id}/password", a.resetUserPassword)
 	r.Post("/api/v1/admin/users/{id}/revoke-sessions", a.revokeUserSessions)
+	r.Get("/api/v1/admin/users/{id}/athub-key", a.managedATHubKey)
+	r.Put("/api/v1/admin/users/{id}/athub-key", a.setManagedATHubKey)
 	r.Get("/api/v1/auth/providers", a.loginProviders)
 	r.Get("/api/v1/auth/verification", a.authVerification)
 	r.Get("/api/v1/legal/{slug}", a.getLegalDocument)

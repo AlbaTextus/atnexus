@@ -235,6 +235,96 @@ func TestATHubUserKeyContentFlowIntegration(t *testing.T) {
 	if err := json.Unmarshal(afterReset.Body.Bytes(), &current); err != nil || len(current.Keys) != 1 || current.Keys[0].ID != replacement.Key.ID {
 		t.Fatal("reset did not leave exactly one current key")
 	}
+	admin, err := st.UpsertUser(ctx, store.UserSeed{Email: "key-admin@example.test", PasswordHash: "unused", Role: "ADMIN"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminCookie := "admin-" + uuid.NewString()
+	if err := st.CreateSession(ctx, admin.ID, security.HashToken(adminCookie), time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	adminPath := "/api/v1/admin/users/" + user.ID.String() + "/athub-key"
+	policy := func() store.ManagedATHubKey {
+		t.Helper()
+		response := call(v1, "GET", adminPath, "", adminCookie, "", 200)
+		var result store.ManagedATHubKey
+		if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	setPolicy := func(disabled bool, status int) {
+		t.Helper()
+		state := policy()
+		body, _ := json.Marshal(map[string]any{"disabled": disabled, "updated_at": state.UpdatedAt})
+		call(v1, "PUT", adminPath, string(body), adminCookie, "", status)
+	}
+	call(v1, "GET", adminPath, "", cookie, "", 403)
+	state := policy()
+	staleBody, _ := json.Marshal(map[string]any{"disabled": true, "updated_at": state.UpdatedAt})
+	setPolicy(true, 200)
+	if policy().Key.RevokedAt == nil {
+		t.Fatal("admin disable did not persist key revocation")
+	}
+	call(v2, "GET", "/api/v2/platforms", "", "", replacement.Token, 401)
+	call(v1, "POST", "/api/v1/account/key/reset", `{}`, cookie, "", 403)
+	blockedEnsure := call(v1, "POST", "/api/v1/account/key", `{}`, cookie, "", 200)
+	if !strings.Contains(blockedEnsure.Body.String(), `"admin_disabled":true`) || strings.Contains(blockedEnsure.Body.String(), "api_key") {
+		t.Fatal("disabled key provisioning bypassed admin lock")
+	}
+	call(v1, "PUT", adminPath, string(staleBody), adminCookie, "", 409)
+	call(v1, "PUT", adminPath, string(staleBody), cookie, "", 403)
+	for _, crossSite := range []bool{false, true} {
+		r := httptest.NewRequest("PUT", adminPath, bytes.NewReader(staleBody))
+		r.AddCookie(&http.Cookie{Name: "session", Value: adminCookie})
+		r.Header.Set("Content-Type", "application/json")
+		if crossSite {
+			r.Header.Set("X-AlbaTextus-Client", "account-center")
+			r.Header.Set("Sec-Fetch-Site", "cross-site")
+		}
+		w := httptest.NewRecorder()
+		v1.ServeHTTP(w, r)
+		if w.Code != 403 {
+			t.Fatal("admin key update bypassed origin protection")
+		}
+	}
+	// A normal administrator cannot control another administrator's key.
+	call(v1, "GET", "/api/v1/admin/users/"+admin.ID.String()+"/athub-key", "", adminCookie, "", 403)
+	setPolicy(false, 200)
+	call(v2, "GET", "/api/v2/platforms", "", "", replacement.Token, 401)
+	enabled := call(v1, "POST", "/api/v1/account/key/reset", `{}`, cookie, "", 201)
+	var allowed struct {
+		Token string `json:"api_key"`
+	}
+	if err := json.Unmarshal(enabled.Body.Bytes(), &allowed); err != nil {
+		t.Fatal(err)
+	}
+	call(v2, "GET", "/api/v2/platforms", "", "", allowed.Token, 200)
+	// Use the actual administrator account-ban route, not a direct SQL update.
+	state = policy()
+	banBody, _ := json.Marshal(map[string]any{"display_name": "", "role": "USER", "is_active": false, "updated_at": state.UpdatedAt})
+	call(v1, "PATCH", "/api/v1/admin/users/"+user.ID.String(), string(banBody), adminCookie, "", 200)
+	banned := policy()
+	if banned.AccountActive || !banned.Disabled || banned.Key.RevokedAt == nil {
+		t.Fatal("account ban did not synchronize key disable")
+	}
+	call(v2, "GET", "/api/v2/platforms", "", "", allowed.Token, 401)
+	call(v1, "POST", "/api/v1/account/key/reset", `{}`, cookie, "", 401)
+	setPolicy(false, 403)
+	unbanBody, _ := json.Marshal(map[string]any{"display_name": "", "role": "USER", "is_active": true, "updated_at": banned.UpdatedAt})
+	call(v1, "PATCH", "/api/v1/admin/users/"+user.ID.String(), string(unbanBody), adminCookie, "", 200)
+	unbannedCookie := "unbanned-" + uuid.NewString()
+	if err := st.CreateSession(ctx, user.ID, security.HashToken(unbannedCookie), time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	call(v2, "GET", "/api/v2/platforms", "", "", allowed.Token, 401)
+	call(v1, "POST", "/api/v1/account/key/reset", `{}`, unbannedCookie, "", 403)
+	setPolicy(false, 200)
+	recovered := call(v1, "POST", "/api/v1/account/key/reset", `{}`, unbannedCookie, "", 201)
+	if err := json.Unmarshal(recovered.Body.Bytes(), &allowed); err != nil {
+		t.Fatal(err)
+	}
+	call(v2, "GET", "/api/v2/platforms", "", "", allowed.Token, 200)
 }
 
 func jsonNumber(n int) string {

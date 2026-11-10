@@ -202,3 +202,49 @@ func TestATHubConcurrentKeyLimitIntegration(t *testing.T) {
 		t.Fatalf("created=%d limited=%d", created, limited)
 	}
 }
+
+func TestATHubUsageRangeIntegration(t *testing.T) {
+	p := athubTestStore(t)
+	ctx := context.Background()
+	user, other := uuid.New(), uuid.New()
+	if _, err := p.pool.Exec(ctx, `INSERT INTO users(id) VALUES($1),($2)`, user, other); err != nil {
+		t.Fatal(err)
+	}
+	from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	until := from.Add(24 * time.Hour)
+	for _, c := range []struct {
+		user         uuid.UUID
+		at           time.Time
+		port, status int
+	}{
+		{user, from.Add(-time.Second), 8003, 200},
+		{user, from, 8003, 200},
+		{user, from.Add(30 * time.Minute), 8003, 500},
+		{user, from.Add(time.Hour), 8004, 0},
+		{user, until, 8003, 200},
+		{other, from, 8003, 200},
+	} {
+		var status *int
+		if c.status != 0 {
+			status = &c.status
+		}
+		if _, err := p.pool.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,request_id,method,path,port,authenticated,status,started_at)
+			VALUES($1,$2,$3,'GET','/api/v2/content',$4,true,$5,$6)`, uuid.New(), c.user, uuid.New(), c.port, status, c.at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	usage, err := p.ATHubUsageRange(ctx, user, from, until, 3600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usage.Total != 3 || usage.Success != 1 || usage.Failed != 1 || usage.Pending != 1 || len(usage.Trend) != 2 {
+		t.Fatalf("unexpected usage: %+v", usage)
+	}
+	if usage.Trend[0].Calls != 2 || usage.Trend[0].Port != 8003 || !usage.Trend[0].StartedAt.Equal(from) || usage.Trend[1].Port != 8004 {
+		t.Fatalf("unexpected buckets: %+v", usage.Trend)
+	}
+	daily, err := p.ATHubUsageRange(ctx, user, from, until, 86400)
+	if err != nil || len(daily.Trend) != 2 {
+		t.Fatalf("daily=%+v err=%v", daily, err)
+	}
+}

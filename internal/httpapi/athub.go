@@ -108,7 +108,39 @@ func (a *API) athubUsage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	usage, err := st.ATHubUsage(r.Context(), user.ID)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		writeJSON(w, 400, map[string]string{"error": "invalid_usage_range"})
+		return
+	}
+	for key, values := range query {
+		if key != "days" || len(values) != 1 {
+			writeJSON(w, 400, map[string]string{"error": "invalid_usage_range"})
+			return
+		}
+	}
+	var usage store.ATHubUsage
+	if values, exists := query["days"]; exists {
+		days, parseErr := strconv.Atoi(values[0])
+		if parseErr != nil || (days != 1 && days != 7 && days != 30) {
+			writeJSON(w, 400, map[string]string{"error": "invalid_usage_range"})
+			return
+		}
+		reader, supported := st.(store.ATHubUsageReader)
+		if !supported {
+			writeJSON(w, 503, map[string]string{"error": "service_unavailable"})
+			return
+		}
+		bucket := time.Hour
+		if days != 1 {
+			bucket = 24 * time.Hour
+		}
+		until := time.Now().UTC().Truncate(bucket).Add(bucket)
+		from := until.Add(-time.Duration(days) * 24 * time.Hour)
+		usage, err = reader.ATHubUsageRange(r.Context(), user.ID, from, until, int(bucket.Seconds()))
+	} else {
+		usage, err = st.ATHubUsage(r.Context(), user.ID)
+	}
 	if err != nil {
 		a.applicationError(w, err)
 		return

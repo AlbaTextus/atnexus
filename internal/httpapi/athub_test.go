@@ -24,6 +24,8 @@ type keyStore struct {
 	user        store.User
 	key         store.ATHubKey
 	queriedUser uuid.UUID
+	from, until time.Time
+	bucket      int
 }
 
 func (s *keyStore) SessionByHash(context.Context, string) (store.Session, error) {
@@ -50,6 +52,37 @@ func (s *keyStore) RevokeATHubKey(_ context.Context, user, id uuid.UUID) error {
 func (s *keyStore) ATHubUsage(_ context.Context, user uuid.UUID) (store.ATHubUsage, error) {
 	s.queriedUser = user
 	return store.ATHubUsage{}, nil
+}
+func (s *keyStore) ATHubUsageRange(_ context.Context, user uuid.UUID, from, until time.Time, bucket int) (store.ATHubUsage, error) {
+	s.queriedUser, s.from, s.until, s.bucket = user, from, until, bucket
+	return store.ATHubUsage{From: &from, Until: &until, BucketSeconds: bucket}, nil
+}
+
+func TestATHubUsageRangeValidation(t *testing.T) {
+	for _, days := range []string{"1", "7", "30"} {
+		a, s := keyAPI(t)
+		r := keyRequest("GET", "")
+		r.URL.RawQuery = "days=" + days
+		w := httptest.NewRecorder()
+		a.athubUsage(w, r)
+		wantBucket := 86400
+		if days == "1" {
+			wantBucket = 3600
+		}
+		if w.Code != 200 || s.queriedUser != s.user.ID || s.bucket != wantBucket || !s.until.After(s.from) {
+			t.Fatalf("days=%s status=%d bucket=%d", days, w.Code, s.bucket)
+		}
+	}
+	for _, query := range []string{"days=0", "days=31", "days=x", "days=1&days=7", "user_id=spoofed", "days=%zz"} {
+		a, _ := keyAPI(t)
+		r := keyRequest("GET", "")
+		r.URL.RawQuery = query
+		w := httptest.NewRecorder()
+		a.athubUsage(w, r)
+		if w.Code != 400 {
+			t.Fatalf("query=%s status=%d", query, w.Code)
+		}
+	}
 }
 func (s *keyStore) ListATHubCalls(_ context.Context, user uuid.UUID, _, _ int) ([]store.ATHubCall, error) {
 	s.queriedUser = user

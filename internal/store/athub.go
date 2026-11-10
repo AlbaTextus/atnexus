@@ -55,11 +55,26 @@ type ATHubUsageGroup struct {
 }
 
 type ATHubUsage struct {
-	Total     int64             `json:"total_calls"`
-	Success   int64             `json:"successful_calls"`
-	Failed    int64             `json:"failed_calls"`
-	Pending   int64             `json:"pending_calls"`
-	Endpoints []ATHubUsageGroup `json:"endpoints"`
+	Total         int64             `json:"total_calls"`
+	Success       int64             `json:"successful_calls"`
+	Failed        int64             `json:"failed_calls"`
+	Pending       int64             `json:"pending_calls"`
+	Endpoints     []ATHubUsageGroup `json:"endpoints"`
+	From          *time.Time        `json:"from,omitempty"`
+	Until         *time.Time        `json:"until,omitempty"`
+	BucketSeconds int               `json:"bucket_seconds,omitempty"`
+	Trend         []ATHubUsagePoint `json:"trend,omitempty"`
+}
+
+type ATHubUsagePoint struct {
+	StartedAt time.Time `json:"started_at"`
+	Port      int       `json:"port"`
+	Calls     int64     `json:"calls"`
+}
+
+// ATHubUsageReader supports bounded, server-aggregated dashboard queries.
+type ATHubUsageReader interface {
+	ATHubUsageRange(context.Context, uuid.UUID, time.Time, time.Time, int) (ATHubUsage, error)
 }
 
 // ATHubStore lives entirely in the account database. The content module knows no users.
@@ -207,18 +222,32 @@ func (p *Postgres) ListATHubCalls(ctx context.Context, userID uuid.UUID, limit, 
 }
 
 func (p *Postgres) ATHubUsage(ctx context.Context, userID uuid.UUID) (ATHubUsage, error) {
+	return p.athubUsage(ctx, userID, nil, nil, 0)
+}
+
+func (p *Postgres) ATHubUsageRange(ctx context.Context, userID uuid.UUID, from, until time.Time, bucketSeconds int) (ATHubUsage, error) {
+	if !until.After(from) || until.Sub(from) > 31*24*time.Hour || (bucketSeconds != 3600 && bucketSeconds != 86400) {
+		return ATHubUsage{}, errors.New("invalid usage range")
+	}
+	return p.athubUsage(ctx, userID, &from, &until, bucketSeconds)
+}
+
+func (p *Postgres) athubUsage(ctx context.Context, userID uuid.UUID, from, until *time.Time, bucketSeconds int) (ATHubUsage, error) {
 	// One snapshot for totals and groups, including calls still pending completion.
 	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return ATHubUsage{}, err
 	}
 	defer tx.Rollback(ctx)
-	result := ATHubUsage{Endpoints: make([]ATHubUsageGroup, 0)}
+	result := ATHubUsage{Endpoints: make([]ATHubUsageGroup, 0), From: from, Until: until, BucketSeconds: bucketSeconds}
 	if err := tx.QueryRow(ctx, `SELECT COUNT(*),COUNT(*) FILTER(WHERE status BETWEEN 200 AND 399),
-		COUNT(*) FILTER(WHERE status>=400),COUNT(*) FILTER(WHERE status IS NULL) FROM athub_api_calls WHERE user_id=$1`, userID).Scan(&result.Total, &result.Success, &result.Failed, &result.Pending); err != nil {
+		COUNT(*) FILTER(WHERE status>=400),COUNT(*) FILTER(WHERE status IS NULL) FROM athub_api_calls
+		WHERE user_id=$1 AND ($2::timestamptz IS NULL OR started_at >= $2) AND ($3::timestamptz IS NULL OR started_at < $3)`, userID, from, until).Scan(&result.Total, &result.Success, &result.Failed, &result.Pending); err != nil {
 		return result, err
 	}
-	rows, err := tx.Query(ctx, `SELECT method,path,port,status,COUNT(*) FROM athub_api_calls WHERE user_id=$1 GROUP BY method,path,port,status ORDER BY COUNT(*) DESC,method,path,port,status`, userID)
+	rows, err := tx.Query(ctx, `SELECT method,path,port,status,COUNT(*) FROM athub_api_calls
+		WHERE user_id=$1 AND ($2::timestamptz IS NULL OR started_at >= $2) AND ($3::timestamptz IS NULL OR started_at < $3)
+		GROUP BY method,path,port,status ORDER BY COUNT(*) DESC,method,path,port,status`, userID, from, until)
 	if err != nil {
 		return result, err
 	}
@@ -234,5 +263,26 @@ func (p *Postgres) ATHubUsage(ctx context.Context, userID uuid.UUID) (ATHubUsage
 		return result, err
 	}
 	rows.Close()
+	if from != nil {
+		result.Trend = make([]ATHubUsagePoint, 0)
+		points, err := tx.Query(ctx, `SELECT to_timestamp(floor(extract(epoch FROM started_at)/$4::int)*$4::int),port,COUNT(*)
+			FROM athub_api_calls WHERE user_id=$1 AND started_at >= $2 AND started_at < $3
+			GROUP BY 1,port ORDER BY 1,port`, userID, from, until, bucketSeconds)
+		if err != nil {
+			return result, err
+		}
+		defer points.Close()
+		for points.Next() {
+			var point ATHubUsagePoint
+			if err := points.Scan(&point.StartedAt, &point.Port, &point.Calls); err != nil {
+				return result, err
+			}
+			result.Trend = append(result.Trend, point)
+		}
+		if err := points.Err(); err != nil {
+			return result, err
+		}
+		points.Close()
+	}
 	return result, tx.Commit(ctx)
 }

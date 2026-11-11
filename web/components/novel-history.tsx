@@ -7,7 +7,8 @@ import { ArrowLeft, GitCommitHorizontal, History } from "lucide-react"
 import { ContentFailure, NovelAccessGate, useNovelAccess } from "@/components/novel-access"
 import { ContributorAvatar } from "@/components/novel-demo/contributors-card"
 import { Button } from "@/components/novel-demo/ui/button"
-import type { ChapterBodyHunk, Novel, NovelChange, NovelHistory } from "@/lib/athub-client"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import type { ChapterBodyHunk, Novel, NovelChange, NovelHistory, NovelRevision } from "@/lib/athub-client"
 
 const fields: Record<string, string> = {
   title: "标题", summary: "简介", coverUrl: "封面", status: "连载状态",
@@ -73,6 +74,17 @@ export function NovelHistoryPage({ id }: { id: number }) {
   return <div className="novel-demo"><NovelAccessGate><HistoryData key={id} id={id}/></NovelAccessGate></div>
 }
 
+function HistoryRevision({ item }: { item: NovelRevision }) {
+  const [open, setOpen] = useState(false)
+  return <li>
+    <GitCommitHorizontal className="novel-history-node" aria-hidden="true"/>
+    <article className="panel">
+      <div className="novel-history-meta"><ContributorAvatar contributor={item.contributor}/><strong>{item.contributor.name || "未记录账号"}</strong><time dateTime={item.createdAt} title={item.startedAt && item.startedAt !== item.createdAt ? `开始于 ${new Date(item.startedAt).toLocaleString("zh-CN", { hour12: false })}` : undefined}>{new Date(item.createdAt).toLocaleString("zh-CN", { hour12: false })}</time><Tooltip><TooltipTrigger render={<code />} tabIndex={0} aria-label={`最新记录编号：${item.id}`}>{item.id.slice(0, 8)}</TooltipTrigger><TooltipContent className="break-all">{item.id}</TooltipContent></Tooltip></div>
+      <details onToggle={event => setOpen(event.currentTarget.open)}><summary>{(item.revisionCount ?? 1) > 1 && `${item.revisionCount} 次提交 · `}{item.changes.length} 处变更</summary>{open && <div>{item.changes.map((change, index) => <ChangeDetail key={index} change={change}/>)}</div>}</details>
+    </article>
+  </li>
+}
+
 function HistoryData({ id }: { id: number }) {
   const { request } = useNovelAccess()
   const [page, setPage] = useState(0)
@@ -97,13 +109,7 @@ function HistoryData({ id }: { id: number }) {
     <header className="novel-history-heading"><h1><History aria-hidden="true"/>变更历史</h1>{data && <p>{data.book.title}</p>}</header>
     {error ? <ContentFailure message={error} retry={() => setRevision(value => value + 1)}/> : !data ? <div role="status">正在加载变更历史…</div> :
       data.history.revisions.length === 0 ? <section className="panel" role="status">暂无变更记录</section> :
-      <><ol className="novel-history-list novel-content-ready">{data.history.revisions.map(item => <li key={item.id}>
-        <GitCommitHorizontal className="novel-history-node" aria-hidden="true"/>
-        <article className="panel">
-          <div className="novel-history-meta"><ContributorAvatar contributor={item.contributor}/><strong>{item.contributor.name || "未记录账号"}</strong><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("zh-CN", { hour12: false })}</time><code title={item.id}>{item.id.slice(0, 8)}</code></div>
-          <details><summary>{item.changes.length} 处变更</summary><div>{item.changes.map((change, index) => <ChangeDetail key={index} change={change}/>)}</div></details>
-        </article>
-      </li>)}</ol>
+      <><ol className="novel-history-list novel-content-ready">{data.history.revisions.map(item => <HistoryRevision key={item.id} item={item}/>)}</ol>
       <nav className="novel-history-pagination" aria-label="变更历史分页"><Button variant="outline" disabled={page === 0} onClick={() => setPage(value => value - 1)}>上一页</Button><span>{page + 1} / {Math.max(1, Math.ceil(data.history.total / 20))}</span><Button variant="outline" disabled={(page + 1) * 20 >= data.history.total} onClick={() => setPage(value => value + 1)}>下一页</Button></nav></>}
   </main>
 }

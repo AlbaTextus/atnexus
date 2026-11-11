@@ -5,6 +5,7 @@ import { AlertCircle, Check, Copy, KeyRound, RefreshCw } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import { feedback } from "@/lib/feedback"
 import { ATHubUsagePanel, type ATHubUsage } from "@/components/athub-usage-panel"
+import { APIRequestCode, HTTPStatusCode } from "@/components/api-request-code"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,7 +19,7 @@ type APIKey = {
   revoked_at: string | null; last_used_at: string | null; total_calls: number
 }
 type KeyResult = { key: APIKey; api_key?: string }
-type Call = { id: string; key_id: string | null; method: string; path: string; port: number; status: number | null; duration_ms: number | null; started_at: string }
+type Call = { id: string; method: string; path: string; port: number; status: number | null; duration_ms: number | null; started_at: string }
 const keyPath = "/api/v1/account/key"
 const usagePath = "/api/v1/account/athub"
 const pageSize = 10
@@ -95,8 +96,6 @@ export function AccountKeys() {
     return () => { active = false }
   }, [offset, revision])
 
-  const keyNames = new Map(keys.map(key => [key.id, key.name]))
-
   function closeSecret(open: boolean) {
     setSecretOpen(open)
     if (!open) { setSecret(""); setCopied(false); setCopyError("") }
@@ -148,17 +147,16 @@ export function AccountKeys() {
       </CardContent>
     </Card>
 
-    <ATHubUsagePanel usage={usage} days={days} loading={loading} onDaysChange={setDays} />
+    <ATHubUsagePanel usage={usage} days={days} loading={loading} onDaysChange={setDays} showQuota />
 
     <Card><CardHeader><CardTitle>最近调用</CardTitle></CardHeader><CardContent>
       {callsError ? <Alert variant="destructive"><AlertCircle /><AlertDescription>{callsError}<Button variant="link" onClick={() => setRevision(value => value + 1)}>重试</Button></AlertDescription></Alert> : callsLoading ? <Skeleton className="h-40 w-full" /> : !calls.length ? <p className="py-6 text-center text-muted-foreground">暂无调用记录</p> :
         <div className="overflow-x-auto"><table className="w-full text-left text-sm">
-          <thead className="text-xs text-muted-foreground"><tr className="border-b">{["时间", "密钥", "接口", "状态", "耗时"].map(label => <th key={label} scope="col" className="whitespace-nowrap px-3 pb-3 font-normal first:pl-0 last:pr-0">{label}</th>)}</tr></thead>
+          <thead className="text-xs text-muted-foreground"><tr className="border-b">{["时间", "接口", "状态", "耗时"].map(label => <th key={label} scope="col" className="whitespace-nowrap px-3 pb-3 font-normal first:pl-0 last:pr-0">{label}</th>)}</tr></thead>
           <tbody>{calls.map(call => <tr key={call.id} className="border-b last:border-0">
             <td className="whitespace-nowrap py-3 pr-3 text-xs text-muted-foreground">{date(call.started_at)}</td>
-            <td className="max-w-36 truncate px-3" title={call.key_id ? keyNames.get(call.key_id) : undefined}>{call.key_id ? keyNames.get(call.key_id) || "历史密钥" : "—"}</td>
-            <td className="whitespace-nowrap px-3 font-mono text-xs">{call.method} {call.path}</td>
-            <td className="px-3"><Badge variant={call.status && call.status >= 400 ? "outline" : "secondary"}>{call.status ?? "处理中"}</Badge></td>
+            <td className="whitespace-nowrap px-3"><APIRequestCode method={call.method} path={call.path} /></td>
+            <td className="px-3"><HTTPStatusCode status={call.status} /></td>
             <td className="whitespace-nowrap pl-3 text-right tabular-nums">{call.duration_ms === null ? "—" : `${call.duration_ms} ms`}</td>
           </tr>)}</tbody>
         </table></div>}

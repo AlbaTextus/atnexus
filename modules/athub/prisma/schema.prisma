@@ -12,6 +12,12 @@ enum NovelStatus {
   COMPLETED
 }
 
+model MutationReceipt {
+  id String @id @db.Uuid
+  response Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+}
+
 model Platform {
   id      Int      @id @default(autoincrement())
   name    String

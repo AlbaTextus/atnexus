@@ -1,7 +1,10 @@
+"use client";
+
 import { Avatar } from "radix-ui";
 import { BookOpen, CloudDownload, FileArchive, Globe, HardDrive, UserRound } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export function DownloadSection() {
   return (
@@ -30,9 +33,14 @@ export function DownloadSection() {
       <footer className="resource-footer">
         <span className="resource-source"><HardDrive aria-hidden="true" />来源待补充</span>
         <div className="resource-actions">
-          <Button type="button" size="icon" className="rounded-xl" aria-label="获取资源" title="暂无资源" disabled>
-            <CloudDownload aria-hidden="true" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger render={<span className="inline-flex" />} tabIndex={0} aria-label="获取资源：暂无资源">
+              <Button type="button" size="icon" className="rounded-xl" aria-label="获取资源" disabled>
+                <CloudDownload aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>暂无资源</TooltipContent>
+          </Tooltip>
         </div>
       </footer>
     </section>

@@ -70,6 +70,7 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("ATHub initialization failed: %w", err)
 	}
 	defer hub.Close()
+	api.SetATHubReviewExecutor(access.ApplyReview)
 	// ATHub owns its 15s database deadline and accepts uploads up to 8 MiB.
 	requestTimeout := max(cfg.HTTPRequestTimeout, 30*time.Second)
 	oauthServer := &http.Server{Addr: cfg.HTTPAddr, Handler: api.Router(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.HTTPRequestTimeout, WriteTimeout: cfg.HTTPRequestTimeout, IdleTimeout: 60 * time.Second}

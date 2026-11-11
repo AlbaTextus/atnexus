@@ -120,7 +120,7 @@ func readApplication(w http.ResponseWriter, r *http.Request) (store.Application,
 		message = "应用主页需为 HTTPS 地址；本地开发可使用 localhost 或回环 IP 的 HTTP 地址。"
 	case in.IconURL != "" && !validApplicationURL(in.IconURL):
 		message = "请填写有效的应用图标 HTTPS 地址。"
-	case in.MinimumRole != "USER" && in.MinimumRole != "ADMIN" && in.MinimumRole != "SUPER_ADMIN":
+	case store.RoleLevel(in.MinimumRole) == 0:
 		message = "请选择有效的最低访问角色。"
 	case len(in.RedirectURIs) == 0 || len(in.RedirectURIs) > 10:
 		message = "请填写 1–10 个回调地址。"

@@ -286,4 +286,5 @@ func TestUploadIntegration(t *testing.T) {
 	bulk.NovelID = &missingID
 	call("POST", "/api/v2/upload", bulk, http.StatusNotFound, nil)
 	call("DELETE", fmt.Sprintf("/api/v2/novelinfo?id=%d", novelID), nil, 204, nil)
+	testReviewReceipts(t, pool)
 }

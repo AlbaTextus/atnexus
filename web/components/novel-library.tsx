@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { LibraryPage } from "@/components/novel-demo/library-page"
 import { ContentFailure, NovelAccessGate, useNovelAccess } from "@/components/novel-access"
 import { mapDemoBook, readAllContent, type DemoLibraryBook } from "@/lib/novel-demo-data"
-import { ContentApiError, type Novel, type ContentAuthor, type ContentTag, type TableOfContents } from "@/lib/athub-client"
+import { type Novel, type ContentAuthor, type ContentTag } from "@/lib/athub-client"
 
 type LibraryFilters = { tagId?: number; authorId?: number }
 
@@ -30,22 +30,8 @@ function LibraryData({ tagId, authorId }: LibraryFilters) {
       authorId
         ? request<ContentAuthor>(`/api/v2/authors?id=${authorId}`, controller.signal).then(author => [author])
         : readAllContent<ContentAuthor>(request, "/api/v2/authors", controller.signal),
-    ]).then(async ([novels, tags, authors]) => {
+    ]).then(([novels, tags, authors]) => {
       const mapped = novels.map(book => mapDemoBook(book, tags, authors))
-      // Keep the existing chapter-count field populated without changing the UI.
-      // Bound parallel reads rather than starting one request per book at once.
-      let next = 0
-      await Promise.all(Array.from({ length: Math.min(4, mapped.length) }, async () => {
-        while (next < mapped.length) {
-          const index = next++
-          try {
-            const toc = await request<TableOfContents>(`/api/v2/toc?novelId=${novels[index].id}`, controller.signal)
-            mapped[index].chapterCount = toc.chapters.length
-          } catch (reason) {
-            if (!(reason instanceof ContentApiError) || reason.status !== 404) throw reason
-          }
-        }
-      }))
       if (!controller.signal.aborted) {
         setAuthorName(authorId ? authors[0]?.name?.trim() || `作者 #${authorId}` : undefined)
         setBooks(mapped)

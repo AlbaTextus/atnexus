@@ -97,11 +97,12 @@ func (m *memoryStore) RevokeToken(context.Context, string, string) error { retur
 func testConfig() config.Config { return config.Config{AuthorizationCodeTTL: 5 * time.Minute} }
 
 func TestMinimumRoleHierarchy(t *testing.T) {
-	roles := []string{"USER", "ADMIN", "SUPER_ADMIN", "LEVEL_2", ""}
+	roles := []string{"USER", "LEVEL_2", "ADMIN", "SUPER_ADMIN", "UNKNOWN", ""}
 	allowed := map[string]map[string]bool{
 		"USER":        {"": true, "USER": true},
-		"ADMIN":       {"": true, "USER": true, "ADMIN": true},
-		"SUPER_ADMIN": {"": true, "USER": true, "ADMIN": true, "SUPER_ADMIN": true},
+		"LEVEL_2":     {"": true, "USER": true, "LEVEL_2": true},
+		"ADMIN":       {"": true, "USER": true, "LEVEL_2": true, "ADMIN": true},
+		"SUPER_ADMIN": {"": true, "USER": true, "LEVEL_2": true, "ADMIN": true, "SUPER_ADMIN": true},
 	}
 	for _, role := range roles {
 		for _, minimum := range roles {

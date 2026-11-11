@@ -23,7 +23,7 @@ export type NovelChange = { entity: string; action: string; before: Record<strin
 export type NovelRevision = {
   id: string; novelId: number
   contributor: { id: string; name: string; avatar: string }
-  createdAt: string; changes: NovelChange[]
+  createdAt: string; startedAt?: string; revisionCount?: number; changes: NovelChange[]
 }
 export type NovelHistory = { revisions: NovelRevision[]; total: number }
 export type ChapterSummary = { id: number; novelId: number; volumeId: number | null; order: number; title: string; updatedAt: string }

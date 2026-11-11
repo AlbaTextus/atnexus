@@ -23,6 +23,7 @@ type Access struct {
 	port       int
 	logger     *slog.Logger
 	readSecret string
+	content    http.Handler
 }
 
 func New(st store.ATHubStore, addr string, logger *slog.Logger) (*Access, error) {
@@ -109,6 +110,7 @@ func (w *responseCapture) Write(data []byte) (int, error) {
 }
 
 func (a *Access) Wrap(next http.Handler) http.Handler {
+	a.content = next
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		w.Header().Set("Cache-Control", "no-store")
@@ -146,6 +148,14 @@ func (a *Access) Wrap(next http.Handler) http.Handler {
 		// produce an unrecorded write; crashes retain a row with status=null.
 		err := a.store.BeginATHubCall(ctx, call)
 		cancel()
+		limited := errors.Is(err, store.ErrATHubCallLimit)
+		forbidden := errors.Is(err, store.ErrATHubPermissionDenied)
+		if forbidden {
+			err = nil
+		}
+		if limited {
+			err = nil
+		}
 		if errors.Is(err, store.ErrATHubAccessDenied) {
 			call.Authenticated = false
 			err = nil
@@ -173,6 +183,14 @@ func (a *Access) Wrap(next http.Handler) http.Handler {
 				a.logger.Error("ATHub call completion failed; pending audit retained", "request_id", requestID)
 			}
 		}()
+		if forbidden {
+			reply(capture, http.StatusForbidden, "operation_forbidden")
+			return
+		}
+		if limited {
+			reply(capture, http.StatusTooManyRequests, "api_key_total_call_limit_reached")
+			return
+		}
 		if !call.Authenticated {
 			capture.Header().Set("WWW-Authenticate", "Bearer")
 			reply(capture, 401, "invalid_api_key")
@@ -189,6 +207,9 @@ func (a *Access) Wrap(next http.Handler) http.Handler {
 				return
 			}
 			r = r.WithContext(athub.WithContributor(r.Context(), actor))
+			if a.queueMutation(capture, r, call, actor) {
+				return
+			}
 		}
 		next.ServeHTTP(capture, r)
 	})

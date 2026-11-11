@@ -1,0 +1,5 @@
+CREATE TABLE "MutationReceipt" (
+    "id" UUID PRIMARY KEY,
+    "response" JSONB NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

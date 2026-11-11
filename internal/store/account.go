@@ -27,9 +27,11 @@ func (p *Postgres) AvailableApplications(ctx context.Context, role string) ([]Av
 	roles := []string{}
 	switch role {
 	case "SUPER_ADMIN":
-		roles = []string{"USER", "ADMIN", "SUPER_ADMIN"}
+		roles = []string{"USER", "LEVEL_2", "ADMIN", "SUPER_ADMIN"}
 	case "ADMIN":
-		roles = []string{"USER", "ADMIN"}
+		roles = []string{"USER", "LEVEL_2", "ADMIN"}
+	case "LEVEL_2":
+		roles = []string{"USER", "LEVEL_2"}
 	case "USER":
 		roles = []string{"USER"}
 	}

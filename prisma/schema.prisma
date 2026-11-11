@@ -43,6 +43,8 @@ model User {
   athubKeys ATHubAPIKey[]
   athubCalls ATHubAPICall[]
   novelRevisions NovelRevision[]
+  athubSubmissions ATHubReview[] @relation("ATHubSubmitter")
+  athubReviewedSubmissions ATHubReview[] @relation("ATHubReviewer")
 
   @@map("users")
 }
@@ -66,6 +68,61 @@ model NovelRevision {
   @@map("novel_revisions")
 }
 
+model ATHubKeyLimit {
+  role String @id @db.VarChar(20)
+  totalCallLimit BigInt? @map("total_call_limit")
+  updatedBy String? @map("updated_by") @db.Uuid
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  policy ATHubRolePolicy?
+
+  @@map("athub_key_limits")
+}
+
+model ATHubRolePolicy {
+  role String @id @db.VarChar(20)
+  reviewRequired Boolean @default(false) @map("review_required")
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  keyLimit ATHubKeyLimit @relation(fields:[role],references:[role],onDelete:NoAction,onUpdate:NoAction)
+  rules ATHubAccessRule[]
+  @@map("athub_role_policies")
+}
+
+model ATHubAccessRule {
+  role String @db.VarChar(20)
+  operation String @db.VarChar(16)
+  method String @default("") @db.VarChar(16)
+  path String @default("") @db.VarChar(255)
+  allowed Boolean
+  totalCallLimit BigInt? @map("total_call_limit")
+  policy ATHubRolePolicy @relation(fields:[role],references:[role],onDelete:NoAction,onUpdate:NoAction)
+  @@id([role,operation,method,path])
+  @@map("athub_access_rules")
+}
+
+model ATHubReview {
+  id String @id @db.Uuid
+  userId String? @map("user_id") @db.Uuid
+  contributor Json
+  operation String @db.VarChar(16)
+  method String @db.VarChar(16)
+  path String @db.VarChar(255)
+  query String @default("") @db.Text
+  payload Json
+  status String @default("pending") @db.VarChar(16)
+  reviewerId String? @map("reviewer_id") @db.Uuid
+  reviewer Json?
+  note String @default("") @db.Text
+  resultStatus Int? @map("result_status")
+  result Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  reviewedAt DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  user User? @relation("ATHubSubmitter",fields:[userId],references:[id],onDelete:SetNull,onUpdate:NoAction)
+  reviewerUser User? @relation("ATHubReviewer",fields:[reviewerId],references:[id],onDelete:SetNull,onUpdate:NoAction)
+  @@index([status,createdAt,id],map:"athub_reviews_status_created_idx")
+  @@index([userId,createdAt,id],map:"athub_reviews_user_created_idx")
+  @@map("athub_reviews")
+}
+
 model ATHubAPIKey {
   // The migration enforces one current key with a partial unique user_id index.
   isCurrent Boolean @default(true) @map("is_current")
@@ -86,6 +143,7 @@ model ATHubAPIKey {
 }
 
 model ATHubAPICall {
+  operation String @default("") @db.VarChar(16)
   id String @id @db.Uuid
   userId String? @map("user_id") @db.Uuid
   keyId String? @map("key_id") @db.Uuid

@@ -6,7 +6,7 @@ import { Link, useTransitionRouter } from "next-view-transitions"
 import { useEffect, useState, type FormEvent } from "react"
 import { AlertCircle, ArrowLeft, Check, Circle, Code2, LockKeyhole, Save, Settings2, Trash2 } from "lucide-react"
 import { api } from "@/lib/api"
-import { type Application, type OAuthMetadata, managementError } from "@/lib/applications"
+import { type Application, type OAuthMetadata, managementError, roleNames } from "@/lib/applications"
 import { CopyField } from "@/components/copy-field"
 import { ClientSecretField } from "@/components/client-secret-field"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -120,11 +120,11 @@ export function ApplicationEditor({ id }: { id?: string }) {
             <FieldLabel id="app-role-label">最低访问等级</FieldLabel>
             <ToggleGroup aria-labelledby="app-role-label" value={[draft.minimum_role]} onValueChange={values => { if (values[0]) change("minimum_role",values[0]) }} disabled={busy} variant="pill" size="lg" spacing={1} className="w-fit! max-w-full flex-wrap">
               <ToggleGroupItem value="USER" aria-label="1 级 · 普通用户" title="普通用户">LT1</ToggleGroupItem>
-              <ToggleGroupItem value="LT2" disabled aria-label="LT2（暂未开放）" title="LT2（暂未开放）">LT2</ToggleGroupItem>
+              <ToggleGroupItem value="LEVEL_2" aria-label={roleNames.LEVEL_2} title={roleNames.LEVEL_2}>LT2</ToggleGroupItem>
               <ToggleGroupItem value="ADMIN" aria-label="3 级 · 管理员" title="管理员">LT3</ToggleGroupItem>
               <ToggleGroupItem value="SUPER_ADMIN" aria-label="4 级 · 超级管理员" title="超级管理员">LT4</ToggleGroupItem>
             </ToggleGroup>
-            <FieldDescription>达到所选等级即可访问，LT2 暂未开放。</FieldDescription>
+            <FieldDescription>达到所选等级即可访问。</FieldDescription>
           </Field>
           <Field data-disabled={busy}>
             <FieldLabel id="app-active-label">应用状态</FieldLabel>

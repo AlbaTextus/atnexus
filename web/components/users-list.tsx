@@ -80,7 +80,7 @@ export function UsersList() {
         <ToggleGroup value={[role]} onValueChange={values => { if (values[0]) { setRole(values[0]); setPage(1) } }} variant="pill" size="lg" spacing={1} aria-label="用户角色筛选">
           <ToggleGroupItem value="all" aria-label="全部角色" title="全部角色"><Circle aria-hidden="true" className="text-muted-foreground" /></ToggleGroupItem>
           <ToggleGroupItem value="USER" aria-label={roleNames.USER} title={roleNames.USER}>LT1</ToggleGroupItem>
-          <ToggleGroupItem value="LT2" disabled aria-label="LT2（暂未开放）" title="LT2（暂未开放）">LT2</ToggleGroupItem>
+          <ToggleGroupItem value="LEVEL_2" aria-label={roleNames.LEVEL_2} title={roleNames.LEVEL_2}>LT2</ToggleGroupItem>
           <ToggleGroupItem value="ADMIN" aria-label={roleNames.ADMIN} title={roleNames.ADMIN}>LT3</ToggleGroupItem>
           <ToggleGroupItem value="SUPER_ADMIN" aria-label={roleNames.SUPER_ADMIN} title={roleNames.SUPER_ADMIN}>LT4</ToggleGroupItem>
         </ToggleGroup>

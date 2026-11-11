@@ -26,15 +26,16 @@ import (
 )
 
 type API struct {
-	cfg           config.Config
-	store         store.Store
-	oauth         *oauth.Service
-	passkey       *passkey.Service
-	log           *slog.Logger
-	clientSecrets *security.SecretCipher
-	federation    *federation.Service
-	turnstile     *turnstile.Service
-	mailer        email.Sender
+	cfg                 config.Config
+	store               store.Store
+	oauth               *oauth.Service
+	passkey             *passkey.Service
+	log                 *slog.Logger
+	clientSecrets       *security.SecretCipher
+	federation          *federation.Service
+	turnstile           *turnstile.Service
+	mailer              email.Sender
+	athubReviewExecutor store.ATHubReviewExecutor
 }
 
 func New(cfg config.Config, st store.Store, logger *slog.Logger) (*API, error) {
@@ -84,6 +85,16 @@ func (a *API) Router() http.Handler {
 	r.Get("/api/v1/admin/users/{id}/athub-key", a.managedATHubKey)
 	r.Put("/api/v1/admin/users/{id}/athub-key", a.setManagedATHubKey)
 	r.Get("/api/v1/admin/athub/dashboard", a.athubDashboard)
+	r.Get("/api/v1/admin/athub/key-limits", a.athubKeyLimits)
+	r.Put("/api/v1/admin/athub/key-limits", a.athubKeyLimits)
+	r.Get("/api/v1/admin/athub/permissions", a.athubPermissions)
+	r.Put("/api/v1/admin/athub/permissions", a.athubPermissions)
+	r.Get("/api/v1/account/athub/permissions", a.athubPermissions)
+	r.Get("/api/v1/admin/athub/reviews", a.athubReviews)
+	r.Get("/api/v1/admin/athub/reviews/{id}", a.athubReviews)
+	r.Post("/api/v1/admin/athub/reviews/{id}", a.athubReviews)
+	r.Get("/api/v1/account/athub/submissions", a.athubReviews)
+	r.Get("/api/v1/account/athub/submissions/{id}", a.athubReviews)
 	r.Get("/api/v1/auth/providers", a.loginProviders)
 	r.Get("/api/v1/auth/verification", a.authVerification)
 	r.Get("/api/v1/legal/{slug}", a.getLegalDocument)

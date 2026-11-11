@@ -76,6 +76,8 @@ func TestAuthenticationAndAccounting(t *testing.T) {
 		{"lookup unavailable", "Bearer " + token, true, errors.New("offline"), nil, 503, false},
 		{"recording unavailable", "Bearer " + token, true, nil, errors.New("offline"), 503, false},
 		{"admin disabled between lookup and dispatch", "Bearer " + token, true, nil, store.ErrATHubAccessDenied, 401, false},
+		{"total call limit reached", "Bearer " + token, true, nil, store.ErrATHubCallLimit, 429, false},
+		{"operation forbidden", "Bearer " + token, true, nil, store.ErrATHubPermissionDenied, 403, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &accessStore{identity: store.ATHubIdentity{KeyID: uuid.New(), UserID: uuid.New(), Active: tc.active}, resolveErr: tc.resolveErr, beginErr: tc.beginErr}
@@ -109,6 +111,9 @@ func TestAuthenticationAndAccounting(t *testing.T) {
 			}
 			if tc.status == 401 && w.Header().Get("WWW-Authenticate") != "Bearer" {
 				t.Fatal("missing bearer challenge")
+			}
+			if tc.name == "total call limit reached" && !strings.Contains(w.Body.String(), "api_key_total_call_limit_reached") {
+				t.Fatal("missing total call limit error")
 			}
 			if tc.status == 204 && (s.hash != security.HashToken(token) || s.call.UserID == nil || !s.call.Authenticated) {
 				t.Fatal("user or hash association missing")

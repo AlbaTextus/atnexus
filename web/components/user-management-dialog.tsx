@@ -37,7 +37,7 @@ export function UserManagementDialog({ action, onClose, onSaved }: {
   const [error, setError] = useFeedback("error")
   const [passwordError, setPasswordError] = useFeedback("error")
   const [busy, setBusy] = useState(false)
-  const roles = actor.role === "SUPER_ADMIN" ? ["USER", "ADMIN", "SUPER_ADMIN"] : ["USER"]
+  const roles = actor.role === "SUPER_ADMIN" ? ["USER", "LEVEL_2", "ADMIN", "SUPER_ADMIN"] : ["USER", "LEVEL_2"]
   const needsPassword = action.kind === "create" || action.kind === "password"
   const changesAccess = target && (target.role !== role || target.is_active !== active)
   const titles = { create: "新建用户", edit: "编辑用户", password: "重置密码", revoke: "撤销登录" }
@@ -89,11 +89,11 @@ export function UserManagementDialog({ action, onClose, onSaved }: {
               <FieldLabel id="managed-role-label">用户等级</FieldLabel>
               <ToggleGroup aria-labelledby="managed-role-label" variant="pill" size="lg" spacing={1} value={[role]} disabled={busy || self || roles.length === 1} onValueChange={values => { if (values[0] && roles.includes(values[0])) setRole(values[0]) }}>
                 <ToggleGroupItem value="USER" aria-label={roleNames.USER} title={roleNames.USER}>LT1</ToggleGroupItem>
-                <ToggleGroupItem value="LT2" disabled aria-label="LT2（暂未开放）" title="LT2（暂未开放）">LT2</ToggleGroupItem>
+                <ToggleGroupItem value="LEVEL_2" aria-label={roleNames.LEVEL_2} title={roleNames.LEVEL_2}>LT2</ToggleGroupItem>
                 <ToggleGroupItem value="ADMIN" disabled={!roles.includes("ADMIN")} aria-label={roleNames.ADMIN} title={roleNames.ADMIN}>LT3</ToggleGroupItem>
                 <ToggleGroupItem value="SUPER_ADMIN" disabled={!roles.includes("SUPER_ADMIN")} aria-label={roleNames.SUPER_ADMIN} title={roleNames.SUPER_ADMIN}>LT4</ToggleGroupItem>
               </ToggleGroup>
-              <FieldDescription>{self ? "不能修改自己的角色或停用自己的账户。" : actor.role === "SUPER_ADMIN" ? "管理员可管理普通用户；超级管理员可管理所有角色。" : "管理员只能创建和管理普通用户，角色调整由超级管理员完成。"} LT2 暂未开放。</FieldDescription>
+              <FieldDescription>{self ? "不能修改自己的角色或停用自己的账户。" : actor.role === "SUPER_ADMIN" ? "管理员可管理 LT1、LT2 用户；超级管理员可管理所有角色。" : "管理员可创建和管理 LT1、LT2 用户。"}</FieldDescription>
             </Field>
             {action.kind === "edit" && <Field data-disabled={busy || self}>
               <FieldLabel id="managed-status-label">账户状态</FieldLabel>

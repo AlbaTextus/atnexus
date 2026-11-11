@@ -71,6 +71,20 @@ func (p *Postgres) Mutate(ctx context.Context, fn func(context.Context) error) e
 		return err
 	}
 	defer tx.Rollback(context.WithoutCancel(ctx))
+	receipt, _ := ctx.Value(receiptKey{}).(*MutationReceipt)
+	if receipt != nil {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,117))`, receipt.ID); err != nil {
+			return err
+		}
+		var raw []byte
+		err := tx.QueryRow(ctx, `SELECT response FROM "MutationReceipt" WHERE id=$1::uuid`, receipt.ID).Scan(&raw)
+		if err == nil {
+			return json.Unmarshal(raw, receipt)
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+	}
 	m := &mutation{tx: tx, before: make(map[int32]map[string]map[string]any), chapterBodies: make(map[int32]string)}
 	ctx = context.WithValue(ctx, mutationKey{}, m)
 	if err := fn(ctx); err != nil {
@@ -113,6 +127,15 @@ func (p *Postgres) Mutate(ctx context.Context, fn func(context.Context) error) e
 	var finish func(context.Context, bool) error
 	if len(drafts) > 0 && p.RecordChanges != nil {
 		if finish, err = p.RecordChanges(ctx, drafts); err != nil {
+			return err
+		}
+	}
+	if receipt != nil {
+		raw, encodeErr := json.Marshal(receipt)
+		if encodeErr != nil {
+			return encodeErr
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO "MutationReceipt"(id,response) VALUES($1::uuid,$2)`, receipt.ID, raw); err != nil {
 			return err
 		}
 	}

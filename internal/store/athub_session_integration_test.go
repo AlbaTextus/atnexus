@@ -18,6 +18,11 @@ func TestATHubSessionAccountingIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Key quotas must not restrict the library's signed session reads.
+	zero := int64(0)
+	if _, err := st.SetATHubKeyLimit(ctx, "USER", &zero, userID); err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		name, setup string
 		allowed     bool

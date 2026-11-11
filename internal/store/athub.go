@@ -68,6 +68,7 @@ type ATHubUsage struct {
 	Until         *time.Time        `json:"until,omitempty"`
 	BucketSeconds int               `json:"bucket_seconds,omitempty"`
 	Trend         []ATHubUsagePoint `json:"trend,omitempty"`
+	Quota         *ATHubCallQuota   `json:"quota,omitempty"`
 }
 
 type ATHubUsagePoint struct {
@@ -98,6 +99,11 @@ type ATHubStore interface {
 func (p *Postgres) CheckATHubSchema(ctx context.Context) error {
 	for _, query := range []string{
 		`SELECT athub_disabled FROM users LIMIT 0`,
+		`SELECT role,total_call_limit,updated_by,updated_at FROM athub_key_limits LIMIT 0`,
+		`SELECT role,review_required,updated_at FROM athub_role_policies LIMIT 0`,
+		`SELECT role,operation,method,path,allowed,total_call_limit FROM athub_access_rules LIMIT 0`,
+		`SELECT id,user_id,payload,status,reviewer_id FROM athub_reviews LIMIT 0`,
+		`SELECT operation FROM athub_api_calls LIMIT 0`,
 		`SELECT id,user_id,name,token_hash,prefix,created_at,expires_at,revoked_at,last_used_at,is_current FROM athub_api_keys LIMIT 0`,
 		`SELECT id,user_id,key_id,request_id,method,path,port,authenticated,status,duration_ms,response_bytes,started_at,completed_at FROM athub_api_calls LIMIT 0`,
 	} {
@@ -225,15 +231,17 @@ func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
-	denied := false
+	denied, limited := false, false
+	var permissionErr error
 	if call.Authenticated {
 		var userAllowed, keyAllowed bool
+		var role string
 		if call.UserID == nil || (call.KeyID == nil && call.SessionID == nil) {
 			return ErrNotFound
 		}
 		// Use the same lock order as administrator changes and rotations. Recheck
 		// before dispatch so an earlier lookup cannot outlive a committed ban.
-		if err := tx.QueryRow(ctx, `SELECT is_active AND NOT athub_disabled FROM users WHERE id=$1 FOR SHARE`, call.UserID).Scan(&userAllowed); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT is_active AND NOT athub_disabled,role FROM users WHERE id=$1 FOR UPDATE`, call.UserID).Scan(&userAllowed, &role); err != nil {
 			return err
 		}
 		if call.SessionID != nil {
@@ -249,10 +257,38 @@ func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 		denied = !userAllowed || !keyAllowed
 		if denied {
 			call.Authenticated = false
+		} else if call.KeyID != nil {
+			var limit *int64
+			// The key row above serializes admission. Read the count in a separate
+			// statement after acquiring it so concurrent calls see committed usage.
+			// Lock settings too: a committed administrator change applies to the
+			// next admitted call. Session-based library reads are not key calls.
+			if err := tx.QueryRow(ctx, `SELECT total_call_limit FROM athub_key_limits WHERE role=$1 FOR SHARE`, role).Scan(&limit); err != nil {
+				return err
+			}
+			if limit != nil {
+				var used int64
+				if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM athub_api_calls WHERE key_id=$1 AND authenticated`, call.KeyID).Scan(&used); err != nil {
+					return err
+				}
+				limited = used >= *limit
+				if limited {
+					call.Authenticated = false
+				}
+			}
+		}
+		if call.Authenticated {
+			permissionErr = checkATHubRule(ctx, tx, call, role)
+			if permissionErr != nil && !errors.Is(permissionErr, ErrATHubPermissionDenied) {
+				return permissionErr
+			}
+			if permissionErr != nil {
+				call.Authenticated = false
+			}
 		}
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,port,authenticated)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, call.ID, call.UserID, call.KeyID, call.RequestID, call.Method, call.Path, call.Port, call.Authenticated)
+	_, err = tx.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,port,authenticated,operation)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, call.ID, call.UserID, call.KeyID, call.RequestID, call.Method, call.Path, call.Port, call.Authenticated, ATHubOperation(call.Method, call.Path))
 	if err != nil {
 		return err
 	}
@@ -266,6 +302,12 @@ func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 	}
 	if denied {
 		return ErrATHubAccessDenied
+	}
+	if limited {
+		return ErrATHubCallLimit
+	}
+	if permissionErr != nil {
+		return permissionErr
 	}
 	return nil
 }
@@ -318,6 +360,21 @@ func (p *Postgres) athubUsage(ctx context.Context, userID uuid.UUID, from, until
 	if err != nil {
 		return result, err
 	}
+	// Quota follows the current key's lifetime usage, independent of the chart range.
+	var quota ATHubCallQuota
+	var used int64
+	if err := tx.QueryRow(ctx, `SELECT l.total_call_limit,
+		(SELECT COUNT(*) FROM athub_api_calls c WHERE c.key_id=k.id AND c.authenticated)
+		FROM users u JOIN athub_key_limits l ON l.role=u.role
+		LEFT JOIN athub_api_keys k ON k.user_id=u.id AND k.is_current
+		WHERE u.id=$1`, userID).Scan(&quota.TotalCallLimit, &used); err != nil {
+		return result, err
+	}
+	if quota.TotalCallLimit != nil {
+		remaining := max(int64(0), *quota.TotalCallLimit-used)
+		quota.RemainingCalls = &remaining
+	}
+	result.Quota = &quota
 	return result, tx.Commit(ctx)
 }
 

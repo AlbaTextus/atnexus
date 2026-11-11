@@ -56,7 +56,7 @@ func managedUserView(u store.ManagedUser) map[string]any {
 }
 
 func validUserRole(role string) bool {
-	return role == "USER" || role == "ADMIN" || role == "SUPER_ADMIN"
+	return store.RoleLevel(role) > 0
 }
 
 func (a *API) listUsers(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +112,7 @@ func (a *API) createManagedUser(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "invalid_request", "error_description": "请填写有效邮箱、12–72 字节的密码、最多 100 字符的昵称及有效角色。"})
 		return
 	}
-	if actor.Role != "SUPER_ADMIN" && in.Role != "USER" {
+	if actor.Role != "SUPER_ADMIN" && in.Role != "USER" && in.Role != "LEVEL_2" {
 		a.userManagementError(w, store.ErrUserForbidden)
 		return
 	}

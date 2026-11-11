@@ -7,6 +7,7 @@ import { Archive, BookOpen, Download, FileText, Image, Library, Tags, UserRound 
 import { Badge } from "./ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { PublicationCard } from "./publication-card";
 import { ContributorsCard } from "./contributors-card";
@@ -47,9 +48,9 @@ export function NovelDetail({novel}: {novel: DemoNovel}) {
   </aside>
   <div className="main-column"><Tabs value={tab} onValueChange={setTab}>
     <div className="novel-section-navigation"><TabsList className="novel-section-tabs" aria-label="作品内容">
-      <TabsTrigger value="intro" aria-label="作品简介" title="作品简介"><FileText aria-hidden="true"/></TabsTrigger>
-      <TabsTrigger value="downloads" aria-label="下载" title="下载"><Download aria-hidden="true"/></TabsTrigger>
-      <TabsTrigger value="catalog" aria-label="章节目录" title="章节目录"><Library aria-hidden="true"/></TabsTrigger>
+      <Tooltip><TabsTrigger value="intro" asChild><TooltipTrigger aria-label="作品简介"><FileText aria-hidden="true"/></TooltipTrigger></TabsTrigger><TooltipContent>作品简介</TooltipContent></Tooltip>
+      <Tooltip><TabsTrigger value="catalog" data-section="catalog" asChild><TooltipTrigger aria-label="章节目录"><Library aria-hidden="true"/></TooltipTrigger></TabsTrigger><TooltipContent>章节目录</TooltipContent></Tooltip>
+      <Tooltip><TabsTrigger value="downloads" data-section="downloads" asChild><TooltipTrigger aria-label="下载"><Download aria-hidden="true"/></TooltipTrigger></TabsTrigger><TooltipContent>下载</TooltipContent></Tooltip>
     </TabsList></div>
     <TabsContent value="intro"><section className="panel introduction" aria-label="作品简介"><h2 className="content-section-heading m-0 text-lg font-bold tracking-tight text-foreground sm:text-xl">简介</h2><div className="synopsis">{novel.synopsis.map((p,i)=><p key={i}>{p}</p>)}</div></section><GallerySection/></TabsContent>
     <TabsContent value="downloads"><DownloadSection/></TabsContent>

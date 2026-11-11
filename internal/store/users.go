@@ -99,7 +99,7 @@ func (p *Postgres) userManagementTx(ctx context.Context, actorID uuid.UUID) (pgx
 }
 
 func canManageUser(actor User, targetRole string) bool {
-	return actor.Role == "SUPER_ADMIN" || (actor.Role == "ADMIN" && targetRole == "USER")
+	return actor.Role == "SUPER_ADMIN" || (actor.Role == "ADMIN" && (targetRole == "USER" || targetRole == "LEVEL_2"))
 }
 
 func (p *Postgres) CreateManagedUser(ctx context.Context, actorID uuid.UUID, input UserSeed) (ManagedUser, error) {

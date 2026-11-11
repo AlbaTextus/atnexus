@@ -78,8 +78,23 @@ func (a *API) serveContent(w http.ResponseWriter, r *http.Request) {
 	}); ok &&
 		(r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete || r.Method == http.MethodPatch) {
 		buffer := &bufferedResponse{header: make(http.Header)}
-		err = st.Mutate(ctx, func(ctx context.Context) error { return a.dispatch(buffer, r.WithContext(ctx)) })
+		mutationCtx, receipt := storage.NewMutationReceipt(ctx)
+		err = st.Mutate(mutationCtx, func(ctx context.Context) error {
+			err := a.dispatch(buffer, r.WithContext(ctx))
+			if receipt != nil {
+				receipt.Header = buffer.header
+				receipt.Status = buffer.status
+				receipt.Body = buffer.body.Bytes()
+			}
+			return err
+		})
 		if err == nil {
+			if receipt != nil {
+				buffer.header = receipt.Header
+				buffer.status = receipt.Status
+				buffer.body.Reset()
+				_, _ = buffer.body.Write(receipt.Body)
+			}
 			for key, values := range buffer.header {
 				w.Header()[key] = values
 			}

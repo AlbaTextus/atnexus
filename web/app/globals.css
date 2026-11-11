@@ -1,1 +1,11 @@
 @import "../styles/oauth.css";
+
+/* Apply the site's default scale to content and body-mounted portals alike. */
+html { --site-scale: 0.8; zoom: var(--site-scale); }
+
+/* Viewport units do not account for CSS zoom; keep full-page shells full height. */
+html body,
+html :is(.home-shell, .auth-shell, .center-shell, .maintenance-shell, .not-found-shell, .novel-workspace) {
+  min-height: calc(100vh / var(--site-scale));
+  min-height: calc(100svh / var(--site-scale));
+}

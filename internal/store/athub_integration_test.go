@@ -50,10 +50,15 @@ func athubTestStore(t *testing.T) *Postgres {
 	}
 	t.Cleanup(pool.Close)
 	// Minimal existing users contract; apply the real new migration unchanged.
-	if _, err := pool.Exec(ctx, `CREATE TABLE users(id uuid PRIMARY KEY,is_active boolean NOT NULL DEFAULT true)`); err != nil {
+	if _, err := pool.Exec(ctx, `CREATE TABLE users(id uuid PRIMARY KEY,is_active boolean NOT NULL DEFAULT true,display_name text,role varchar(20) NOT NULL DEFAULT 'USER',
+		CONSTRAINT users_role_check CHECK(role IN ('USER','ADMIN','SUPER_ADMIN')));
+		CREATE TABLE oauth_clients(id text PRIMARY KEY,name text NOT NULL,homepage_url text NOT NULL DEFAULT '',
+		description text NOT NULL DEFAULT '',icon_url text NOT NULL DEFAULT '',is_active boolean NOT NULL DEFAULT true,
+		minimum_role varchar(20) NOT NULL DEFAULT 'USER',allowed_grant_types text[] NOT NULL DEFAULT ARRAY['authorization_code'],
+		CONSTRAINT oauth_clients_minimum_role_check CHECK(minimum_role IN ('USER','ADMIN','SUPER_ADMIN')))`); err != nil {
 		t.Fatal(err)
 	}
-	for _, migration := range []string{"20261110000000_athub_user_keys", "20261110010000_athub_single_key", "20261110020000_athub_admin_disable"} {
+	for _, migration := range []string{"20261110000000_athub_user_keys", "20261110010000_athub_single_key", "20261110020000_athub_admin_disable", "20261111000000_athub_key_limits", "20261111010000_enable_level_2", "20261111020000_athub_permissions_reviews"} {
 		sql, err := os.ReadFile("../../prisma/migrations/" + migration + "/migration.sql")
 		if err != nil {
 			t.Fatal(err)

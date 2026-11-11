@@ -233,6 +233,7 @@ func (p *Postgres) CheckSchema(ctx context.Context) error {
 	// Fail at startup rather than silently creating or migrating Prisma-owned tables.
 	for _, query := range []string{
 		`SELECT "id", "platformId", "name" FROM "Author" LIMIT 0`,
+		`SELECT id,response FROM "MutationReceipt" LIMIT 0`,
 		`SELECT "id", "name", "url" FROM "Platform" LIMIT 0`,
 		`SELECT "id", "name" FROM "Tag" LIMIT 0`,
 		`SELECT "novelId", "tagId" FROM "NovelTag" LIMIT 0`,

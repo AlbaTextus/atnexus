@@ -27,7 +27,7 @@ export type OAuthMetadata = {
   introspection_endpoint: string
 }
 
-export const roleNames: Record<string, string> = { USER: "1 级 · 普通用户", ADMIN: "3 级 · 管理员", SUPER_ADMIN: "4 级 · 超级管理员" }
+export const roleNames: Record<string, string> = { USER: "1 级 · 普通用户", LEVEL_2: "2 级 · 用户", ADMIN: "3 级 · 管理员", SUPER_ADMIN: "4 级 · 超级管理员" }
 export const isAdminRole = (role: string) => role === "ADMIN" || role === "SUPER_ADMIN"
 
 export function managementError(error: unknown): string {

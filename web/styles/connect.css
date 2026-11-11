@@ -424,6 +424,20 @@ body { min-height: 100vh; margin: 0; background: var(--page-canvas); color: var(
 .dark .center-header::before { background: color-mix(in srgb, var(--background) 92%, transparent); border-color: var(--border); }
 .dark .center-header .center-nav { --center-nav-foreground: var(--foreground); }
 .dark .center-header .center-nav-highlight, .dark .center-header .center-nav-link:hover { background: var(--accent); }
+.center-header .center-nav-link[data-tone="blue"] { --nav-tone: #2563eb; }
+.center-header .center-nav-link[data-tone="teal"] { --nav-tone: #0d9488; }
+.center-header .center-nav-link[data-tone="violet"] { --nav-tone: #7c3aed; }
+.center-header .center-nav-link[data-tone="pink"] { --nav-tone: #db2777; }
+.center-header .center-nav-link[data-tone="orange"] { --nav-tone: #ea580c; }
+.dark .center-header .center-nav-link[data-tone="blue"] { --nav-tone: #60a5fa; }
+.dark .center-header .center-nav-link[data-tone="teal"] { --nav-tone: #2dd4bf; }
+.dark .center-header .center-nav-link[data-tone="violet"] { --nav-tone: #a78bfa; }
+.dark .center-header .center-nav-link[data-tone="pink"] { --nav-tone: #f472b6; }
+.dark .center-header .center-nav-link[data-tone="orange"] { --nav-tone: #fb923c; }
+.center-header .center-nav-link[data-tone] .center-nav-icon { color: var(--nav-tone); }
+.center-header .center-nav-link[data-tone] .center-nav-highlight { background: color-mix(in srgb, var(--nav-tone) 13%, transparent); }
+.center-header .center-nav-link[data-tone]:hover { background: color-mix(in srgb, var(--nav-tone) 9%, transparent); }
+.center-header .center-nav-link[data-tone]:focus-visible { outline-color: var(--nav-tone); }
 .dark .center-userbar [data-maintenance-active="true"] { --secondary: #2a3443; --secondary-foreground: #c6dcfa; }
 
 /* Connect app/globals.css: footer brand typography supplements site.css. */

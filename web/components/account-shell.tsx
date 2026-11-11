@@ -16,10 +16,9 @@ import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SiteHeader, navigationTransition, type NavigationItem } from "@/components/site-header"
-import { MaintenanceControl } from "@/components/maintenance-control"
 import { ThemeToggle } from "@/components/theme-toggle"
 
-export type AccountUser = { id: string; numeric_id: number; bio?: string; email: string; email_verified?: boolean; profile_setup_required?: boolean; display_name?: string | null; role: string; level: 1 | 3 | 4; created_at?: string; has_password?: boolean; email_is_alias?: boolean; avatar_source?: string; avatar_url?: string; custom_avatar_url?: string }
+export type AccountUser = { id: string; numeric_id: number; bio?: string; email: string; email_verified?: boolean; profile_setup_required?: boolean; display_name?: string | null; role: string; level: 1 | 2 | 3 | 4; created_at?: string; has_password?: boolean; email_is_alias?: boolean; avatar_source?: string; avatar_url?: string; custom_avatar_url?: string }
 const AccountContext = createContext<{ user: AccountUser; updateUser: (user: AccountUser) => void } | null>(null)
 function useAccountContext() {
   const context = useContext(AccountContext)
@@ -30,15 +29,16 @@ export function useAccountUser() { return useAccountContext().user }
 export function useUpdateAccountUser() { return useAccountContext().updateUser }
 
 const userNavigation: NavigationItem[] = [
-  { href: "/account", title: "用户中心", icon: House },
-  { href: "/account/profile", title: "个人资料", icon: UserRound },
-  { href: "/account/security", title: "账户安全", icon: ShieldCheck },
-  { href: "/account/key", title: "API 密钥", icon: KeyRound },
+  { href: "/account", title: "用户中心", icon: House, tone: "orange" },
+  { href: "/account/profile", title: "个人资料", icon: UserRound, tone: "blue" },
+  { href: "/account/security", title: "账户安全", icon: ShieldCheck, tone: "teal" },
+  { href: "/account/key", title: "API 密钥", icon: KeyRound, tone: "violet" },
 ]
 const adminNavigation: NavigationItem[] = [
-  { href: "/admin/users", title: "用户管理", icon: Users },
-  { href: "/admin/usage", title: "调用统计", icon: Activity },
-  { href: "/admin/applications", title: "应用接入", icon: LayoutGrid },
+  { href: "/admin/users", title: "用户管理", icon: Users, tone: "blue" },
+  { href: "/admin/usage", title: "调用统计", icon: Activity, tone: "teal" },
+  { href: "/admin/applications", title: "应用接入", icon: LayoutGrid, tone: "violet" },
+  { href: "/admin/settings", title: "配置", icon: Settings2, tone: "pink" },
 ]
 
 export function AccountShell({ children, area = "account", initialUser }: { children: ReactNode; area?: "account" | "admin"; initialUser?: AccountUser }) {
@@ -55,8 +55,8 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
   const active = navigation.find(item => item.href === accountPath ? pathname === item.href : pathname.startsWith(item.href))
   const title = area === "admin" && !denied ? "管理后台" : "用户中心"
   const areaLink: NavigationItem = area === "admin"
-    ? { href: accountPath, title: "用户中心", icon: House }
-    : { href: "/admin/users", title: "管理后台", icon: Settings2 }
+    ? { href: accountPath, title: "用户中心", icon: House, tone: "orange" }
+    : { href: "/admin/users", title: "管理后台", icon: Settings2, tone: "pink" }
 
   useLayoutEffect(() => {
     if (!user || denied) return
@@ -98,7 +98,7 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
       <a className="center-skip" href="#center-content">跳转到主要内容</a>
       <SiteHeader items={admin ? [...navigation, areaLink] : navigation} activeHref={active?.href}
         navigationLabel={title + "导航"} routeKey={pathname} LinkComponent={Link}
-        actions={<><ThemeToggle />{user?.role === "SUPER_ADMIN" && <MaintenanceControl />}<Button variant="ghost" size="icon" aria-label="退出登录" disabled={!user || leaving} onClick={logout}><LogOut /></Button></>} />
+        actions={<><ThemeToggle /><Button variant="ghost" size="icon" aria-label="退出登录" disabled={!user || leaving} onClick={logout}><LogOut /></Button></>} />
       <div className="center-workspace">
         <main id="center-content" tabIndex={-1} className="center-content">
           {error && <Alert variant="destructive" className="mb-6"><AlertCircle /><AlertDescription>{error} <Button variant="link" onClick={() => window.location.reload()}>重新加载</Button></AlertDescription></Alert>}

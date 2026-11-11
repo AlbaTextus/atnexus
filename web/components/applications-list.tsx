@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
-const minimumLevels: Record<string, string> = { USER: "LT1", ADMIN: "LT3", SUPER_ADMIN: "LT4" }
+const minimumLevels: Record<string, string> = { USER: "LT1", LEVEL_2: "LT2", ADMIN: "LT3", SUPER_ADMIN: "LT4" }
 
 export function ApplicationsList() {
   const [apps, setApps] = useState<Application[]>([])

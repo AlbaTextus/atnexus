@@ -11,7 +11,7 @@ export type UserListResult = {
 }
 
 export function canManageUser(actor: AccountUser, target: AccountUser) {
-  return actor.role === "SUPER_ADMIN" || (actor.role === "ADMIN" && target.role === "USER")
+  return actor.role === "SUPER_ADMIN" || (actor.role === "ADMIN" && (target.role === "USER" || target.role === "LEVEL_2"))
 }
 
 export function userManagementError(error: unknown) {

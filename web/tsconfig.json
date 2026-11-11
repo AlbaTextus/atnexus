@@ -58,7 +58,9 @@
     "temp/ui-adaptation-dev/types/**/*.ts",
     "temp/ui-adaptation-dev/dev/types/**/*.ts",
     "temp/next-webpack-20261101/types/**/*.ts",
-    "temp/next-webpack-20261101/dev/types/**/*.ts"
+    "temp/next-webpack-20261101/dev/types/**/*.ts",
+    "temp/quota-ring-dev/types/**/*.ts",
+    "temp/quota-ring-dev/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

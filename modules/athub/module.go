@@ -30,6 +30,11 @@ func WithContributor(ctx context.Context, contributor Contributor) context.Conte
 	return storage.WithContributor(ctx, contributor)
 }
 
+// WithMutationID is used only by the host's approved-submission executor.
+func WithMutationID(ctx context.Context, id string) context.Context {
+	return storage.WithMutationID(ctx, id)
+}
+
 func (c Config) Validate() error {
 	if strings.TrimSpace(c.DatabaseURL) == "" {
 		return errors.New("ATHUB_DATABASE_URL is required")

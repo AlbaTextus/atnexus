@@ -7,7 +7,7 @@ import { BrandWordmark } from "@/components/brand-wordmark"
 import { useHeaderCollapse } from "@/hooks/use-header-collapse"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
-export type NavigationItem = { href: string; title: string; icon: LucideIcon }
+export type NavigationItem = { href: string; title: string; icon: LucideIcon; tone?: "blue" | "teal" | "violet" | "pink" | "orange" }
 export const navigationTransition = { duration: 0.32, ease: [0.22, 1, 0.36, 1] } as const
 
 /** The account center and other AlbaTextus apps render the exact same header. */
@@ -30,6 +30,7 @@ export function SiteHeader({ items, activeHref, navigationLabel, routeKey, brand
             return <Tooltip key={item.href}>
               <TooltipTrigger render={<MotionLink href={item.href} {...(LinkComponent !== "a" ? { prefetch: true } : {})}
               className={active ? "center-nav-link is-active" : "center-nav-link"}
+              data-tone={item.tone}
               aria-label={item.title} aria-current={active ? "page" : undefined} tabIndex={0}
               transition={transition} whileHover={reducedMotion ? undefined : { y: -1 }} whileTap={reducedMotion ? undefined : { scale: 0.97 }} />}>
               {active && <motion.span className="center-nav-highlight" layoutId={reducedMotion ? undefined : "active-navigation"} transition={transition} aria-hidden="true" />}

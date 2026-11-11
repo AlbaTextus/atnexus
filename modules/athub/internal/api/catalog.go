@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"albatextus/athub/internal/storage"
 )
@@ -107,14 +108,52 @@ func (a *API) authors(w http.ResponseWriter, r *http.Request) error {
 		if input.PlatformID <= 0 {
 			return badRequest("platformId must be a positive 32-bit integer")
 		}
+		if err := normalizeAuthorName(&input.Name); err != nil {
+			return err
+		}
 		item, err := a.store.CreateAuthor(r.Context(), input)
 		if err != nil {
 			return err
 		}
 		w.Header().Set("Location", "/api/v2/authors?id="+strconv.FormatInt(int64(item.ID), 10))
 		return writeJSON(w, http.StatusCreated, item)
+	case http.MethodPut:
+		id, err := onlyID(query)
+		if err != nil {
+			return err
+		}
+		var input struct {
+			Name *string `json:"name"`
+		}
+		if err := decodeJSON(w, r, &input); err != nil {
+			return err
+		}
+		if err := normalizeAuthorName(&input.Name); err != nil {
+			return err
+		}
+		item, err := a.store.UpdateAuthorName(r.Context(), id, input.Name)
+		if err != nil {
+			return err
+		}
+		return writeJSON(w, http.StatusOK, item)
 	default:
-		w.Header().Set("Allow", "GET, POST")
+		w.Header().Set("Allow", "GET, POST, PUT")
 		return &requestError{http.StatusMethodNotAllowed, "method not allowed"}
 	}
+}
+
+func normalizeAuthorName(name **string) error {
+	if *name == nil {
+		return nil
+	}
+	value := strings.TrimSpace(**name)
+	if strings.ContainsRune(value, 0) || utf8.RuneCountInString(value) > 200 {
+		return badRequest("author name must be at most 200 characters and cannot contain NUL")
+	}
+	if value == "" {
+		*name = nil
+	} else {
+		*name = &value
+	}
+	return nil
 }

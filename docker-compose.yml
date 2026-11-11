@@ -1,3 +1,5 @@
+name: atnexus
+
 services:
   redis:
     image: redis:7-alpine
@@ -43,7 +45,7 @@ services:
       timeout: 5s
       retries: 10
 
-  oauth:
+  atnexus:
     build: .
     environment:
       APP_ENV: development
@@ -89,17 +91,19 @@ services:
       context: .
       dockerfile: web/Dockerfile
       args:
-        OAUTH_BACKEND_URL: http://oauth:8001
-        ATHUB_BACKEND_URL: http://oauth:8003
+        OAUTH_BACKEND_URL: http://atnexus:8001
         NEXT_PUBLIC_WIKI_URL: ${NEXT_PUBLIC_WIKI_URL:-http://localhost:3200}
+        NEXT_PUBLIC_ATHUB_API_URL: ${NEXT_PUBLIC_ATHUB_API_URL:-http://localhost:8003}
     environment:
-      OAUTH_BACKEND_URL: http://oauth:8001
-      ATHUB_BACKEND_URL: http://oauth:8003
+      OAUTH_BACKEND_URL: http://atnexus:8001
     ports:
       - "3288:3288"
     depends_on:
-      - oauth
+      - atnexus
 
 volumes:
   oauth-postgres:
+    # Keep the original database volumes when upgrading from the oauth project.
+    name: ${ACCOUNT_POSTGRES_VOLUME:-oauth_oauth-postgres}
   athub-postgres:
+    name: ${ATHUB_POSTGRES_VOLUME:-oauth_athub-postgres}

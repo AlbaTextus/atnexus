@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AlbaTextus/oauth/internal/security"
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/atnexus/internal/security"
+	"github.com/AlbaTextus/atnexus/internal/store"
 	"github.com/google/uuid"
 )
 
@@ -23,6 +23,11 @@ type accessStore struct {
 	call                            store.ATHubCall
 	status                          int
 	finished                        bool
+}
+
+func (s *accessStore) UserByID(_ context.Context, id uuid.UUID) (store.User, error) {
+	name := "测试贡献者"
+	return store.User{ID: id, NumericID: 1, DisplayName: &name, IsActive: true}, nil
 }
 
 func (s *accessStore) ResolveATHubKey(_ context.Context, hash string) (store.ATHubIdentity, error) {
@@ -137,5 +142,21 @@ func TestCompletionSurvivesCancellationAndPanic(t *testing.T) {
 		if s.call.Path != "/api/v2/{unknown}" {
 			t.Fatal("unbounded path entered accounting")
 		}
+	}
+}
+
+func TestTagsUseAuthenticatedAccounting(t *testing.T) {
+	s := &accessStore{identity: store.ATHubIdentity{KeyID: uuid.New(), UserID: uuid.New(), Active: true}}
+	dispatched := false
+	handler := accessFor(t, s).Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		dispatched = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	r := httptest.NewRequest("DELETE", "/api/v2/tags?id=3", nil)
+	r.Header.Set("Authorization", "Bearer ath_"+strings.Repeat("a", 43))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if !dispatched || w.Code != http.StatusNoContent || !s.finished || s.call.Path != "/api/v2/tags" || !s.call.Authenticated {
+		t.Fatalf("tags authentication or accounting failed: status=%d call=%+v", w.Code, s.call)
 	}
 }

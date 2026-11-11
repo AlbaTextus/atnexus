@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/atnexus/internal/store"
 )
 
 func (a *API) updateAvatar(w http.ResponseWriter, r *http.Request) {

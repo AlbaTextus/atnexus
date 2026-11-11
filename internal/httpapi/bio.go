@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/atnexus/internal/store"
 	"net/http"
 	"strings"
 	"unicode/utf8"

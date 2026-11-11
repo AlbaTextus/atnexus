@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/oauth/internal/oauth"
-	"github.com/AlbaTextus/oauth/internal/security"
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/atnexus/internal/oauth"
+	"github.com/AlbaTextus/atnexus/internal/security"
+	"github.com/AlbaTextus/atnexus/internal/store"
 )
 
 func (a *API) consentStore(w http.ResponseWriter) (store.ConsentStore, bool) {

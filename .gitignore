@@ -11,6 +11,8 @@ web/node_modules/
 web/.vercel/
 *.tsbuildinfo
 oauth.exe
+atnexus
+atnexus.exe
 connect.exe
 seed.exe
 server.exe

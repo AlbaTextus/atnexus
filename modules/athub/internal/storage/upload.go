@@ -7,8 +7,13 @@ import (
 )
 
 func (p *Postgres) Upload(ctx context.Context, input UploadInput) (UploadResult, error) {
+	if input.NovelID != nil {
+		if err := p.trackNovel(ctx, *input.NovelID, false); err != nil {
+			return UploadResult{}, err
+		}
+	}
 	result := UploadResult{Volumes: make([]Volume, 0), Chapters: make([]UploadedChapter, 0)}
-	tx, err := p.pool.Begin(ctx)
+	tx, err := p.db(ctx).Begin(ctx)
 	if err != nil {
 		return UploadResult{}, err
 	}
@@ -17,10 +22,15 @@ func (p *Postgres) Upload(ctx context.Context, input UploadInput) (UploadResult,
 		result.Novel, err = createNovel(ctx, tx, *input.Novel)
 	} else {
 		// Serialize uploads to one novel and prevent deletion during the batch.
-		result.Novel, err = scanNovel(tx.QueryRow(ctx, `SELECT `+novelColumns+` FROM "Novel" WHERE "id" = $1 FOR NO KEY UPDATE`, *input.NovelID))
+		result.Novel, err = scanNovel(tx.QueryRow(ctx, `SELECT `+novelReadColumns+` FROM "Novel" WHERE "id" = $1 FOR NO KEY UPDATE`, *input.NovelID))
 	}
 	if err != nil {
 		return UploadResult{}, err
+	}
+	if input.NovelID == nil {
+		if err := p.trackNovel(ctx, result.Novel.ID, true); err != nil {
+			return UploadResult{}, err
+		}
 	}
 	if len(input.Volumes) > 0 {
 		result.Volumes, err = uploadVolumes(ctx, tx, result.Novel.ID, input.Volumes)
@@ -55,6 +65,13 @@ func (p *Postgres) Upload(ctx context.Context, input UploadInput) (UploadResult,
 		}
 	}
 	batch := &pgx.Batch{}
+	chapterOrders := make([]int32, 0, len(input.Chapters))
+	for _, c := range input.Chapters {
+		chapterOrders = append(chapterOrders, c.Order)
+	}
+	if err := p.trackChapterBodies(ctx, tx, result.Novel.ID, chapterOrders); err != nil {
+		return UploadResult{}, err
+	}
 	for _, c := range input.Chapters {
 		var volumeID *int32
 		if c.VolumeOrder != nil {

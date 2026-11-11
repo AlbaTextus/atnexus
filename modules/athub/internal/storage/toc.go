@@ -7,7 +7,7 @@ import (
 
 func (p *Postgres) GetTOC(ctx context.Context, novelID int32) (TOC, error) {
 	// One snapshot includes empty volumes and ungrouped chapters without reading content.
-	rows, err := p.pool.Query(ctx, `SELECT t.kind, t."id", t."volumeId", t."order", t."title", t."createdAt", t."updatedAt"
+	rows, err := p.db(ctx).Query(ctx, `SELECT t.kind, t."id", t."volumeId", t."order", t."title", t."createdAt", t."updatedAt"
 		FROM "Novel" n LEFT JOIN LATERAL (
 			SELECT 0 AS kind, "id", NULL::integer AS "volumeId", "order", "title", "createdAt", "updatedAt"
 			FROM "Volume" WHERE "novelId" = n."id"

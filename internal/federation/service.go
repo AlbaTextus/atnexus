@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/oauth/internal/config"
-	"github.com/AlbaTextus/oauth/internal/security"
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/atnexus/internal/config"
+	"github.com/AlbaTextus/atnexus/internal/security"
+	"github.com/AlbaTextus/atnexus/internal/store"
 	"golang.org/x/oauth2"
 )
 

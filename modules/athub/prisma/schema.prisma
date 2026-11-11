@@ -23,6 +23,7 @@ model Platform {
 model Author {
   id         Int      @id @default(autoincrement())
   platformId Int
+  name       String?  @db.VarChar(200)
   platform   Platform @relation(fields: [platformId], references: [id], onDelete: Restrict)
   novels     Novel[]
 
@@ -43,9 +44,26 @@ model Novel {
   author     Author?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
   volumes    Volume[]
   chapters   Chapter[]
+  tags       NovelTag[]
 
   @@index([platformId])
   @@index([authorId])
+}
+
+model Tag {
+  id     Int        @id @default(autoincrement())
+  name   String     @unique
+  novels NovelTag[]
+}
+
+model NovelTag {
+  novelId Int
+  tagId   Int
+  novel   Novel @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  tag     Tag   @relation(fields: [tagId], references: [id], onDelete: Restrict)
+
+  @@id([novelId, tagId])
+  @@index([tagId])
 }
 
 model Volume {

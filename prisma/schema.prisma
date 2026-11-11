@@ -42,8 +42,28 @@ model User {
   consentRequests OAuthConsentRequest[]
   athubKeys ATHubAPIKey[]
   athubCalls ATHubAPICall[]
+  novelRevisions NovelRevision[]
 
   @@map("users")
+}
+
+model NovelRevision {
+  id String @id @db.Uuid
+  batchId String @map("batch_id") @db.Uuid
+  novelId Int @map("novel_id")
+  userId String? @map("user_id") @db.Uuid
+  contributor Json
+  changes Json
+  status String @default("pending") @db.VarChar(16)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([batchId, novelId])
+  @@index([novelId, createdAt(sort: Desc), id(sort: Desc)], map: "novel_revisions_novel_history_idx")
+  @@index([batchId], map: "novel_revisions_batch_id_idx")
+  @@index([userId], map: "novel_revisions_user_id_idx")
+  @@map("novel_revisions")
 }
 
 model ATHubAPIKey {

@@ -12,15 +12,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/oauth/internal/security"
-	"github.com/AlbaTextus/oauth/internal/store"
+	"albatextus/athub"
+	"github.com/AlbaTextus/atnexus/internal/security"
+	"github.com/AlbaTextus/atnexus/internal/store"
 	"github.com/google/uuid"
 )
 
 type Access struct {
-	store  store.ATHubStore
-	port   int
-	logger *slog.Logger
+	store      store.ATHubStore
+	port       int
+	logger     *slog.Logger
+	readSecret string
 }
 
 func New(st store.ATHubStore, addr string, logger *slog.Logger) (*Access, error) {
@@ -57,7 +59,7 @@ func tokenFrom(r *http.Request) string {
 // Bound labels keep query-string credentials and arbitrary paths out of audit data.
 func endpoint(path string) string {
 	switch path {
-	case "/api/v2/platforms", "/api/v2/authors", "/api/v2/novelinfo", "/api/v2/volumes", "/api/v2/toc", "/api/v2/content", "/api/v2/upload":
+	case "/api/v2/platforms", "/api/v2/authors", "/api/v2/tags", "/api/v2/novelinfo", "/api/v2/volumes", "/api/v2/toc", "/api/v2/content", "/api/v2/upload", "/api/v3/history", "/api/v3/contributors":
 		return path
 	default:
 		return "/api/v2/{unknown}"
@@ -116,7 +118,17 @@ func (a *Access) Wrap(next http.Handler) http.Handler {
 		call := store.ATHubCall{ID: uuid.New(), RequestID: requestID, Method: method(r.Method), Path: endpoint(r.URL.Path), Port: a.port}
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		token := tokenFrom(r)
-		if token != "" {
+		if len(r.Header.Values("Authorization")) == 1 && r.Method == http.MethodGet && a.readSecret != "" {
+			scheme, credential, ok := strings.Cut(r.Header.Get("Authorization"), " ")
+			if ok && strings.EqualFold(scheme, "Bearer") {
+				if identity, valid := parseReadSession(a.readSecret, credential); valid {
+					call.UserID = &identity.UserID
+					call.SessionID = &identity.SessionID
+					call.Authenticated = true
+				}
+			}
+		}
+		if token != "" && !call.Authenticated {
 			identity, err := a.store.ResolveATHubKey(ctx, security.HashToken(token))
 			if err != nil && !errors.Is(err, store.ErrNotFound) {
 				cancel()
@@ -165,6 +177,18 @@ func (a *Access) Wrap(next http.Handler) http.Handler {
 			capture.Header().Set("WWW-Authenticate", "Bearer")
 			reply(capture, 401, "invalid_api_key")
 			return
+		}
+		if r.URL.Path == "/api/v3/history" || r.URL.Path == "/api/v3/contributors" {
+			a.history(capture, r)
+			return
+		}
+		if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete || r.Method == http.MethodPatch {
+			actor, err := a.contributor(r.Context(), *call.UserID)
+			if err != nil {
+				reply(capture, 503, "contributor_unavailable")
+				return
+			}
+			r = r.WithContext(athub.WithContributor(r.Context(), actor))
 		}
 		next.ServeHTTP(capture, r)
 	})

@@ -7,11 +7,13 @@ import (
 	"time"
 )
 
-func NewContentHandler(v2 http.Handler, pingV2 func(context.Context) error) http.Handler {
+func NewContentHandler(v2 http.Handler, pingV2 func(context.Context) error, allowedOrigins ...string) http.Handler {
 	mux := http.NewServeMux()
 	// Register both forms to avoid redirecting authenticated requests at the boundary.
 	mux.Handle("/api/v2", v2)
 	mux.Handle("/api/v2/", v2)
+	mux.Handle("/api/v3/history", v2)
+	mux.Handle("/api/v3/contributors", v2)
 	mux.Handle("GET /healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
@@ -24,5 +26,5 @@ func NewContentHandler(v2 http.Handler, pingV2 func(context.Context) error) http
 		}
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
-	return mux
+	return contentCORS(mux, allowedOrigins)
 }

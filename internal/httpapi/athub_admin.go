@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/atnexus/internal/store"
 )
 
 func (a *API) managedATHubKey(w http.ResponseWriter, r *http.Request) {

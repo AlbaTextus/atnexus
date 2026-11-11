@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -72,7 +73,55 @@ func (a *API) serveContent(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	r = r.WithContext(ctx)
 	var err error
+	if st, ok := a.store.(interface {
+		Mutate(context.Context, func(context.Context) error) error
+	}); ok &&
+		(r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete || r.Method == http.MethodPatch) {
+		buffer := &bufferedResponse{header: make(http.Header)}
+		err = st.Mutate(ctx, func(ctx context.Context) error { return a.dispatch(buffer, r.WithContext(ctx)) })
+		if err == nil {
+			for key, values := range buffer.header {
+				w.Header()[key] = values
+			}
+			status := buffer.status
+			if status == 0 {
+				status = http.StatusOK
+			}
+			w.WriteHeader(status)
+			_, _ = w.Write(buffer.body.Bytes())
+		}
+	} else {
+		err = a.dispatch(w, r)
+	}
+	if err != nil {
+		a.respondError(w, r, err)
+	}
+}
+
+type bufferedResponse struct {
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func (b *bufferedResponse) Header() http.Header { return b.header }
+func (b *bufferedResponse) WriteHeader(status int) {
+	if b.status == 0 {
+		b.status = status
+	}
+}
+func (b *bufferedResponse) Write(data []byte) (int, error) {
+	if b.status == 0 {
+		b.status = http.StatusOK
+	}
+	return b.body.Write(data)
+}
+
+func (a *API) dispatch(w http.ResponseWriter, r *http.Request) error {
+	var err error
 	switch r.URL.Path {
+	case "/api/v2/tags":
+		err = a.tags(w, r)
 	case "/api/v2/platforms":
 		err = a.platforms(w, r)
 	case "/api/v2/authors":
@@ -89,11 +138,9 @@ func (a *API) serveContent(w http.ResponseWriter, r *http.Request) {
 		err = a.upload(w, r)
 	default:
 		writeError(w, http.StatusNotFound, "not found")
-		return
+		return nil
 	}
-	if err != nil {
-		a.respondError(w, r, err)
-	}
+	return err
 }
 
 type requestError struct {
@@ -106,7 +153,7 @@ func (e *requestError) Error() string { return e.message }
 func badRequest(message string) error { return &requestError{http.StatusBadRequest, message} }
 
 func (a *API) novelInfo(w http.ResponseWriter, r *http.Request) error {
-	query, err := parseQuery(r.URL.RawQuery, "id", "platformId", "authorId", "limit", "offset")
+	query, err := parseQuery(r.URL.RawQuery, "id", "platformId", "authorId", "tagId", "limit", "offset")
 	if err != nil {
 		return err
 	}
@@ -134,11 +181,15 @@ func (a *API) novelInfo(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
+		tagID, err := positiveID(query, "tagId", false)
+		if err != nil {
+			return err
+		}
 		limit, offset, err := pagination(query)
 		if err != nil {
 			return err
 		}
-		novels, err := a.store.ListNovels(r.Context(), storage.NovelFilter{PlatformID: platformID, AuthorID: authorID, Limit: limit, Offset: offset})
+		novels, err := a.store.ListNovels(r.Context(), storage.NovelFilter{PlatformID: platformID, AuthorID: authorID, TagID: tagID, Limit: limit, Offset: offset})
 		if err != nil {
 			return err
 		}
@@ -273,6 +324,16 @@ func (a *API) content(w http.ResponseWriter, r *http.Request) error {
 }
 
 func validateNovel(n *storage.NovelInput) error {
+	seenTags := make(map[int32]bool, len(n.TagIDs))
+	for _, id := range n.TagIDs {
+		if id <= 0 || seenTags[id] {
+			return badRequest("tagIds must contain unique positive 32-bit integers")
+		}
+		seenTags[id] = true
+	}
+	if n.TagIDs == nil {
+		n.TagIDs = []int32{}
+	}
 	if strings.ContainsRune(n.Title, 0) || (n.Summary != nil && strings.ContainsRune(*n.Summary, 0)) || (n.CoverURL != nil && strings.ContainsRune(*n.CoverURL, 0)) {
 		return badRequest("text fields cannot contain NUL characters")
 	}
@@ -442,7 +503,9 @@ func (a *API) respondError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, storage.ErrNotFound):
 		writeError(w, http.StatusNotFound, "record not found")
 	case errors.Is(err, storage.ErrInvalidReference):
-		writeError(w, http.StatusBadRequest, "platform, novel or volume does not exist, author does not belong to platform, or volume does not belong to novel")
+		writeError(w, http.StatusBadRequest, "platform, novel, volume or tag does not exist, author does not belong to platform, or volume does not belong to novel")
+	case errors.Is(err, storage.ErrTagInUse):
+		writeError(w, http.StatusConflict, "tag is still referenced by novels; remove references first")
 	case errors.Is(err, storage.ErrConflict):
 		writeError(w, http.StatusConflict, "record already exists")
 	case errors.Is(err, storage.ErrVolumeNotEmpty):

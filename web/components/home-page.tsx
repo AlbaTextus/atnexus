@@ -3,7 +3,7 @@
 import { Link as TransitionLink } from "next-view-transitions"
 import { useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { motion, useInView } from "framer-motion"
-import { Check, Code2, Fingerprint, Globe2, ShieldCheck, Sparkles, UserRound } from "lucide-react"
+import { Check, Code2, Fingerprint, Globe2, LibraryBig, ShieldCheck, Sparkles, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SiteFooter } from "@/components/site-footer"
 import { CloudflareNetwork } from "@/components/cloudflare-network"
@@ -11,7 +11,7 @@ import { ServiceArchitecture } from "@/components/service-architecture"
 import { HomeHeader } from "@/components/home-header"
 import { CodeHighlighted, ShikiProvider } from "@/components/code-highlighted/index"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { AccountEntryLink } from "@/components/account-entry-link"
+import { IconButton } from "@/components/icon-button"
 
 const authorizationExample = `GET /oauth/authorize
 ?client_id=…&response_type=code&…
@@ -50,7 +50,7 @@ export function HomePage() {
     <a href="#home-main" className="home-skip">跳转到主要内容</a>
     <HomeHeader brandHref="#top" LinkComponent={TransitionLink} actions={<>
       <ThemeToggle />
-      <AccountEntryLink render={<TransitionLink href="/account" />} />
+      <IconButton nativeButton={false} role="link" render={<TransitionLink href="/library" />} label="前往图书馆"><LibraryBig aria-hidden="true" /></IconButton>
     </>} />
 
     <main id="home-main" tabIndex={-1}>

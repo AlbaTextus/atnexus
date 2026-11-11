@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/oauth/internal/security"
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/atnexus/internal/security"
+	"github.com/AlbaTextus/atnexus/internal/store"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 )

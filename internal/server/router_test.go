@@ -21,6 +21,8 @@ func TestContentListenerRouting(t *testing.T) {
 	}{
 		{"/api/v2/content?novelId=7&order=1", 204},
 		{"/api/v2/upload", 204}, {"/api/v2", 204}, {"/api/v2/", 204},
+		{"/api/v3/history?novelId=2", 204}, {"/api/v3/contributors?novelId=2", 204},
+		{"/api/v3/novelinfo", 404}, {"/api/v3/history/other", 404},
 		{"/api/v1/user", 404}, {"/oauth/token", 404},
 		{"/.well-known/oauth-authorization-server", 404},
 		{"/api/v20/content", 404}, {"/api/content", 404},

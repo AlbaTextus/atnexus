@@ -1,12 +1,48 @@
-# ALBATEXTUS 服务（仓库名暂为 OAuth）
+# atnexus
 
-本仓库承载统一 Go 服务：v1 是账户中心与 OAuth 2.0 授权，v2 是 ATHub 内容存储。
+atnexus 是 ALBATEXTUS 的统一服务：v1 是账户中心与 OAuth 2.0 授权，v2 是 ATHub 内容存储。
 两套功能编译成一个程序，由 `cmd/server` 一起初始化，OAuth 监听 `8001`，ATHub 监听 `8003`，分别连接各自数据库。
-仓库名与 Go module 路径暂时保留，后续再确定新名称。
+Go module 路径为 `github.com/AlbaTextus/atnexus`，根工作区包为 `@albatextus/atnexus`，
+账户前端包为 `@albatextus/atnexus-web`，统一程序名为 `atnexus`。
 
 后端使用 Go，前端使用 Next.js、React 和 shadcn/ui，数据存储于 PostgreSQL。Prisma 负责数据库结构与迁移，Go 运行时通过 pgx 访问数据库。
 
 [快速开始](#快速开始) · [登录与账户](#登录与账户) · [应用接入](#应用接入) · [配置与部署](#配置与部署) · [API](#api) · [开发](#开发)
+
+## 小说库界面框架
+
+首页 `/` 保留原有展示页面。小说库工作区使用独立入口 `/library`：
+复用用户中心的 `SiteHeader` 顶部导航，包含小说库、分类、数据来源和设置，
+最右侧显示当前登录账号头像并进入现有用户中心，内容区域居中铺开。
+导航已预留分类、阅读记录、书架、收藏、数据来源、下载和设置，
+对应 `/library/{categories,history,bookshelf,favorites,sources,downloads,settings}`。
+书库列表、标签分类、数据来源、作品详情及章节目录通过浏览器
+直接请求 `NEXT_PUBLIC_ATHUB_API_URL` 下的 `/api/v2/*`，Next.js 不转发小说接口。
+书库与详情直接复制 `demo-2` 原组件及其 Button、Badge、Tabs、ToggleGroup 等控件到
+`web/components/novel-demo/`，原样复用 DOM、类名和 CSS 声明；样式仅加
+`.novel-demo` 作用域，避免影响主页和用户中心。与后端的连接由
+`web/lib/novel-demo-data.ts` 适配，共用站点顶部导航；不改演示仓库，不引入其 SQLite、
+固定书名、示例封面或跨项目源码引用。
+作品详情沿用原图标页签，增加章节目录入口。目录仅使用 `/api/v2/toc` 返回的标题，
+按“作品 → 卷 → 章节”展开和收起，卷与章节分别按 `order` 排序。
+未分卷章节不会丢失：有卷时归入“未分卷”，整本无卷时直接列在作品下。
+章节标题为普通文字，不提供阅读跳转，不请求 `/api/v2/content` 或显示正文。
+小说库自动联动用户中心登录，无需输入 API Key。账户接口
+`POST /api/v1/account/athub/session` 使用现有会话签发最长 5 分钟的只读凭证，
+浏览器仅在内存保存，自动续期并直连内容后端；不生成、读取或重置个人 Key。
+内容后端每次读取都在账户库检查会话有效期、撤销状态、账户封禁与管理员限制。
+退出登录或管理员禁用后，已签发凭证也无法继续读取。会话调用计入当前用户统计，`key_id` 为空。
+外部调用继续使用个人 API Key；个人 Key 的停用和重置不影响网站登录会话。
+数据层通过 API 的 `limit`、`offset` 分页读取列表，再使用原组件的每页 12 本、
+排序与统计交互；章节数量通过目录接口读取，同步请求并发限制为 4。
+作者 API 提供可空的 `name`，书库列表和详情使用真实姓名；未补录姓名时保留作者编号。
+没有接口字段的发行日期、年龄限制、总字数和资源链接不使用示例值，相关区域保留占位，不新增数据业务。
+下载资源、插图、阅读记录、书架和收藏仍是待接入区域。
+8003 允许 `AUTH_UI_URL` 与 `WEBAUTHN_RP_ORIGINS` 对应来源进行带 Authorization 的 GET 跨域读取，
+预检不消耗调用统计；实际 GET 仍执行鉴权与记账，不跨域传递账户 Cookie。
+`NEXT_PUBLIC_ATHUB_API_URL` 是构建时配置，部署后端后需重新构建前端；反代须保留 Origin、
+Authorization、OPTIONS 及后端的跨域响应头。
+用户中心与管理后台继续使用原页面和鉴权，小说库侧栏不包裹这些页面。
 
 ## 功能
 
@@ -22,6 +58,7 @@
 | 授权确认 | 展示应用与申请权限，用户明确允许后才签发授权码 |
 | 管理后台 | 应用接入、客户端密钥、最低访问角色、用户管理、协议编辑 |
 | 内容存储（v2） | 平台、作者、小说、卷、章节、全书目录与批量上传 |
+| 贡献历史（v3） | 贡献者、按请求合并的变更记录、字段前后对比 |
 
 ## 模块维护与路由
 
@@ -30,11 +67,30 @@ ATHub 代码合入 [`modules/athub/`](modules/athub/README.md)，直接使用 `/
 `/api/v2/upload` 等路径，不加 `/athub`。同一进程开两个监听器，模块之间没有内部 HTTP 转发。
 v1 与 v2 在这里代表不同功能模块。
 
+`8003/api/v3/history?novelId=2&limit=20&offset=0` 返回分页变更历史，
+`8003/api/v3/contributors?novelId=2` 返回真实创建者与后续贡献者。
+两个接口使用现有网站只读凭证或个人 Key 鉴权，浏览器直连后端；Next.js 不代理 v3。
+作品详情的贡献者卡片链接到 `/library/books/2/history`，沿用现有组件、字体和面板。
+
+历史表 `novel_revisions` 位于服务账户库 `DATABASE_URL`，迁移为根目录
+`20261110050000_novel_history`；ATHub 小说库不新增历史表或账号表。
+修改者由宿主根据已认证的账号或 Key 所属账号确定，客户端不能指定贡献者。
+小说元数据、卷、章节、批量上传以及已有作者/标签名称的修改都记录变更；
+同一次请求按小说合并为一条记录，无实际变化不新增记录。
+章节正文更新时，在服务历史中保存修改片段及少量上下文，按字高亮新增与删除，并标注所在行；
+不保存整章初始快照。单章保存与批量上传均记录差异，小说库仍只存当前内容。
+旧历史只有摘要哈希、字数及变动标记，无法追溯补出当时的正文差异。
+旧数据不补造创建者，后续编辑者只列为贡献者。删除条目后服务库仍保留历史。
+
+跨库写入先在服务库保存 pending 记录，再提交小说事务，最后确认历史为 completed；
+准备记录失败会回滚小说写入。只有 completed 记录用于历史页与贡献统计，
+内容提交与历史确认之间发生崩溃或服务库中断时，pending 记录保留供核对，不冒充已完成记录。
+
 ATHub 保留独立 `go.mod`、存储实现、测试和 Prisma 迁移；根模块通过本地 `replace` 引用。
 维护内容功能时修改该目录，再重新构建统一程序。普通 Git 克隆即可取得全部源码，
 不需要相邻 ATHub 目录或初始化子模块。原 ATHub 工作目录保留。
 
-v2 使用登录用户在 `8001/api/v1/account/key` 创建的个人 API Key，不接受原全局密钥、
+v2 的外部调用使用登录用户在 `8001/api/v1/account/key` 创建的个人 API Key，不接受原全局密钥、
 OAuth access token 或账户 Cookie。每个 Key 归属一个用户，创建时仅返回一次明文，账户库只保存哈希。
 账户维护模式沿用 v1 范围；v2 内容请求不经过账户维护拦截。
 `8001/healthz` 检查账户库，账户维护状态仍返回 `433`；`8003/healthz` 检查内容库，
@@ -107,7 +163,8 @@ Key 目前拥有共享内容库读写权限，用户归属用于鉴权与统计�
 
 ## 服务拆分
 
-本仓库由 `AlbaTextus/connect` 更名为 `AlbaTextus/oauth`，负责账户、认证和 OAuth 授权。
+本仓库曾使用 `AlbaTextus/connect`、`AlbaTextus/oauth` 名称，现统一命名为
+`AlbaTextus/atnexus`，负责账户、认证、OAuth 授权与 ATHub 内容存储。
 积分、支付、管理调整与 24 小时结算已迁移至独立仓库 [AlbaTextus/credit](https://github.com/AlbaTextus/credit)，使用独立数据库。
 账户中心的积分入口和旧支付页面跳转到 `NEXT_PUBLIC_CREDIT_URL`（本地默认 `http://localhost:3300`）。
 钱包及支付 API 不再由本服务提供；调用方应切换到 Credit。
@@ -245,7 +302,9 @@ pnpm web:dev
 
 访问 [首页](http://localhost:3288/)、[登录页](http://localhost:3288/login) 或 [用户中心](http://localhost:3288/account)。OAuth 默认监听 `8001`，ATHub 默认监听 `8003`，两个端口均提供 `/healthz`。内容接口例如 `http://localhost:8003/api/v2/content?novelId=1&order=1`。
 
-浏览器统一通过 `localhost:3288` 访问：Next.js 优先将 `/api/v2/*` 转发至 `ATHUB_BACKEND_URL`（默认 `http://localhost:8003`），其余 `/api/*`、`/oauth/*` 和 `/.well-known/*` 转发至 `OAUTH_BACKEND_URL`（默认 `http://localhost:8001`），使页面与登录会话保持同源。不要混用 `localhost` 和 `127.0.0.1`，否则 Cookie 和 Passkey 的来源校验可能不一致。
+账户前端通过 `localhost:3288` 访问：Next.js 仅将 `/api/v1/*`、`/oauth/*` 和 `/.well-known/*` 转发至 `OAUTH_BACKEND_URL`（默认 `http://localhost:8001`），使账户页面与登录会话保持同源。Key 管理和调用统计属于账户接口，继续由该入口提供。不要混用 `localhost` 和 `127.0.0.1`，否则 Cookie 和 Passkey 的来源校验可能不一致。
+
+小说内容 `/api/v2/*` 不在前端域名下提供，也不经过 Next.js 转发。调用方直接访问 `https://api.albatextus.com/api/v2/*`，由外部反向代理转发到后端 `8003`；本地可直接请求 `http://localhost:8003/api/v2/*`。前端不需要配置或连接 ATHub 内容端口。
 
 `pnpm web:dev` 默认使用 Turbopack。中文字体的 `regular.css` 和 `medium.css` 在 `web/app/layout.tsx` 中作为独立 CSS 入口加载，不要再通过 `web/styles/fonts.css` 的 `@import` 合并。Windows 本地环境中，两套分片字体及其 source map 合并为大型 PostCSS IPC 结果时会卡住首次编译；分离入口保留相同的字体、字重和样式，并缩小单次转换结果。
 
@@ -429,7 +488,6 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 | `WEBAUTHN_RP_ORIGINS` | 允许的完整前端 Origin，逗号分隔 |
 | `PASSKEY_CHALLENGE_TTL` | Passkey 挑战有效期，默认 `5m` |
 | `OAUTH_BACKEND_URL` | Next.js 转发到账户功能的地址，默认 `http://localhost:8001` |
-| `ATHUB_BACKEND_URL` | Next.js 转发到内容功能的地址，默认 `http://localhost:8003` |
 | `NEXT_PUBLIC_WIKI_URL` | 独立 Wiki 服务的公开地址，用于文档、接入指南与协议链接及 `/wiki/*` 跳转，默认 `http://localhost:3200`；构建时内联，修改后需重新构建 |
 | `NEXT_OUTPUT_DIR` | Next.js 构建目录，相对于 `web/`，默认 `.next` |
 
@@ -444,6 +502,12 @@ docker compose up --build -d
 ```
 
 当前 [docker-compose.yml](docker-compose.yml) 是本地开发配置，固定使用本地地址和开发环境，并不自动执行迁移。Go 容器只接收 `environment` 中列出的变量：**目前未透传 `TURNSTILE_*` 和 `CUSTOM_OAUTH_AVATAR_FIELD`**，使用这些功能时需在 Compose 配置或覆盖文件中补充。只修改根目录 `.env` 不会把未列出的变量自动注入容器。
+
+Compose 项目与后端服务均名为 `atnexus`。数据库名称、账号及已有连接配置继续沿用；
+默认复用改名前的 `oauth_oauth-postgres`、`oauth_athub-postgres` 数据卷。
+如果旧部署使用了自定义 Compose 项目名或卷名，启动前将 `ACCOUNT_POSTGRES_VOLUME`、
+`ATHUB_POSTGRES_VOLUME` 设为实际已有卷名。升级时先停止旧 Compose 服务，再启动新服务，
+避免端口冲突；停止旧服务时保留数据卷，不使用 `down -v`。
 
 Redis 服务位于 Compose 的 `redis` profile 中，默认不会启动。启用缓存时使用 `docker compose --profile redis up --build -d`；禁用时继续使用普通的 `docker compose up --build -d`。Compose 内部默认连接 `redis://redis:6379/0`，如需覆盖可设置 `REDIS_COMPOSE_URL`。
 
@@ -466,7 +530,7 @@ pnpm web:build
 pnpm web:start
 ```
 
-Go 服务可用 `go build -o release/oauth ./cmd/server` 构建，Windows 可将输出命名为 `release/oauth.exe`。运行时提供 `.env` 或进程环境变量。已有实例升级只需应用新迁移并更新服务，不需要重复 seed。
+Go 服务可用 `go build -o ../release/atnexus ./cmd/server` 构建，Windows 可将输出命名为 `../release/atnexus.exe`。运行时在仓库目录提供 `.env` 或进程环境变量。已有实例升级只需应用新迁移并更新服务，不需要重复 seed。
 
 正式部署应使用同源 HTTPS 入口，正确设置 `ISSUER_URL`、`AUTH_UI_URL`、`WEBAUTHN_RP_ID`、`WEBAUTHN_RP_ORIGINS` 和 `COOKIE_SECURE=true`。反向代理保留 `/api/`、`/oauth/`、`/.well-known/` 的转发；健康检查直接请求 Go 的 `/healthz`。启用 CSP 时，为 Turnstile 放行 `https://challenges.cloudflare.com` 的脚本与 iframe。
 
@@ -596,16 +660,16 @@ Prisma schema 与迁移是数据库结构的来源；Go 服务没有 Prisma Clie
 
 相邻的 Status 后台可通过 `go run ./cmd/register-status` 接入当前 OAuth。工具创建独立机密应用 `albatextus-status`，最低角色为 `ADMIN`，仅申请 `profile`；默认回调为 `http://127.0.0.1:3100/api/auth/callback`，凭据写入 `../status/.dev.vars`。应用所有者使用 `SEED_ADMIN_EMAIL` 对应的现有管理员，也可在首次登记时用 `-admin-id <UUID>` 指定。Status 默认按服务端用户资料中的 `role` 允许 `ADMIN`、`SUPER_ADMIN`，符合条件的其他账号也能登录；OAuth 应用更严格的 `SUPER_ADMIN` 最低角色会保留。支持 `-app-url`、`-issuer-url`、`-output`；重复运行保留已有密钥、回调、Status 管理密钥和自定义允许名单。旧版仅允许所有者 UUID 的配置，可运行 `go run ./cmd/register-status -migrate-owner-allowlist` 切换到角色授权；该选项拒绝自动清理自定义账号名单。登记后在 Status 执行 `npm run db:migrate:local` 并重启开发服务。工具不会重置用户、运行 seed 或修改其他应用。
 
-目前未提供邮箱验证码绑定、OIDC ID Token 或跨子系统统一登出。功能问题和接入反馈可提交到 [GitHub Issues](https://github.com/AlbaTextus/oauth/issues)。
+目前未提供邮箱验证码绑定、OIDC ID Token 或跨子系统统一登出。功能问题和接入反馈可提交到 [GitHub Issues](https://github.com/AlbaTextus/atnexus/issues)。
 
 ## UI 与字体维护
 
-Web 的组件、主题、字体与页面展示样式在 OAuth 项目内独立维护，不再依赖 `@albatextus/ui` 包或相邻的 ATUI 仓库。迁移使用此前实际安装的组件版本，保留现有外观与交互；独立 ATUI 项目不受影响。基础组件实现位于 `web/components/ui/`，其他展示组件位于 `web/components/`，带业务反馈或路由适配的组件继续包装 `web/components/presentation/` 中的本地实现。
+Web 的组件、主题、字体与页面展示样式在 atnexus 项目内独立维护，不再依赖 `@albatextus/ui` 包或相邻的 ATUI 仓库。迁移使用此前实际安装的组件版本，保留现有外观与交互；独立 ATUI 项目不受影响。基础组件实现位于 `web/components/ui/`，其他展示组件位于 `web/components/`，带业务反馈或路由适配的组件继续包装 `web/components/presentation/` 中的本地实现。
 
-应用与用户管理使用共享 `StatCard`；列表使用 `EmptyState`；删除通行密钥、解绑账号、删除应用及重置密钥使用 `ConfirmDialog`。这些组合归在原有 card / empty / dialog 组件组中，不再在页面内重复维护骨架。请求、统计和名称二次确认仍在 OAuth，密钥按需读取与隐藏清除的逻辑保持不变。
+应用与用户管理使用共享 `StatCard`；列表使用 `EmptyState`；删除通行密钥、解绑账号、删除应用及重置密钥使用 `ConfirmDialog`。这些组合归在原有 card / empty / dialog 组件组中，不再在页面内重复维护骨架。请求、统计和名称二次确认仍在账户模块，密钥按需读取与隐藏清除的逻辑保持不变。
 
 PasswordInput 与 CopyField 的静态密钥显隐共用本地 InputGroupPassword；ClientSecretField 继续独立负责按需读取及隐藏时清除服务端密钥，不将其改为预加载静态字段。底层 Base UI、动画和 Markdown 等依赖直接在 `web/package.json` 中声明。
 
 首页授权示例使用 `web/components/code-highlighted/` 中的 `CodeHighlighted`，保留深色终端外观，只为该示例加载 HTTP 语法，不在全局初始化高亮引擎。个人简介及编辑预览中的 Markdown 代码块继续按需高亮，沿用全站明暗主题、中文复制反馈和纯文本回退。
 
-`web/app/globals.css` 引入本地 `web/styles/oauth.css`，主题 token、页面样式与字体声明均保留在 `web/styles/`。字体文件和 OFL 许可证位于 `web/fonts/`，构建时自动生成静态资源地址，不依赖外部字体服务。修改后运行 `pnpm web:typecheck` 和 `pnpm web:build`；依赖更新时同步锁文件，部署使用 `pnpm install --frozen-lockfile`。Docker 构建只需 OAuth 自身目录，不再需要额外 UI 构建上下文。
+`web/app/globals.css` 引入本地 `web/styles/oauth.css`，主题 token、页面样式与字体声明均保留在 `web/styles/`。字体文件和 OFL 许可证位于 `web/fonts/`，构建时自动生成静态资源地址，不依赖外部字体服务。修改后运行 `pnpm web:typecheck` 和 `pnpm web:build`；依赖更新时同步锁文件，部署使用 `pnpm install --frozen-lockfile`。Docker 构建只需 atnexus 自身目录，不再需要额外 UI 构建上下文。

@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/oauth/internal/config"
-	"github.com/AlbaTextus/oauth/internal/email"
-	"github.com/AlbaTextus/oauth/internal/federation"
-	"github.com/AlbaTextus/oauth/internal/oauth"
-	"github.com/AlbaTextus/oauth/internal/passkey"
-	"github.com/AlbaTextus/oauth/internal/security"
-	"github.com/AlbaTextus/oauth/internal/store"
-	"github.com/AlbaTextus/oauth/internal/turnstile"
+	"github.com/AlbaTextus/atnexus/internal/config"
+	"github.com/AlbaTextus/atnexus/internal/email"
+	"github.com/AlbaTextus/atnexus/internal/federation"
+	"github.com/AlbaTextus/atnexus/internal/oauth"
+	"github.com/AlbaTextus/atnexus/internal/passkey"
+	"github.com/AlbaTextus/atnexus/internal/security"
+	"github.com/AlbaTextus/atnexus/internal/store"
+	"github.com/AlbaTextus/atnexus/internal/turnstile"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -83,6 +83,7 @@ func (a *API) Router() http.Handler {
 	r.Post("/api/v1/admin/users/{id}/revoke-sessions", a.revokeUserSessions)
 	r.Get("/api/v1/admin/users/{id}/athub-key", a.managedATHubKey)
 	r.Put("/api/v1/admin/users/{id}/athub-key", a.setManagedATHubKey)
+	r.Get("/api/v1/admin/athub/dashboard", a.athubDashboard)
 	r.Get("/api/v1/auth/providers", a.loginProviders)
 	r.Get("/api/v1/auth/verification", a.authVerification)
 	r.Get("/api/v1/legal/{slug}", a.getLegalDocument)
@@ -99,6 +100,7 @@ func (a *API) Router() http.Handler {
 	r.Delete("/api/v1/account/key/{id}", a.revokeATHubKey)
 	r.Get("/api/v1/account/athub/usage", a.athubUsage)
 	r.Get("/api/v1/account/athub/calls", a.athubCalls)
+	r.Post("/api/v1/account/athub/session", a.athubReadSession)
 	r.Patch("/api/v1/account/profile", a.updateProfile)
 	r.Post("/api/v1/account/setup", a.completeProfileSetup)
 	r.Patch("/api/v1/account/bio", a.updateBio)

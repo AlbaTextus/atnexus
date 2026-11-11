@@ -110,7 +110,7 @@ func TestNewRouteRejections(t *testing.T) {
 		{"GET", "/api/v2/authors?platformId=0", ""},
 		{"POST", "/api/v2/authors?limit=1", `{"platformId":2}`},
 		{"POST", "/api/v2/authors", `{"platformId":0}`},
-		{"POST", "/api/v2/authors", `{"platformId":2,"name":"unsupported"}`},
+		{"POST", "/api/v2/authors", `{"platformId":2,"unknown":"unsupported"}`},
 		{"GET", "/api/v2/volumes", ""},
 		{"GET", "/api/v2/volumes?novelId=7&order=1&limit=1", ""},
 		{"DELETE", "/api/v2/volumes?novelId=7", ""},

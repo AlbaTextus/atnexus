@@ -34,6 +34,7 @@ type ATHubIdentity struct {
 }
 
 type ATHubCall struct {
+	SessionID     *uuid.UUID `json:"-"`
 	ID            uuid.UUID  `json:"id"`
 	UserID        *uuid.UUID `json:"user_id"`
 	KeyID         *uuid.UUID `json:"key_id"`
@@ -227,7 +228,7 @@ func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 	denied := false
 	if call.Authenticated {
 		var userAllowed, keyAllowed bool
-		if call.UserID == nil || call.KeyID == nil {
+		if call.UserID == nil || (call.KeyID == nil && call.SessionID == nil) {
 			return ErrNotFound
 		}
 		// Use the same lock order as administrator changes and rotations. Recheck
@@ -235,7 +236,13 @@ func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 		if err := tx.QueryRow(ctx, `SELECT is_active AND NOT athub_disabled FROM users WHERE id=$1 FOR SHARE`, call.UserID).Scan(&userAllowed); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(ctx, `SELECT is_current AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now())
+		if call.SessionID != nil {
+			err := tx.QueryRow(ctx, `SELECT revoked_at IS NULL AND expires_at>now() FROM user_sessions
+				WHERE id=$1 AND user_id=$2 FOR SHARE`, call.SessionID, call.UserID).Scan(&keyAllowed)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+		} else if err := tx.QueryRow(ctx, `SELECT is_current AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now())
 			FROM athub_api_keys WHERE id=$1 AND user_id=$2 FOR UPDATE`, call.KeyID, call.UserID).Scan(&keyAllowed); err != nil {
 			return err
 		}
@@ -249,7 +256,7 @@ func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 	if err != nil {
 		return err
 	}
-	if call.Authenticated {
+	if call.Authenticated && call.KeyID != nil {
 		if _, err := tx.Exec(ctx, `UPDATE athub_api_keys SET last_used_at=now() WHERE id=$1`, call.KeyID); err != nil {
 			return err
 		}
@@ -307,14 +314,23 @@ func (p *Postgres) athubUsage(ctx context.Context, userID uuid.UUID, from, until
 		return ATHubUsage{}, err
 	}
 	defer tx.Rollback(ctx)
+	result, err := athubUsageSnapshot(ctx, tx, &userID, from, until, bucketSeconds)
+	if err != nil {
+		return result, err
+	}
+	return result, tx.Commit(ctx)
+}
+
+// A nil userID aggregates the whole site, including unattributed requests.
+func athubUsageSnapshot(ctx context.Context, tx pgx.Tx, userID *uuid.UUID, from, until *time.Time, bucketSeconds int) (ATHubUsage, error) {
 	result := ATHubUsage{Endpoints: make([]ATHubUsageGroup, 0), From: from, Until: until, BucketSeconds: bucketSeconds}
 	if err := tx.QueryRow(ctx, `SELECT COUNT(*),COUNT(*) FILTER(WHERE status BETWEEN 200 AND 399),
 		COUNT(*) FILTER(WHERE status>=400),COUNT(*) FILTER(WHERE status IS NULL) FROM athub_api_calls
-		WHERE user_id=$1 AND ($2::timestamptz IS NULL OR started_at >= $2) AND ($3::timestamptz IS NULL OR started_at < $3)`, userID, from, until).Scan(&result.Total, &result.Success, &result.Failed, &result.Pending); err != nil {
+		WHERE ($1::uuid IS NULL OR user_id=$1) AND ($2::timestamptz IS NULL OR started_at >= $2) AND ($3::timestamptz IS NULL OR started_at < $3)`, userID, from, until).Scan(&result.Total, &result.Success, &result.Failed, &result.Pending); err != nil {
 		return result, err
 	}
 	rows, err := tx.Query(ctx, `SELECT method,path,port,status,COUNT(*) FROM athub_api_calls
-		WHERE user_id=$1 AND ($2::timestamptz IS NULL OR started_at >= $2) AND ($3::timestamptz IS NULL OR started_at < $3)
+		WHERE ($1::uuid IS NULL OR user_id=$1) AND ($2::timestamptz IS NULL OR started_at >= $2) AND ($3::timestamptz IS NULL OR started_at < $3)
 		GROUP BY method,path,port,status ORDER BY COUNT(*) DESC,method,path,port,status`, userID, from, until)
 	if err != nil {
 		return result, err
@@ -334,7 +350,7 @@ func (p *Postgres) athubUsage(ctx context.Context, userID uuid.UUID, from, until
 	if from != nil {
 		result.Trend = make([]ATHubUsagePoint, 0)
 		points, err := tx.Query(ctx, `SELECT to_timestamp(floor(extract(epoch FROM started_at)/$4::int)*$4::int),port,COUNT(*)
-			FROM athub_api_calls WHERE user_id=$1 AND started_at >= $2 AND started_at < $3
+			FROM athub_api_calls WHERE ($1::uuid IS NULL OR user_id=$1) AND started_at >= $2 AND started_at < $3
 			GROUP BY 1,port ORDER BY 1,port`, userID, from, until, bucketSeconds)
 		if err != nil {
 			return result, err
@@ -352,5 +368,5 @@ func (p *Postgres) athubUsage(ctx context.Context, userID uuid.UUID, from, until
 		}
 		points.Close()
 	}
-	return result, tx.Commit(ctx)
+	return result, nil
 }

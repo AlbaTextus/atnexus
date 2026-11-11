@@ -101,6 +101,22 @@ func TestUploadIntegration(t *testing.T) {
 	if len(authors) != 1 || authors[0].ID != author.ID {
 		t.Fatalf("authors: %+v", authors)
 	}
+	call("PUT", fmt.Sprintf("/api/v2/authors?id=%d", author.ID), map[string]any{"name": "  真实笔名  "}, 200, &author)
+	if author.Name == nil || *author.Name != "真实笔名" || author.PlatformID != platform.ID {
+		t.Fatalf("author update: %+v", author)
+	}
+	call("GET", fmt.Sprintf("/api/v2/authors?id=%d", author.ID), nil, 200, &author)
+	if author.Name == nil || *author.Name != "真实笔名" {
+		t.Fatal("author name was not persisted")
+	}
+	call("GET", fmt.Sprintf("/api/v2/authors?platformId=%d", platform.ID), nil, 200, &authors)
+	if len(authors) != 1 || authors[0].Name == nil || *authors[0].Name != "真实笔名" {
+		t.Fatalf("author list name missing: %+v", authors)
+	}
+	call("PUT", fmt.Sprintf("/api/v2/authors?id=%d", author.ID), map[string]any{"name": nil}, 200, &author)
+	if author.Name != nil {
+		t.Fatal("author name was not cleared")
+	}
 	call("POST", "/api/v2/authors", storage.AuthorInput{PlatformID: 2147483647}, 400, nil)
 	call("GET", "/api/v2/authors?id=2147483647", nil, 404, nil)
 	var emptyNovel storage.Novel

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/AlbaTextus/oauth/internal/store"
+	"github.com/AlbaTextus/atnexus/internal/store"
 	"github.com/google/uuid"
 )
 

@@ -8,9 +8,10 @@ import (
 
 var (
 	ErrNotFound         = errors.New("record not found")
-	ErrInvalidReference = errors.New("platform, author, novel or volume reference is invalid")
+	ErrInvalidReference = errors.New("platform, author, novel, volume or tag reference is invalid")
 	ErrConflict         = errors.New("record already exists")
 	ErrVolumeNotEmpty   = errors.New("volume still contains chapters")
+	ErrTagInUse         = errors.New("tag is still referenced by novels")
 )
 
 type PlatformInput struct {
@@ -24,7 +25,8 @@ type Platform struct {
 }
 
 type AuthorInput struct {
-	PlatformID int32 `json:"platformId"`
+	PlatformID int32   `json:"platformId"`
+	Name       *string `json:"name"`
 }
 
 type Author struct {
@@ -33,6 +35,7 @@ type Author struct {
 }
 
 type NovelInput struct {
+	TagIDs     []int32 `json:"tagIds"`
 	PlatformID int32   `json:"platformId"`
 	AuthorID   *int32  `json:"authorId"`
 	Title      string  `json:"title"`
@@ -126,17 +129,24 @@ type UploadResult struct {
 type NovelFilter struct {
 	PlatformID int32
 	AuthorID   int32
+	TagID      int32
 	Limit      int32
 	Offset     int32
 }
 
 type Store interface {
+	GetTag(context.Context, int32) (Tag, error)
+	ListTags(context.Context, int32, int32) ([]Tag, error)
+	CreateTag(context.Context, TagInput) (Tag, error)
+	UpdateTag(context.Context, int32, TagInput) (Tag, error)
+	DeleteTag(context.Context, int32) error
 	GetPlatform(context.Context, int32) (Platform, error)
 	ListPlatforms(context.Context, int32, int32) ([]Platform, error)
 	CreatePlatform(context.Context, PlatformInput) (Platform, error)
 	GetAuthor(context.Context, int32) (Author, error)
 	ListAuthors(context.Context, int32, int32, int32) ([]Author, error)
 	CreateAuthor(context.Context, AuthorInput) (Author, error)
+	UpdateAuthorName(context.Context, int32, *string) (Author, error)
 	GetNovel(context.Context, int32) (Novel, error)
 	ListNovels(context.Context, NovelFilter) ([]Novel, error)
 	CreateNovel(context.Context, NovelInput) (Novel, error)

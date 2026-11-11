@@ -16,6 +16,7 @@ func TestDatabaseErrors(t *testing.T) {
 		{pgx.ErrNoRows, ErrNotFound},
 		{fmt.Errorf("wrapped: %w", pgx.ErrNoRows), ErrNotFound},
 		{&pgconn.PgError{Code: "23503"}, ErrInvalidReference},
+		{&pgconn.PgError{Code: "23001"}, ErrInvalidReference},
 		{&pgconn.PgError{Code: "23505"}, ErrConflict},
 		{unknown, unknown},
 	} {

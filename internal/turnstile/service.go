@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlbaTextus/oauth/internal/config"
+	"github.com/AlbaTextus/atnexus/internal/config"
 )
 
 const Action = "authenticate"

@@ -16,8 +16,18 @@ import (
 )
 
 type Config struct {
-	DatabaseURL string
-	WrapHandler func(http.Handler) http.Handler
+	DatabaseURL   string
+	WrapHandler   func(http.Handler) http.Handler
+	RecordChanges ChangeRecorder
+}
+
+type Contributor = storage.Contributor
+type RevisionDraft = storage.RevisionDraft
+type ChangeRecorder = storage.ChangeRecorder
+
+// WithContributor is for host middleware, never for client-supplied identities.
+func WithContributor(ctx context.Context, contributor Contributor) context.Context {
+	return storage.WithContributor(ctx, contributor)
 }
 
 func (c Config) Validate() error {
@@ -66,6 +76,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Module, error) 
 		return nil, errors.New("ATHub PostgreSQL connection failed; check ATHUB_DATABASE_URL and database availability")
 	}
 	st := storage.NewPostgres(pool)
+	st.RecordChanges = cfg.RecordChanges
 	if err := st.CheckSchema(startup); err != nil {
 		return nil, errors.New("ATHub schema is not ready; run npm run db:athub:deploy")
 	}

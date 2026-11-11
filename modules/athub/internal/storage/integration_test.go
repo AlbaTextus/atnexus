@@ -103,6 +103,9 @@ func TestPostgresIntegration(t *testing.T) {
 	if err := store.CheckSchema(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if novel, err := store.GetNovel(ctx, legacyNovelID); err != nil || novel.TagIDs == nil || len(novel.TagIDs) != 0 {
+		t.Fatalf("migration must leave existing novels without tags: %+v %v", novel, err)
+	}
 	legacy, err := store.GetChapter(ctx, legacyNovelID, 1)
 	if err != nil || legacy.ID != legacyChapterID || legacy.VolumeID != nil || legacy.Title != "Legacy chapter" || legacy.Content != "Original body" || !legacy.UpdatedAt.Equal(time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("migration changed existing chapter: %+v %v", legacy, err)
@@ -266,4 +269,6 @@ func TestPostgresIntegration(t *testing.T) {
 	if _, err := store.SaveChapter(ctx, chapter); !errors.Is(err, ErrInvalidReference) {
 		t.Fatalf("orphan chapter: %v", err)
 	}
+	t.Run("tags", func(t *testing.T) { testTagIntegration(t, ctx, store) })
+	t.Run("history", func(t *testing.T) { testHistoryIntegration(t, ctx, store) })
 }

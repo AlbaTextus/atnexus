@@ -29,5 +29,5 @@ func (a *API) athubReadSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 200, map[string]any{"access_token": token, "expires_at": expires})
+	writeJSON(w, 200, map[string]any{"access_token": token, "expires_at": expires, "cache_scope": session.ID})
 }

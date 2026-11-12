@@ -270,5 +270,6 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatalf("orphan chapter: %v", err)
 	}
 	t.Run("tags", func(t *testing.T) { testTagIntegration(t, ctx, store) })
+	t.Run("library pagination", func(t *testing.T) { testLibraryIntegration(t, ctx, store) })
 	t.Run("history", func(t *testing.T) { testHistoryIntegration(t, ctx, store) })
 }

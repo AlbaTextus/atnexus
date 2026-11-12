@@ -9,6 +9,9 @@ import (
 )
 
 func (a *API) tags(w http.ResponseWriter, r *http.Request) error {
+	if handled, err := a.catalogView(w, r); handled {
+		return err
+	}
 	query, err := parseQuery(r.URL.RawQuery, "id", "limit", "offset")
 	if err != nil {
 		return err

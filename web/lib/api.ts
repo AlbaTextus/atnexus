@@ -1,4 +1,5 @@
 import { collectLoginDevice } from "@/lib/login-device"
+import { clearStoredContent } from "@/lib/content-cache"
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
@@ -24,6 +25,11 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     }
     const message = payload?.error_description || payload?.error || "请求失败"
     throw new ApiError(response.status, payload?.error || "request_failed", message)
+  }
+  if (init?.method === "DELETE" && path === "/api/v1/sessions/current") clearStoredContent()
+  if (init?.method === "POST" && (path === "/api/v1/account/athub/submissions" || path.startsWith("/api/v1/admin/athub/reviews/"))) {
+    clearStoredContent()
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("atnexus:content-changed"))
   }
   return payload as T
 }

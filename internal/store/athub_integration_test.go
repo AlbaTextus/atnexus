@@ -339,9 +339,17 @@ func TestATHubSingleKeyMigrationRetainsHistory(t *testing.T) {
 func TestATHubUsageRangeIntegration(t *testing.T) {
 	p := athubTestStore(t)
 	ctx := context.Background()
-	user, other := uuid.New(), uuid.New()
-	if _, err := p.pool.Exec(ctx, `INSERT INTO users(id) VALUES($1),($2)`, user, other); err != nil {
+	user, other, browserOnly := uuid.New(), uuid.New(), uuid.New()
+	if _, err := p.pool.Exec(ctx, `INSERT INTO users(id) VALUES($1),($2),($3)`, user, other, browserOnly); err != nil {
 		t.Fatal(err)
+	}
+	keys := make(map[uuid.UUID]uuid.UUID)
+	for _, userID := range []uuid.UUID{user, other} {
+		key, err := p.CreateATHubKey(ctx, ATHubKey{ID: uuid.New(), UserID: userID, Name: "ATHub", TokenHash: security.HashToken(userID.String()), Prefix: "ath_test"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		keys[userID] = key.ID
 	}
 	from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	until := from.Add(24 * time.Hour)
@@ -361,9 +369,20 @@ func TestATHubUsageRangeIntegration(t *testing.T) {
 		if c.status != 0 {
 			status = &c.status
 		}
-		if _, err := p.pool.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,request_id,method,path,port,authenticated,status,started_at)
-			VALUES($1,$2,$3,'GET','/api/v2/content',$4,true,$5,$6)`, uuid.New(), c.user, uuid.New(), c.port, status, c.at); err != nil {
+		if _, err := p.pool.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,port,authenticated,status,started_at)
+			VALUES($1,$2,$3,$4,'GET','/api/v2/content',$5,true,$6,$7)`, uuid.New(), c.user, keys[c.user], uuid.New(), c.port, status, c.at); err != nil {
 			t.Fatal(err)
+		}
+	}
+	// Historical website reads and anonymous failures share the audit table.
+	// None may contribute to API key totals, endpoint groups or chart buckets.
+	okStatus, failedStatus := 200, 401
+	for _, userID := range []*uuid.UUID{&user, &other, &browserOnly, nil} {
+		for _, status := range []*int{nil, &okStatus, &failedStatus} {
+			if _, err := p.pool.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,request_id,method,path,port,authenticated,status,started_at)
+				VALUES($1,$2,$3,'GET','/api/v2/novelinfo',8005,false,$4,$5)`, uuid.New(), userID, uuid.New(), status, from.Add(2*time.Hour)); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	usage, err := p.ATHubUsageRange(ctx, user, from, until, 3600)
@@ -373,12 +392,72 @@ func TestATHubUsageRangeIntegration(t *testing.T) {
 	if usage.Total != 3 || usage.Success != 1 || usage.Failed != 1 || usage.Pending != 1 || len(usage.Trend) != 2 {
 		t.Fatalf("unexpected usage: %+v", usage)
 	}
+	var endpointCalls int64
+	for _, group := range usage.Endpoints {
+		if group.Path != "/api/v2/content" {
+			t.Fatalf("website traffic in endpoint groups: %+v", usage.Endpoints)
+		}
+		endpointCalls += group.Calls
+	}
+	if endpointCalls != usage.Total {
+		t.Fatalf("endpoint total=%d usage=%+v", endpointCalls, usage)
+	}
 	if usage.Trend[0].Calls != 2 || usage.Trend[0].Port != 8003 || !usage.Trend[0].StartedAt.Equal(from) || usage.Trend[1].Port != 8004 {
 		t.Fatalf("unexpected buckets: %+v", usage.Trend)
 	}
 	daily, err := p.ATHubUsageRange(ctx, user, from, until, 86400)
 	if err != nil || len(daily.Trend) != 2 {
 		t.Fatalf("daily=%+v err=%v", daily, err)
+	}
+	total, err := p.ATHubUsage(ctx, user)
+	if err != nil || total.Total != 5 {
+		t.Fatalf("lifetime usage=%+v err=%v", total, err)
+	}
+	calls, err := p.ListATHubCalls(ctx, user, 100, 0)
+	if err != nil || len(calls) != 5 {
+		t.Fatalf("key call history=%+v err=%v", calls, err)
+	}
+	for _, call := range calls {
+		if call.KeyID == nil {
+			t.Fatalf("website traffic in key call history: %+v", call)
+		}
+	}
+	empty, err := p.ATHubUsage(ctx, browserOnly)
+	if err != nil || empty.Total != 0 || len(empty.Endpoints) != 0 {
+		t.Fatalf("browser-only usage=%+v err=%v", empty, err)
+	}
+	browserCalls, err := p.ListATHubCalls(ctx, browserOnly, 1, 0)
+	if err != nil || len(browserCalls) != 0 {
+		t.Fatalf("browser-only call history=%+v err=%v", browserCalls, err)
+	}
+	// Add just the profile contract used by the administrator dashboard.
+	if _, err := p.pool.Exec(ctx, `ALTER TABLE users ADD COLUMN numeric_id serial,
+		ADD COLUMN avatar_source text NOT NULL DEFAULT 'auto', ADD COLUMN custom_avatar_url text;
+		CREATE TABLE external_identities(user_id uuid,avatar_url text,provider text,created_at timestamptz,id uuid)`); err != nil {
+		t.Fatal(err)
+	}
+	dashboard, err := p.ATHubDashboard(ctx, from, until, 3600, 100, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dashboard.Usage.Total != 4 || dashboard.Usage.Success != 2 || dashboard.Usage.Failed != 1 ||
+		dashboard.Usage.Pending != 1 || len(dashboard.Usage.Trend) != 2 ||
+		dashboard.TotalUsers != 2 || len(dashboard.Users) != 2 || len(dashboard.Calls) != 4 || dashboard.CallsNext {
+		t.Fatalf("API key dashboard includes website traffic: %+v", dashboard)
+	}
+	if dashboard.Users[0].UserID != user || dashboard.Users[0].Total != 3 ||
+		dashboard.Users[1].UserID != other || dashboard.Users[1].Total != 1 {
+		t.Fatalf("invalid API key ranking: %+v", dashboard.Users)
+	}
+	for _, call := range dashboard.Calls {
+		if call.KeyID == nil {
+			t.Fatalf("website traffic in administrator call history: %+v", call)
+		}
+	}
+	page, err := p.ATHubDashboard(ctx, from, until, 3600, 1, 1, 3)
+	if err != nil || len(page.Users) != 1 || page.Users[0].UserID != other ||
+		len(page.Calls) != 1 || page.CallsNext {
+		t.Fatalf("invalid filtered dashboard pagination: %+v err=%v", page, err)
 	}
 }
 

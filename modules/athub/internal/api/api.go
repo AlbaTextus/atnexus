@@ -26,6 +26,7 @@ type API struct {
 	store     storage.Store
 	tokenHash [32]byte
 	logger    *slog.Logger
+	cache     *readCache
 }
 
 func New(store storage.Store, token string, logger *slog.Logger) (http.Handler, error) {
@@ -60,11 +61,11 @@ func NewWithMiddleware(store storage.Store, wrap func(http.Handler) http.Handler
 	if logger == nil {
 		logger = slog.Default()
 	}
-	a := &API{store: store, logger: logger}
+	a := &API{store: store, logger: logger, cache: newReadCache()}
 	return wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		a.serveContent(w, r)
+		a.serveCachedContent(w, r)
 	})), nil
 }
 
@@ -168,6 +169,9 @@ func (e *requestError) Error() string { return e.message }
 func badRequest(message string) error { return &requestError{http.StatusBadRequest, message} }
 
 func (a *API) novelInfo(w http.ResponseWriter, r *http.Request) error {
+	if handled, err := a.catalogView(w, r); handled {
+		return err
+	}
 	query, err := parseQuery(r.URL.RawQuery, "id", "platformId", "authorId", "tagId", "limit", "offset")
 	if err != nil {
 		return err

@@ -86,6 +86,23 @@ func TestATHubUserKeyContentFlowIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
+	// This test exercises direct writes and key accounting. Grant the two fixture
+	// writes explicitly; ordinary users are read-only under the current policy.
+	operator, err := st.UpsertUser(ctx, store.UserSeed{Email: "policy-operator@example.test", PasswordHash: "unused", Role: "SUPER_ADMIN"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	policyFixture, err := st.ATHubPolicy(ctx, "USER")
+	if err != nil {
+		t.Fatal(err)
+	}
+	policyFixture.ReviewRequired = false
+	policyFixture.Rules = append(policyFixture.Rules,
+		store.ATHubAccessRule{Operation: "upload", Method: "POST", Path: "/api/v2/platforms", Allowed: true},
+		store.ATHubAccessRule{Operation: "upload", Method: "POST", Path: "/api/v2/novelinfo", Allowed: true})
+	if _, err := st.SetATHubPolicy(ctx, operator.ID, policyFixture); err != nil {
+		t.Fatal(err)
+	}
 	user, err := st.CreateUser(ctx, "collector@example.test", "unused", nil)
 	if err != nil {
 		t.Fatal(err)

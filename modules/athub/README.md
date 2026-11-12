@@ -43,6 +43,21 @@ Key 只在生成或重置时显示明文，账户库只保存 SHA-256 哈希。�
 现有请求字段、分页、8 MiB JSON 上限、批量上传事务、分卷和章节排序规则保持不变。
 创建资源返回的 `Location` 使用 `/api/v2/`。
 
+网站按需使用下列 GET 查询，原有列表的数组响应保持兼容：
+
+- `/api/v2/novelinfo?view=page&limit=24&offset=0&sort=updated&q=关键词` 返回
+  `{"items":[...],"total":123}`。`sort` 支持 `updated`、`title`，并支持原有
+  `platformId`、`authorId`、`tagId` 筛选；`q` 按 NFKC 归一化后匹配书名或作者，最多 200 字符。
+- `/api/v2/authors?ids=1,2,3` 批量返回指定作者，最多 100 个正整数 ID，不能组合其他参数。
+- `novelinfo`、`authors`、`tags`、`platforms` 支持单独的 `?view=count`，返回 `{"total":123}`。
+
+宿主模式下，内容模块在鉴权之后缓存成功的 GET 响应，合并同路径的并发回源。
+普通内容有效期 30 秒，标签和平台有效期 5 分钟；不缓存错误或超过 1 MiB 的响应，
+总容量不超过 128 项和 16 MiB。写入成功及宿主批准的审核写入都会使本进程缓存失效，
+旧读请求不能在失效后重新填入缓存。缓存命中仍需通过宿主鉴权、权限检查和 API Key 记账。
+这是进程内缓存；多实例部署与绕过 API 的数据库修改由有效期兜底。HTTP 响应仍为 `no-store`，
+不将账户保护下的内容变为公共 CDN 缓存。
+
 ## 数据库与迁移
 
 `ATHUB_DATABASE_URL` 专用于内容库，与宿主 `DATABASE_URL` 分开配置。

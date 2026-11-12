@@ -17,7 +17,7 @@ import { ChapterTree } from "./chapter-tree";
 import type { DemoNovel } from "@/lib/novel-demo-data";
 
 const navigation = [{href:"/library",title:"书库",icon:Library},{href:"#overview",title:"作品概览",icon:BookOpen},{href:"#details",title:"作品详情",icon:Library}];
-export function NovelDetail({novel}: {novel: DemoNovel}) {
+export function NovelDetail({novel,catalogLoading=false,catalogError=""}: {novel: DemoNovel;catalogLoading?:boolean;catalogError?:string}) {
   const [tab,setTab]=useState("intro"), [cover,setCover]=useState(false);
   const facts=[["总字数",novel.words],["章节数量",novel.chapterCount === null ? "待补充" : `${novel.chapterCount} 章`],["作品语言",novel.language],["最后更新",novel.updatedAt.slice(0,10)]];
   return <MotionConfig reducedMotion="user">
@@ -54,7 +54,7 @@ export function NovelDetail({novel}: {novel: DemoNovel}) {
     </TabsList></div>
     <TabsContent value="intro"><section className="panel introduction" aria-label="作品简介"><h2 className="content-section-heading m-0 text-lg font-bold tracking-tight text-foreground sm:text-xl">简介</h2><div className="synopsis">{novel.synopsis.map((p,i)=><p key={i}>{p}</p>)}</div></section><GallerySection/></TabsContent>
     <TabsContent value="downloads"><DownloadSection/></TabsContent>
-    <TabsContent value="catalog"><ChapterTree volumes={novel.volumes} chapters={novel.chapters}/></TabsContent>
+    <TabsContent value="catalog">{catalogLoading ? <div className="panel novel-page-loading" role="status">正在加载目录…</div> : catalogError ? <div className="panel" role="alert">{catalogError}</div> : <ChapterTree volumes={novel.volumes} chapters={novel.chapters}/>}</TabsContent>
   </Tabs></div></div>
   </main>
   <Dialog open={cover} onOpenChange={setCover}><DialogContent><DialogHeader><DialogTitle>作品封面</DialogTitle><DialogDescription>{novel.title}</DialogDescription></DialogHeader><DemoCover src={novel.cover} title={novel.title} full/></DialogContent></Dialog></MotionConfig>;

@@ -50,6 +50,15 @@ func TestATHubSessionAccountingIntegration(t *testing.T) {
 			if err := st.pool.QueryRow(ctx, `SELECT authenticated,key_id FROM athub_api_calls WHERE id=$1`, call.ID).Scan(&authenticated, &keyID); err != nil || authenticated != tc.allowed || keyID != nil {
 				t.Fatalf("invalid session audit: %v", err)
 			}
+			usage, err := st.ATHubUsage(ctx, userID)
+			if err != nil || usage.Total != 0 || len(usage.Endpoints) != 0 ||
+				usage.Quota == nil || usage.Quota.RemainingCalls == nil || *usage.Quota.RemainingCalls != 0 {
+				t.Fatalf("session traffic changed API key usage: %+v err=%v", usage, err)
+			}
+			calls, err := st.ListATHubCalls(ctx, userID, 10, 0)
+			if err != nil || len(calls) != 0 {
+				t.Fatalf("session traffic in API key history: %+v err=%v", calls, err)
+			}
 		})
 	}
 }

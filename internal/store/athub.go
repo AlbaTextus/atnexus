@@ -322,7 +322,7 @@ func (p *Postgres) FinishATHubCall(ctx context.Context, id uuid.UUID, status int
 
 func (p *Postgres) ListATHubCalls(ctx context.Context, userID uuid.UUID, limit, offset int) ([]ATHubCall, error) {
 	rows, err := p.pool.Query(ctx, `SELECT id,user_id,key_id,request_id,method,path,port,authenticated,status,duration_ms,response_bytes,started_at,completed_at
-		FROM athub_api_calls WHERE user_id=$1 ORDER BY started_at DESC,id DESC LIMIT $2 OFFSET $3`, userID, limit, offset)
+		FROM athub_api_calls WHERE user_id=$1 AND key_id IS NOT NULL ORDER BY started_at DESC,id DESC LIMIT $2 OFFSET $3`, userID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -378,16 +378,18 @@ func (p *Postgres) athubUsage(ctx context.Context, userID uuid.UUID, from, until
 	return result, tx.Commit(ctx)
 }
 
-// A nil userID aggregates the whole site, including unattributed requests.
+// Only personal API key calls contribute to usage. Account-session traffic
+// remains in the audit log but must not appear in API key totals or charts.
+// A nil userID aggregates API key calls across the whole site.
 func athubUsageSnapshot(ctx context.Context, tx pgx.Tx, userID *uuid.UUID, from, until *time.Time, bucketSeconds int) (ATHubUsage, error) {
 	result := ATHubUsage{Endpoints: make([]ATHubUsageGroup, 0), From: from, Until: until, BucketSeconds: bucketSeconds}
 	if err := tx.QueryRow(ctx, `SELECT COUNT(*),COUNT(*) FILTER(WHERE status BETWEEN 200 AND 399),
 		COUNT(*) FILTER(WHERE status>=400),COUNT(*) FILTER(WHERE status IS NULL) FROM athub_api_calls
-		WHERE ($1::uuid IS NULL OR user_id=$1) AND ($2::timestamptz IS NULL OR started_at >= $2) AND ($3::timestamptz IS NULL OR started_at < $3)`, userID, from, until).Scan(&result.Total, &result.Success, &result.Failed, &result.Pending); err != nil {
+		WHERE key_id IS NOT NULL AND ($1::uuid IS NULL OR user_id=$1) AND ($2::timestamptz IS NULL OR started_at >= $2) AND ($3::timestamptz IS NULL OR started_at < $3)`, userID, from, until).Scan(&result.Total, &result.Success, &result.Failed, &result.Pending); err != nil {
 		return result, err
 	}
 	rows, err := tx.Query(ctx, `SELECT method,path,port,status,COUNT(*) FROM athub_api_calls
-		WHERE ($1::uuid IS NULL OR user_id=$1) AND ($2::timestamptz IS NULL OR started_at >= $2) AND ($3::timestamptz IS NULL OR started_at < $3)
+		WHERE key_id IS NOT NULL AND ($1::uuid IS NULL OR user_id=$1) AND ($2::timestamptz IS NULL OR started_at >= $2) AND ($3::timestamptz IS NULL OR started_at < $3)
 		GROUP BY method,path,port,status ORDER BY COUNT(*) DESC,method,path,port,status`, userID, from, until)
 	if err != nil {
 		return result, err
@@ -407,7 +409,7 @@ func athubUsageSnapshot(ctx context.Context, tx pgx.Tx, userID *uuid.UUID, from,
 	if from != nil {
 		result.Trend = make([]ATHubUsagePoint, 0)
 		points, err := tx.Query(ctx, `SELECT to_timestamp(floor(extract(epoch FROM started_at)/$4::int)*$4::int),port,COUNT(*)
-			FROM athub_api_calls WHERE ($1::uuid IS NULL OR user_id=$1) AND started_at >= $2 AND started_at < $3
+			FROM athub_api_calls WHERE key_id IS NOT NULL AND ($1::uuid IS NULL OR user_id=$1) AND started_at >= $2 AND started_at < $3
 			GROUP BY 1,port ORDER BY 1,port`, userID, from, until, bucketSeconds)
 		if err != nil {
 			return result, err

@@ -64,7 +64,7 @@ func (p *Postgres) ATHubDashboard(ctx context.Context, from, until time.Time, bu
 		return result, err
 	}
 	if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM users u WHERE EXISTS(
-		SELECT 1 FROM athub_api_calls c WHERE c.user_id=u.id AND c.started_at >= $1 AND c.started_at < $2
+		SELECT 1 FROM athub_api_calls c WHERE c.user_id=u.id AND c.key_id IS NOT NULL AND c.started_at >= $1 AND c.started_at < $2
 	)`, from, until).Scan(&result.TotalUsers); err != nil {
 		return result, err
 	}
@@ -75,7 +75,7 @@ func (p *Postgres) ATHubDashboard(ctx context.Context, from, until time.Time, bu
 			COUNT(*) FILTER(WHERE status BETWEEN 200 AND 399) AS success,
 			COUNT(*) FILTER(WHERE status>=400) AS failed,
 			COUNT(*) FILTER(WHERE status IS NULL) AS pending,MAX(started_at) AS last_used_at
-		FROM athub_api_calls WHERE started_at >= $1 AND started_at < $2 AND user_id IS NOT NULL GROUP BY user_id
+		FROM athub_api_calls WHERE key_id IS NOT NULL AND started_at >= $1 AND started_at < $2 AND user_id IS NOT NULL GROUP BY user_id
 	)
 	SELECT u.id,u.numeric_id,u.display_name,`+dashboardAvatarSQL+`,c.total,c.success,
 		c.failed,c.pending,c.last_used_at
@@ -100,7 +100,7 @@ func (p *Postgres) ATHubDashboard(ctx context.Context, from, until time.Time, bu
 	calls, err := tx.Query(ctx, `SELECT c.id,c.user_id,c.key_id,c.request_id,c.method,c.path,c.port,c.authenticated,
 		c.status,c.duration_ms,c.response_bytes,c.started_at,c.completed_at,u.numeric_id,u.display_name,`+dashboardAvatarSQL+`
 		FROM athub_api_calls c LEFT JOIN users u ON u.id=c.user_id
-		WHERE c.started_at >= $1 AND c.started_at < $2
+		WHERE c.key_id IS NOT NULL AND c.started_at >= $1 AND c.started_at < $2
 		ORDER BY c.started_at DESC,c.id DESC LIMIT $3 OFFSET $4`, from, until, limit+1, callsOffset)
 	if err != nil {
 		return result, err

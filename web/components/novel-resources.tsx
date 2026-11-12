@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { BookOpen, Building2, Tags, UsersRound } from "lucide-react"
 import { ContentFailure, NovelAccessGate, useNovelAccess } from "@/components/novel-access"
-import { readAllContent } from "@/lib/novel-demo-data"
 
 const resources = [
   { path: "/api/v2/novelinfo", title: "小说", icon: BookOpen, tone: "blue" },
@@ -27,10 +26,9 @@ function ResourceCounts() {
 
   useEffect(() => {
     const controller = new AbortController()
-    setCounts(null)
     setError("")
     Promise.all(resources.map(async resource =>
-      (await readAllContent<{ id: number }>(request, resource.path, controller.signal)).length,
+      (await request<{ total: number }>(`${resource.path}?view=count`, controller.signal)).total,
     )).then(values => {
       if (!controller.signal.aborted) setCounts(values)
     }).catch(reason => {

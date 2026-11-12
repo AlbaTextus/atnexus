@@ -10,6 +10,9 @@ import (
 )
 
 func (a *API) platforms(w http.ResponseWriter, r *http.Request) error {
+	if handled, err := a.catalogView(w, r); handled {
+		return err
+	}
 	query, err := parseQuery(r.URL.RawQuery, "id", "limit", "offset")
 	if err != nil {
 		return err
@@ -64,6 +67,9 @@ func (a *API) platforms(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *API) authors(w http.ResponseWriter, r *http.Request) error {
+	if handled, err := a.catalogView(w, r); handled {
+		return err
+	}
 	query, err := parseQuery(r.URL.RawQuery, "id", "platformId", "limit", "offset")
 	if err != nil {
 		return err

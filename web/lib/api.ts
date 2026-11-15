@@ -27,7 +27,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(response.status, payload?.error || "request_failed", message)
   }
   if (init?.method === "DELETE" && path === "/api/v1/sessions/current") clearStoredContent()
-  if (init?.method === "POST" && (path === "/api/v1/account/athub/submissions" || path.startsWith("/api/v1/admin/athub/reviews/"))) {
+  if (init?.method === "POST" && (path === "/api/v1/account/athub/submissions" || path.startsWith("/api/v1/admin/athub/reviews/")) ||
+    init?.method === "PUT" && /^\/api\/v1\/account\/athub\/novels\/\d+$/.test(path)) {
     clearStoredContent()
     if (typeof window !== "undefined") window.dispatchEvent(new Event("atnexus:content-changed"))
   }

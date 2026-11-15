@@ -25,12 +25,17 @@
 .novel-demo .novel-resource-count dd { color: var(--foreground); font-size: 36px; font-weight: 600; line-height: 1.2; text-align: left; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
 .novel-demo .novel-detail-page > .details-grid { margin-top: 0; }
-.novel-demo .book-overview, .novel-demo .book-title-card { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.novel-demo .book-overview { --sidebar-icon: #64a08b; }
-.novel-demo .book-title-card { --sidebar-icon: #5c8fc7; }
-.novel-demo .book-overview .cover-area { align-self: stretch; padding: 6px 0; }
-.novel-demo .book-overview .cover-button { width: min(170px, 100%); }
-.novel-demo .book-title-card h1 { margin: 0; font-size: 16px; line-height: 1.6; white-space: normal; overflow-wrap: anywhere; letter-spacing: 0; }
+.novel-demo .novel-book-header { display: grid; grid-template-columns: 280px minmax(0, 1fr); align-items: center; gap: 64px; padding: 40px 0 56px; }
+.novel-demo .novel-book-header .cover-area { align-self: center; min-width: 0; }
+.novel-demo .novel-book-header .cover-button { display: block; width: 100%; padding: 0; border: 0; border-radius: 8px; background: var(--secondary); transform: none; box-shadow: 0 20px 40px -12px rgb(38 43 65 / 22%); transition: box-shadow 180ms ease; }
+.novel-demo .novel-book-header .cover-button:hover { transform: none; box-shadow: 0 24px 44px -12px rgb(38 43 65 / 28%); }
+.novel-demo .novel-book-header .cover-button img { width: 100%; height: auto; max-height: 440px; object-fit: contain; }
+.novel-demo .novel-book-header .library-cover-fallback { aspect-ratio: 7 / 10; height: auto; }
+.novel-demo .novel-book-heading { min-width: 0; }
+.novel-demo .novel-book-heading h1 { margin: 0; color: var(--foreground); font-size: 34px; font-weight: 700; line-height: 1.45; letter-spacing: 0; white-space: normal; overflow-wrap: anywhere; text-wrap: pretty; }
+.novel-demo .novel-book-author { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 28px 0 0; font-size: 16px; line-height: 1.7; }
+.novel-demo .novel-book-author .author-name { font-size: inherit; font-weight: 500; }
+.novel-demo .novel-author-role { color: var(--muted-foreground); }
 .novel-author-link:hover { color: #5289c7; text-decoration: underline; text-underline-offset: 4px; }
 .novel-author-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: 2px; }
 @media(max-width:640px) {

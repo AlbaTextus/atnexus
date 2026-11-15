@@ -36,6 +36,8 @@ type API struct {
 	turnstile           *turnstile.Service
 	mailer              email.Sender
 	athubReviewExecutor store.ATHubReviewExecutor
+	athubSubmitter      func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID)
+	athubNovelEditor    func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32)
 }
 
 func New(cfg config.Config, st store.Store, logger *slog.Logger) (*API, error) {
@@ -94,6 +96,9 @@ func (a *API) Router() http.Handler {
 	r.Get("/api/v1/admin/athub/reviews/{id}", a.athubReviews)
 	r.Post("/api/v1/admin/athub/reviews/{id}", a.athubReviews)
 	r.Get("/api/v1/account/athub/submissions", a.athubReviews)
+	r.Post("/api/v1/account/athub/submissions", a.athubSubmit)
+	r.Put("/api/v1/account/athub/novels/{id}", a.athubEditNovel)
+		r.Post("/api/v1/account/athub/cover", a.uploadNovelCover)
 	r.Get("/api/v1/account/athub/submissions/{id}", a.athubReviews)
 	r.Get("/api/v1/auth/providers", a.loginProviders)
 	r.Get("/api/v1/auth/verification", a.authVerification)

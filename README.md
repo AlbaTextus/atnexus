@@ -413,6 +413,8 @@ Go 服务在注册、密码登录、第三方登录发起、通行密钥登录�
 
 `/admin/settings` 分别提供 Key 总调用限制与接口权限配置。默认 LT1 仅可 GET 查看、读取资源；LT2 可上传、新建和修改，但提交需审核后生效；LT3 可直接上传、修改并审核，不能删除；LT4 拥有全部操作。接口权限只配置允许／禁止及审核要求，具体接口按方法与路径覆盖分类开关，不再设置或执行分类、具体接口的次数限制，旧配置中的次数上限也不再生效。网页登录的接口权限同样生效。Key 累计总调用限制保留，默认不限次。接口权限由超级管理员保存，管理员可查看。
 
+作品详情右上方的「编辑」支持修改作品名称、来源平台、关联作者、连载状态、封面链接、简介和标签。`/admin/settings` 的「接口权限 → 作品资料编辑」可按等级选择继承、允许或禁止，审核要求沿用该等级的「内容写入（含作品资料编辑）需审核后生效」。浏览器通过 `PUT /api/v1/account/athub/novels/{id}` 提交，服务端绑定登录会话及作品编号，复用 `PUT /api/v2/novelinfo` 的权限、审核和变更历史；只读内容凭据不能用于写入。
+
 需审核的内容写入返回 HTTP `202` 以及 `review_id`、`status: "pending"`，此时正式书库尚未变化。书库头像菜单内的审核入口位于 `/library/reviews`，LT3、LT4 可查看提交并通过或驳回；不能审核自己的提交，也不能借审核执行自己无权进行的操作。通过后应用原提交，保留提交者作为历史贡献者；驳回原因与审核结果会保存。重复或并发审核不会重复写入内容。提交者可通过 `/api/v1/account/athub/submissions` 及 `/{id}` 查询自己的状态和结果，审核接口为 `/api/v1/admin/athub/reviews`。
 
 权限配置接口为 `GET/PUT /api/v1/admin/athub/permissions`，当前账户能力接口为 `GET /api/v1/account/athub/permissions`。启用此功能需分别运行 `pnpm db:deploy` 和 `pnpm db:athub:deploy`，应用账户库权限／审核迁移及内容库幂等回执迁移，然后更新前后端；迁移不改变现有账户等级和 Key 总调用限额。
@@ -639,6 +641,48 @@ Go 服务可用 `go build -o ../release/atnexus ./cmd/server` 构建，Windows �
 后台邮件推送、全站公告和消息中心已移除，包括管理页面、公开公告接口及后台发信队列。注册、验证和绑定邮箱仍使用原有 SMTP 配置；验证码邮件保留品牌 HTML 模板和纯文本备份。
 
 部署时先停止旧版 Go 服务，备份需要保留的历史消息，再执行 `pnpm db:deploy`，最后启动新版 Go 服务并更新前端。新增的 `20261101000000_remove_communications` 迁移会永久删除 `mail_deliveries` 和 `communications` 表及其中的消息、发送记录；历史迁移保持不变，不影响邮箱验证数据。外部服务若仍使用旧公告接口，需要同步移除入口和轮询。
+
+## Linux AMD64 构建
+
+支持 Windows 原生构建，无需 WSL 或 Docker。构建机安装 Go（版本见 `go.mod`）、
+Node.js 20.9 或更新版本、Corepack 和 `tar`（Windows 自带），在项目根目录执行：
+
+```bash
+node scripts/build-linux-amd64.mjs
+# 可指定发布包名称；同名产物已存在时会退出，避免覆盖。
+node scripts/build-linux-amd64.mjs atnexus-linux-amd64-v1
+# 也可通过项目命令执行。
+pnpm build:linux-amd64
+```
+
+Windows 也可使用 PowerShell 入口：
+
+```powershell
+.\scripts\build-linux-amd64.ps1
+.\scripts\build-linux-amd64.ps1 -Name atnexus-linux-amd64-v1
+```
+
+Linux 可运行 `bash scripts/build-linux-amd64.sh`。Corepack 未安装时先运行
+`npm install --global corepack`。构建前可设置 `OAUTH_BACKEND_URL`、
+`NEXT_PUBLIC_ATHUB_API_URL`、`NEXT_PUBLIC_WIKI_URL` 和 `NEXT_PUBLIC_CREDIT_URL`。
+默认后端地址为 `http://127.0.0.1:8001`，内容 API 为 `https://api.albatextus.com`，
+Wiki 和 Credit 分别为 `http://localhost:3200`、`http://localhost:3300`。
+本地 `.env` 文件不参与构建，公开地址和 Next.js 转发目标修改后需要重新构建。
+
+脚本复制当前工作目录源码（包括未提交的修改）到 `temp/`，安装锁定依赖并构建，
+退出时清理临时目录。开发依赖与前端构建目录不受影响。产物位于项目的 `release/`：
+
+- `<名称>/`：静态 Go 后端、Next.js 前端、Linux AMD64 生产依赖、启动脚本、
+  两套数据库迁移与 `.env.example`。
+- `<名称>.tar.gz` 和 `<名称>.tar.gz.sha256`：完整发布包与校验文件。
+
+目标服务器需要 Linux AMD64、glibc 和 Node.js 20.9 或更新版本（推荐 Node.js 24），
+不适用于 Alpine/musl。构建包不附带 Node.js。前端先在构建机编译，再独立安装 Linux 的
+生产依赖，不打包 Windows 开发依赖。部署后保留已有 `.env`，
+执行 `chmod +x atnexus start-backend.sh start-frontend.sh`，
+分别运行 `./start-backend.sh`、`./start-frontend.sh`；
+前端默认监听 `3288`，可通过 `HOSTNAME_OVERRIDE` 和 `PORT` 调整。
+脚本不自动执行数据库迁移或 seed；迁移仍按现有部署流程执行。
 
 ## 开发
 

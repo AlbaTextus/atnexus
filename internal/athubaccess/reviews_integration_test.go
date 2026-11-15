@@ -182,4 +182,136 @@ func TestModeratedContentIntegration(t *testing.T) {
 	if deletion.Code != 204 {
 		t.Fatalf("LT4 delete=%d %s", deletion.Code, deletion.Body)
 	}
+
+	t.Run("browser session novel edits", func(t *testing.T) {
+		created := call("SUPER_ADMIN", "POST", "/api/v2/novelinfo", body)
+		var book struct {
+			ID int32 `json:"id"`
+		}
+		if created.Code != 201 || json.Unmarshal(created.Body.Bytes(), &book) != nil || book.ID <= 0 {
+			t.Fatalf("edit fixture: %d %s", created.Code, created.Body)
+		}
+		cookie := "browser-edit-" + uuid.NewString()
+		if err := p.CreateSession(ctx, users["LEVEL_2"].ID, security.HashToken(cookie), time.Now().Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		session, err := p.SessionByHash(ctx, security.HashToken(cookie))
+		if err != nil {
+			t.Fatal(err)
+		}
+		submitEdit := func(title string) store.ATHubReview {
+			t.Helper()
+			payload := fmt.Sprintf(`{"platformId":%d,"title":%q,"status":"COMPLETED","summary":"浏览器编辑简介","tagIds":[]}`, platformData.ID, title)
+			request := httptest.NewRequest("PUT", fmt.Sprintf("/api/v1/account/athub/novels/%d", book.ID), strings.NewReader(payload))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			access.SubmitNovelEdit(response, request, users["LEVEL_2"].ID, session.ID, book.ID)
+			var queued struct {
+				ID uuid.UUID `json:"review_id"`
+			}
+			if response.Code != 202 || json.Unmarshal(response.Body.Bytes(), &queued) != nil {
+				t.Fatalf("browser edit: %d %s", response.Code, response.Body)
+			}
+			item, err := p.ATHubReview(ctx, users["LEVEL_2"].ID, queued.ID, false)
+			if err != nil || item.Operation != "edit" || item.Status != "pending" || item.Query != fmt.Sprintf("id=%d", book.ID) {
+				t.Fatalf("browser edit review: %+v %v", item, err)
+			}
+			return item
+		}
+		readTitle := func(want string) {
+			t.Helper()
+			visible := call("USER", "GET", fmt.Sprintf("/api/v2/novelinfo?id=%d", book.ID), "")
+			var data struct {
+				Title string `json:"title"`
+			}
+			if visible.Code != 200 || json.Unmarshal(visible.Body.Bytes(), &data) != nil || data.Title != want {
+				t.Fatalf("visible title should be %q: %d %s", want, visible.Code, visible.Body)
+			}
+		}
+		item := submitEdit("审核通过的浏览器编辑")
+		readTitle("等待审核的小说")
+		if _, err := p.DecideATHubReview(ctx, users["LEVEL_2"].ID, item.ID, "approve", "", access.ApplyReview); err == nil {
+			t.Fatal("submitter approved own edit")
+		}
+		approved, err := p.DecideATHubReview(ctx, users["ADMIN"].ID, item.ID, "approve", "", access.ApplyReview)
+		if err != nil || approved.Status != "approved" {
+			t.Fatalf("browser edit approval: %+v %v", approved, err)
+		}
+		readTitle("审核通过的浏览器编辑")
+		history, err := p.NovelHistory(ctx, book.ID, 20, 0)
+		if err != nil || history.Total != 2 || !strings.Contains(string(history.Revisions[0].Contributor), users["LEVEL_2"].ID.String()) {
+			t.Fatalf("browser edit contributor lost: %+v %v", history, err)
+		}
+		item = submitEdit("驳回的浏览器编辑")
+		rejected, err := p.DecideATHubReview(ctx, users["ADMIN"].ID, item.ID, "reject", "资料不准确", access.ApplyReview)
+		if err != nil || rejected.Status != "rejected" {
+			t.Fatalf("browser edit rejection: %+v %v", rejected, err)
+		}
+		readTitle("审核通过的浏览器编辑")
+	})
+
+	t.Run("browser session submissions", func(t *testing.T) {
+		for _, role := range []string{"USER", "LEVEL_2", "ADMIN"} {
+			keyCallsBefore, err := p.ListATHubCalls(ctx, users[role].ID, 1, 0)
+			if err != nil || len(keyCallsBefore) != 1 {
+				t.Fatalf("missing API key call fixture: %+v %v", keyCallsBefore, err)
+			}
+			cookie := "browser-submission-" + uuid.NewString()
+			if err := p.CreateSession(ctx, users[role].ID, security.HashToken(cookie), time.Now().Add(time.Hour)); err != nil {
+				t.Fatal(err)
+			}
+			session, err := p.SessionByHash(ctx, security.HashToken(cookie))
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload := fmt.Sprintf(`{"novel":{"platformId":%d,"title":"%s浏览器投稿","status":"ONGOING"},"chapters":[{"order":1,"title":"第一章","content":"这是通过登录会话提交的正文。"}],"volumes":[]}`, platformData.ID, role)
+			request := httptest.NewRequest("POST", "/api/v1/account/athub/submissions", strings.NewReader(payload))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("X-AlbaTextus-Client", "account-center")
+			response := httptest.NewRecorder()
+			access.SubmitUpload(response, request, users[role].ID, session.ID)
+			want := map[string]int{"USER": 403, "LEVEL_2": 202, "ADMIN": 201}[role]
+			if response.Code != want {
+				t.Fatalf("role=%s status=%d body=%s", role, response.Code, response.Body)
+			}
+			if role == "USER" {
+				continue
+			}
+			body := response.Body.Bytes()
+			if role == "LEVEL_2" {
+				var queued struct {
+					ID uuid.UUID `json:"review_id"`
+				}
+				if err := json.Unmarshal(body, &queued); err != nil {
+					t.Fatal(err)
+				}
+				item, err := p.ATHubReview(ctx, users[role].ID, queued.ID, false)
+				if err != nil || item.Status != "pending" || item.Path != "/api/v2/upload" {
+					t.Fatalf("browser submission missing from own reviews: %+v %v", item, err)
+				}
+				approved, err := p.DecideATHubReview(ctx, users["ADMIN"].ID, queued.ID, "approve", "", access.ApplyReview)
+				if err != nil || approved.Status != "approved" {
+					t.Fatalf("browser approval: %+v %v", approved, err)
+				}
+				body = approved.Result
+			}
+			var uploaded struct {
+				Novel struct {
+					ID int32 `json:"id"`
+				} `json:"novel"`
+				ChapterCount int `json:"chapterCount"`
+			}
+			if err := json.Unmarshal(body, &uploaded); err != nil || uploaded.Novel.ID <= 0 || uploaded.ChapterCount != 1 {
+				t.Fatalf("invalid upload result: %s err=%v", body, err)
+			}
+			history, err := p.NovelHistory(ctx, uploaded.Novel.ID, 20, 0)
+			if err != nil || history.Total != 1 || !strings.Contains(string(history.Revisions[0].Contributor), users[role].ID.String()) {
+				t.Fatalf("browser contributor lost: %+v %v", history, err)
+			}
+			calls, err := p.ListATHubCalls(ctx, users[role].ID, 1, 0)
+			if err != nil || len(calls) != 1 || calls[0].KeyID == nil || calls[0].ID != keyCallsBefore[0].ID {
+				t.Fatalf("browser submission counted against personal key: %+v %v", calls, err)
+			}
+		}
+	})
 }

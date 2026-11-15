@@ -6,7 +6,7 @@ import { Link } from "next-view-transitions"
 import { usePathname } from "next/navigation"
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from "react"
 import { motion, useAnimationControls, useReducedMotion } from "framer-motion"
-import { Activity, AlertCircle, House, KeyRound, LayoutGrid, LogOut, Settings2, ShieldCheck, ShieldX, UserRound, Users } from "lucide-react"
+import { Activity, AlertCircle, House, KeyRound, LayoutGrid, LibraryBig, LogOut, Settings2, ShieldCheck, ShieldX, UserRound, Users } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import { isAdminRole, managementError } from "@/lib/applications"
 import { profileSetupPath } from "@/lib/profile-setup"
@@ -29,12 +29,14 @@ export function useAccountUser() { return useAccountContext().user }
 export function useUpdateAccountUser() { return useAccountContext().updateUser }
 
 const userNavigation: NavigationItem[] = [
+  { href: "/library", title: "返回书库", icon: LibraryBig, tone: "blue", leadingGap: 90 },
   { href: "/account", title: "用户中心", icon: House, tone: "orange" },
   { href: "/account/profile", title: "个人资料", icon: UserRound, tone: "blue" },
   { href: "/account/security", title: "账户安全", icon: ShieldCheck, tone: "teal" },
   { href: "/account/key", title: "API 密钥", icon: KeyRound, tone: "violet" },
 ]
 const adminNavigation: NavigationItem[] = [
+  { href: "/library", title: "返回书库", icon: LibraryBig, tone: "blue", leadingGap: 90 },
   { href: "/admin/users", title: "用户管理", icon: Users, tone: "blue" },
   { href: "/admin/usage", title: "调用统计", icon: Activity, tone: "teal" },
   { href: "/admin/applications", title: "应用接入", icon: LayoutGrid, tone: "violet" },

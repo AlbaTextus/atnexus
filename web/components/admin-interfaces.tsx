@@ -19,6 +19,7 @@ type Draft = Omit<RolePolicy, "rules"> & { rules: DraftRule[] }
 const ruleKey = (rule: { operation: string; method: string; path: string }) => `${rule.operation}:${rule.method}:${rule.path}`
 const toDraft = (policy: RolePolicy): Draft => ({ ...policy, rules: policy.rules.map(({ operation, method, path, allowed }) => ({ operation, method, path, allowed })) })
 const operations: Operation[] = ["read", "upload", "edit", "review", "delete"]
+const novelEditEndpoint: Endpoint = { operation: "edit", method: "PUT", path: "/api/v2/novelinfo" }
 function privileged(role: string, operation: Operation) {
   return operation === "delete" ? role === "SUPER_ADMIN" : operation === "review" ? role === "ADMIN" || role === "SUPER_ADMIN" : true
 }
@@ -94,6 +95,8 @@ export function AdminInterfaces() {
   const draft = drafts[role]
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved[role])
   const disabled = !editable || busy
+  const novelEditRule = draft?.rules.find(rule => ruleKey(rule) === ruleKey(novelEditEndpoint))
+  const novelEditInherited = draft?.rules.find(rule => rule.operation === "edit" && rule.method === "")?.allowed ?? false
   function changeRule(rule: DraftRule) {
     setDrafts(current => ({ ...current, [role]: { ...current[role], rules: [...current[role].rules.filter(item => ruleKey(item) !== ruleKey(rule)), rule].sort((a, b) => ruleKey(a).localeCompare(ruleKey(b))) } }))
   }
@@ -130,8 +133,13 @@ export function AdminInterfaces() {
               <td className="pr-5"><Checkbox aria-label={`${role} ${operationNames[operation]}权限`} checked={rule.allowed} disabled={disabled || !privileged(role, operation)} onCheckedChange={value => changeRule({ ...rule, allowed: Boolean(value) })} /></td>
             </tr>
           })}</tbody></table></div>
-        <label className="flex items-center gap-3 text-sm"><Checkbox checked={draft.review_required} disabled={disabled} onCheckedChange={value => setDrafts(current => ({ ...current, [role]: { ...current[role], review_required: Boolean(value) } }))} />内容写入需审核后生效</label>
-        <details className="rounded-xl border p-4"><summary className="cursor-pointer text-sm font-medium">具体接口规则</summary><div className="mt-4 space-y-4">{endpoints.map(endpoint => {
+        <div className="flex items-center justify-between gap-4 rounded-xl border p-4">
+          <span className="text-sm font-medium">作品资料编辑</span>
+          <EndpointPermissionSelect value={novelEditRule ? novelEditRule.allowed ? "allow" : "deny" : "inherit"} inheritedAllowed={novelEditInherited}
+            disabled={disabled} label={`${role} 作品资料编辑权限`} onValueChange={value => value === "inherit" ? inherit(novelEditEndpoint) : changeRule({ ...novelEditEndpoint, allowed: value === "allow" })} />
+        </div>
+        <label className="flex items-center gap-3 text-sm"><Checkbox checked={draft.review_required} disabled={disabled} onCheckedChange={value => setDrafts(current => ({ ...current, [role]: { ...current[role], review_required: Boolean(value) } }))} />内容写入（含作品资料编辑）需审核后生效</label>
+        <details className="rounded-xl border p-4"><summary className="cursor-pointer text-sm font-medium">具体接口规则</summary><div className="mt-4 space-y-4">{endpoints.filter(endpoint => ruleKey(endpoint) !== ruleKey(novelEditEndpoint)).map(endpoint => {
           const override = draft.rules.find(rule => ruleKey(rule) === ruleKey(endpoint))
           const base = draft.rules.find(rule => rule.operation === endpoint.operation && rule.method === "")
           return <div key={ruleKey(endpoint)} className="flex flex-col gap-2 border-b pb-4 last:border-0 sm:flex-row sm:items-center">

@@ -56,6 +56,14 @@
 @media(max-width:900px) { .novel-demo .resource-footer { flex-wrap: wrap; } .novel-demo .resource-actions { margin-left: auto; } }
 
 /* Icon tabs with a pill track and a raised circular selection. */
+.novel-demo .novel-detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.novel-demo .novel-detail-toolbar .novel-section-navigation { margin-bottom: 0; }
 .novel-demo .novel-section-navigation {
   display: flex;
   align-items: center;

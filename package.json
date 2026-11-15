@@ -3,6 +3,7 @@
   "private": true,
   "packageManager": "pnpm@11.17.0",
   "scripts": {
+    "build:linux-amd64": "node scripts/build-linux-amd64.mjs",
     "server:dev": "go run ./cmd/server",
     "test:go": "go test ./... && go -C modules/athub test ./...",
     "db:athub:install": "npm --prefix modules/athub ci",

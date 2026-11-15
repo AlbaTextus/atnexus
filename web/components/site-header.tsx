@@ -7,7 +7,7 @@ import { BrandWordmark } from "@/components/brand-wordmark"
 import { useHeaderCollapse } from "@/hooks/use-header-collapse"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
-export type NavigationItem = { href: string; title: string; icon: LucideIcon; tone?: "blue" | "teal" | "violet" | "pink" | "orange" }
+export type NavigationItem = { href: string; title: string; icon: LucideIcon; tone?: "blue" | "teal" | "violet" | "pink" | "orange"; leadingGap?: number }
 export const navigationTransition = { duration: 0.32, ease: [0.22, 1, 0.36, 1] } as const
 
 /** The account center and other AlbaTextus apps render the exact same header. */
@@ -24,12 +24,13 @@ export function SiteHeader({ items, activeHref, navigationLabel, routeKey, brand
     <div className="center-header-inner">
       <BrandWordmark href={brandHref} collapsed={collapsed} LinkComponent={BrandLinkComponent} />
       <LayoutGroup id={navigationId}>
-        <TooltipProvider><nav aria-label={navigationLabel} className="center-nav">
+        <TooltipProvider><nav aria-label={navigationLabel} className="center-nav relative">
           {items.map(item => {
             const active = item.href === activeHref
             return <Tooltip key={item.href}>
               <TooltipTrigger render={<MotionLink href={item.href} {...(LinkComponent !== "a" ? { prefetch: true } : {})}
               className={active ? "center-nav-link is-active" : "center-nav-link"}
+              style={item.leadingGap !== undefined ? { position: "absolute", insetInlineEnd: `calc(100% + ${item.leadingGap}px)` } : undefined}
               data-tone={item.tone}
               aria-label={item.title} aria-current={active ? "page" : undefined} tabIndex={0}
               transition={transition} whileHover={reducedMotion ? undefined : { y: -1 }} whileTap={reducedMotion ? undefined : { scale: 0.97 }} />}>

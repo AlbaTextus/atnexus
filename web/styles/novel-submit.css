@@ -1,0 +1,118 @@
+.novel-demo .page-shell.novel-submit-page { max-width: 1280px; padding-bottom: 60px; }
+.dark .novel-submit-view {
+  --background: inherit; --foreground: inherit; --primary: inherit;
+  --secondary: inherit; --secondary-foreground: inherit; --muted: inherit;
+  --muted-foreground: inherit; --accent: inherit; --accent-foreground: inherit;
+  --border: inherit; --input: inherit; --ring: inherit;
+}
+.dark .novel-submit-view .novel-submit-page * { border-color: var(--border); }
+.novel-submit-view .panel { background: var(--card); border-color: var(--border); }
+.novel-upload-form { margin-top: 28px; }
+.novel-upload-dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; min-height: 420px; padding: 56px 32px; border: 1px dashed var(--border); transition: border-color 150ms, background 150ms; }
+.novel-upload-dropzone.is-dragging { border-color: #5289c7; background: color-mix(in srgb, #5289c7 6%, var(--card)); }
+.novel-upload-drop-icon { display: grid; place-items: center; width: 64px; height: 76px; border-radius: 12px; color: #5289c7; background: color-mix(in srgb, #5289c7 9%, var(--card)); }
+.novel-upload-drop-icon svg { width: 30px; height: 30px; stroke-width: 1.4; }
+.novel-upload-dropzone h2 { margin: 0; font-size: 24px; font-weight: 600; }
+.novel-upload-dropzone > p { margin: -6px 0 2px; font-size: 14px; color: var(--muted-foreground); }
+.novel-upload-file-limit { font-size: 12px; color: var(--muted-foreground); }
+.novel-upload-file-bar { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 20px; margin-bottom: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.novel-upload-file-bar > div { display: flex; align-items: center; gap: 12px; min-width: 0; font-size: 13px; }
+.novel-upload-file-bar > div > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.novel-upload-file-bar svg { flex-shrink: 0; width: 17px; height: 17px; color: #5289c7; }
+.novel-upload-file-count { flex-shrink: 0; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.novel-upload-import-error { margin-bottom: 24px !important; }
+.novel-upload-preview-layout { display: grid; grid-template-columns: 248px minmax(0, 1fr); align-items: start; gap: 28px; }
+.novel-upload-sidebar { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.novel-submit-view .novel-upload-book-card { padding: 24px; }
+.novel-upload-cover { display: flex; align-items: center; justify-content: center; overflow: hidden; height: 238px; border-radius: 8px; background: var(--muted); }
+.novel-upload-cover img { width: 100%; height: 100%; object-fit: contain; }
+.novel-submit-view .novel-upload-cover .library-cover-fallback { height: 100%; width: 100%; display: grid; place-items: center; background: var(--muted); color: var(--muted-foreground); font-size: 13px; }
+.novel-upload-book-card h2 { margin: 22px 0 0; font-size: 20px; line-height: 1.55; font-weight: 600; overflow-wrap: anywhere; }
+.novel-upload-author { display: flex; gap: 7px; align-items: flex-start; margin: 12px 0 0; font-size: 13px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.novel-upload-author svg { flex-shrink: 0; width: 15px; height: 15px; margin-top: 2px; }
+.novel-submit-view .novel-upload-facts { display: grid; gap: 15px; padding-top: 20px; margin: 22px 0 0; border-top: 1px solid var(--border); font-size: 13px; }
+.novel-submit-view .novel-upload-facts > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.novel-submit-view .novel-upload-facts dt { color: var(--muted-foreground); }
+.novel-submit-view .novel-upload-facts dd { margin: 0; color: var(--foreground); font-variant-numeric: tabular-nums; }
+.novel-upload-selected-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.novel-upload-selected-tags span { padding: 4px 8px; border-radius: 6px; background: var(--muted); font-size: 12px; color: var(--muted-foreground); }
+.novel-submit-view .novel-upload-submit-card { display: flex; flex-direction: column; gap: 20px; padding: 22px; }
+.novel-upload-main { min-width: 0; }
+.novel-upload-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 18px; min-height: 32px; }
+.novel-upload-preview-heading h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.novel-submit-view .novel-upload-main .novel-upload-tabs { display: inline-flex; gap: 6px; width: auto; height: 42px; padding: 4px; margin-bottom: 20px; background: var(--muted); border-radius: 10px; }
+.novel-upload-tabs [role=tab] { gap: 8px; min-width: 120px; padding: 0 14px; font-size: 13px; border-radius: 7px; }
+.novel-upload-tabs [role=tab] svg { width: 15px; height: 15px; }
+.novel-upload-tabs [role=tab] > span { margin-left: 2px; font-size: 11px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.novel-submit-view .novel-upload-intro { padding: 28px 32px; }
+.novel-upload-intro > h2, .novel-upload-catalog-heading h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.novel-submit-view .novel-upload-intro .synopsis { margin-top: 22px; font-size: 15px; font-weight: 400; color: var(--foreground); line-height: 2.1; overflow-wrap: anywhere; }
+.novel-submit-view .novel-upload-intro .synopsis p { margin: 0 0 16px; }
+.novel-upload-intro > button { margin-top: 12px; }
+.novel-submit-view .novel-upload-catalog { padding: 0; overflow: hidden; }
+.novel-upload-catalog-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+.novel-upload-search { position: relative; width: 210px; }
+.novel-upload-search > svg { position: absolute; top: 10px; left: 11px; width: 15px; height: 15px; color: var(--muted-foreground); }
+.novel-upload-search input { padding-left: 34px; height: 35px; }
+.novel-upload-catalog-body { display: grid; min-height: 340px; }
+.novel-upload-catalog-body.has-selection { grid-template-columns: 240px minmax(0, 1fr); }
+.novel-upload-chapter-list { max-height: 560px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 8px; }
+.novel-upload-chapter-list ol { list-style: none; padding: 0; margin: 0; }
+.novel-upload-chapter-list button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 11px 12px; border: 0; border-radius: 7px; background: transparent; text-align: left; color: var(--foreground); font-size: 13px; line-height: 1.65; cursor: pointer; transition: background 150ms, color 150ms; }
+.novel-upload-chapter-list button:hover { background: var(--muted); }
+.novel-upload-chapter-list button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.novel-upload-chapter-list button[aria-pressed=true] { background: color-mix(in srgb, #5289c7 11%, var(--card)); color: #5289c7; }
+.novel-upload-chapter-list button:disabled { cursor: default; opacity: .5; }
+.novel-upload-chapter-list button > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.novel-upload-chapter-list button > svg { flex-shrink: 0; width: 14px; height: 14px; color: var(--muted-foreground); }
+.novel-upload-chapter-number { flex: 0 0 25px; align-self: flex-start; color: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; padding-top: 1px; }
+.novel-upload-volume > summary { display: flex; align-items: center; gap: 8px; padding: 14px 10px; font-size: 13px; font-weight: 500; cursor: pointer; list-style: none; }
+.novel-upload-volume > summary::-webkit-details-marker { display: none; }
+.novel-upload-volume > summary > svg { width: 15px; height: 15px; flex-shrink: 0; color: #5289c7; }
+.novel-upload-volume > summary > svg:first-child { width: 12px; color: var(--muted-foreground); transition: transform 150ms; }
+.novel-upload-volume[open] > summary > svg:first-child { transform: rotate(90deg); }
+.novel-upload-volume > summary > span:first-of-type { flex: 1; overflow-wrap: anywhere; }
+.novel-upload-volume > summary > span:last-child { font-size: 11px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.novel-upload-volume > ol { padding-left: 10px; }
+.novel-upload-cover-field > p { margin: 10px 0; font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.novel-upload-reader { display: flex; flex-direction: column; min-width: 0; height: 560px; border-left: 1px solid var(--border); }
+.novel-upload-reader-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 6px 16px; border-bottom: 1px solid var(--border); }
+.novel-upload-reader-toolbar > span { font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.novel-upload-reader-toolbar > div { display: flex; gap: 4px; }
+.novel-upload-reading-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.novel-upload-reading-text { padding: 28px; }
+.novel-upload-reading-text h3 { margin: 0 0 26px; text-align: center; font-size: 19px; line-height: 1.7; font-weight: 600; overflow-wrap: anywhere; }
+.novel-upload-reading-text > div { font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif; white-space: pre-wrap; font-size: 16px; line-height: 2.15; overflow-wrap: anywhere; }
+.novel-upload-reader-pagination { display: flex; justify-content: space-between; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--border); }
+.novel-upload-empty { padding: 36px 20px; text-align: center; color: var(--muted-foreground); font-size: 13px; }
+.novel-submit-view .novel-upload-edit-details { padding: 26px; margin-bottom: 24px; }
+.novel-submit-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 20px; min-width: 0; padding: 0; margin: 0; border: 0; }
+.novel-submit-wide { grid-column: 1 / -1; }
+.novel-submit-field { display: flex; flex-direction: column; gap: 9px; min-width: 0; font-size: 13px; font-weight: 500; }
+.novel-submit-field input, .novel-submit-field select { width: 100%; height: 40px; font-weight: 400; }
+.novel-submit-field textarea { font-weight: 400; line-height: 1.8; }
+.novel-submit-field select { min-width: 0; padding: 0 12px; border: 1px solid var(--input); border-radius: 8px; background: var(--card); color: var(--foreground); outline: none; }
+.novel-submit-field select:focus-visible { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 35%, transparent); }
+.novel-submit-field select:disabled { opacity: .5; }
+.novel-submit-tags { margin: 0; padding: 0; border: 0; }
+.novel-submit-tags legend { margin-bottom: 12px; font-size: 13px; font-weight: 500; }
+.novel-submit-tags > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.novel-submit-tags button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 4px 11px; border: 1px solid var(--border); border-radius: 7px; color: var(--muted-foreground); font-size: 12px; cursor: pointer; }
+.novel-submit-tags button[aria-pressed=true] { border-color: #a7c6e9; background: color-mix(in srgb, #5289c7 12%, var(--card)); color: #5289c7; }
+.novel-submit-tags button svg { width: 13px; height: 13px; }
+.novel-submit-tags button:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.novel-upload-chapter-editor { display: flex; flex-direction: column; gap: 20px; padding: 24px; margin: 0; border: 0; min-width: 0; }
+.novel-upload-chapter-editor textarea { field-sizing: fixed; height: 320px; resize: vertical; }
+.novel-upload-chapter-editor > button { align-self: flex-start; }
+.novel-submit-review { display: flex; gap: 6px; align-items: flex-start; margin: 0; font-size: 12px; line-height: 1.7; color: var(--muted-foreground); }
+.novel-submit-review svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 3px; color: #c7809e; }
+.novel-submit-review button { padding: 0; background: none; border: 0; color: #5289c7; cursor: pointer; }
+.novel-submit-error, .novel-upload-dropzone > .novel-submit-error { margin: 0; color: var(--destructive); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.novel-submit-action { width: 100%; }
+.novel-submit-notice { margin-top: 28px; }
+.novel-submit-success { max-width: 620px; margin: 60px auto; text-align: center; }
+.novel-submit-success [data-slot=card-content] { display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 32px; }
+.novel-submit-success [data-slot=card-content] > svg { width: 40px; height: 40px; color: #5289c7; stroke-width: 1.5; }
+.novel-submit-success h1 { margin: 0; font-size: 24px; font-weight: 600; }
+.novel-submit-success p { margin: 0; font-size: 14px; line-height: 1.8; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.novel-submit-success [data-slot=card-content] > div { display: flex; gap: 12px; align-items: center; }

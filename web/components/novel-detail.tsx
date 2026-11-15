@@ -5,6 +5,7 @@ import { NovelDetail as DemoNovelDetail } from "@/components/novel-demo/novel-de
 import { ContentFailure, NovelAccessGate, useNovelAccess } from "@/components/novel-access"
 import { mapDemoNovel, readAllContent, type DemoNovel } from "@/lib/novel-demo-data"
 import type { Novel, NovelContributors, ContentAuthor, ContentTag, ContentPlatform, TableOfContents } from "@/lib/athub-client"
+import { NovelEdit } from "@/components/novel-edit"
 
 export function NovelDetail({ id }: { id: number }) {
   return <div className="novel-demo"><NovelAccessGate><DetailData key={id} id={id} /></NovelAccessGate></div>
@@ -54,6 +55,6 @@ function DetailData({ id }: { id: number }) {
   if (!novel) return <div className="page-shell novel-page-loading" role="status">正在加载作品…</div>
   return <>
     {partialError && <div className="page-shell"><ContentFailure message={partialError} retry={() => setRevision(value => value + 1)} /></div>}
-    <DemoNovelDetail novel={novel} catalogLoading={catalogLoading} catalogError={catalogError} />
+    <DemoNovelDetail novel={novel} catalogLoading={catalogLoading} catalogError={catalogError} actions={<NovelEdit id={id} />} />
   </>
 }

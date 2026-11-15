@@ -24,6 +24,7 @@ type Access struct {
 	logger     *slog.Logger
 	readSecret string
 	content    http.Handler
+	wrapped    http.Handler
 }
 
 func New(st store.ATHubStore, addr string, logger *slog.Logger) (*Access, error) {
@@ -111,13 +112,19 @@ func (w *responseCapture) Write(data []byte) (int, error) {
 
 func (a *Access) Wrap(next http.Handler) http.Handler {
 	a.content = next
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		requestID := uuid.New()
 		w.Header().Set("X-Request-ID", requestID.String())
 		call := store.ATHubCall{ID: uuid.New(), RequestID: requestID, Method: method(r.Method), Path: endpoint(r.URL.Path), Port: a.port}
+		if identity, ok := r.Context().Value(submissionIdentityKey{}).(submissionIdentity); ok &&
+			((r.Method == http.MethodPost && r.URL.Path == "/api/v2/upload") ||
+				(r.Method == http.MethodPut && r.URL.Path == "/api/v2/novelinfo")) {
+			call.UserID, call.SessionID = &identity.user, &identity.session
+			call.Authenticated = true
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		token := tokenFrom(r)
 		if len(r.Header.Values("Authorization")) == 1 && r.Method == http.MethodGet && a.readSecret != "" {
@@ -213,4 +220,6 @@ func (a *Access) Wrap(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(capture, r)
 	})
+	a.wrapped = handler
+	return handler
 }

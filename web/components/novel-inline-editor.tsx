@@ -131,10 +131,10 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
       if (field && !canEdit(permissions)) throw new Error("当前账户没有编辑作品资料的权限。")
       if (!canEdit(permissions)) return
       const [book, authors, platforms, tags] = await Promise.all([
-        request<Novel>(`/api/v2/novelinfo?id=${id}`, abort.signal),
-        readAllContent<ContentAuthor>(request, "/api/v2/authors", abort.signal),
-        readAllContent<ContentPlatform>(request, "/api/v2/platforms", abort.signal),
-        readAllContent<ContentTag>(request, "/api/v2/tags", abort.signal),
+        request<Novel>(`/api/v5/novelinfo?id=${id}`, abort.signal),
+        readAllContent<ContentAuthor>(request, "/api/v5/authors", abort.signal),
+        readAllContent<ContentPlatform>(request, "/api/v5/platforms", abort.signal),
+        readAllContent<ContentTag>(request, "/api/v5/tags", abort.signal),
       ])
       if (abort.signal.aborted) return
       const value = toDraft(book)
@@ -216,7 +216,7 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
     if (new TextEncoder().encode(body).length > 8 * 1024 * 1024) { setError("作品资料超过 8 MiB，请缩短后重试。"); return }
     submitting.current = true; setBusy(true)
     try {
-      const response = await api<EditResult>(`/api/v1/account/athub/novels/${id}`, { method: "PUT", body })
+      const response = await api<EditResult>(`/api/v4/account/athub/novels/${id}`, { method: "PUT", body })
       if (!response || !("id" in response && response.id === id) &&
         !("status" in response && response.status === "pending" && response.review_id)) {
         throw new Error("未能确认提交结果，请刷新查看后再操作。")

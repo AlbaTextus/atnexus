@@ -6,6 +6,7 @@ import { History, MoreHorizontal, UsersRound } from "lucide-react";
 import { Link } from "next-view-transitions";
 import { contentDate, safeContentURL } from "@/lib/athub-client";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { UserProfileCard } from "@/components/user-profile-card";
 
 type Contributor = {
   id: string;
@@ -37,6 +38,9 @@ export function ContributorAvatar({
       </Avatar.Fallback>
     </Avatar.Root>
   );
+  if (contributor?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(contributor.id)) {
+    return <UserProfileCard userId={contributor.id} name={contributor.name}>{avatar}</UserProfileCard>;
+  }
   return tooltip && contributor?.name ? <Tooltip>
     <TooltipTrigger render={avatar} tabIndex={0} aria-label={contributor.name} />
     <TooltipContent>{contributor.name}</TooltipContent>

@@ -46,13 +46,13 @@ function LibraryData({ tagId, authorId }: LibraryFilters) {
     if (tagId) filters.set("tagId", String(tagId))
     if (authorId) filters.set("authorId", String(authorId))
     async function load() {
-      const data = await request<{ items: Novel[]; total: number }>(`/api/v2/novelinfo?${filters}`, controller.signal)
+      const data = await request<{ items: Novel[]; total: number }>(`/api/v5/novelinfo?${filters}`, controller.signal)
       controller.signal.throwIfAborted()
       const lastPage = Math.max(1, Math.ceil(data.total / pageSize))
       if (page > lastPage) { update({ page: String(lastPage) }); return }
       const ids = [...new Set([...data.items.flatMap(book => book.authorId === null ? [] : [book.authorId]), ...(authorId ? [authorId] : [])])].sort((a, b) => a - b)
       const authors = ids.length
-        ? await request<ContentAuthor[]>(`/api/v2/authors?ids=${ids.join(",")}`, controller.signal)
+        ? await request<ContentAuthor[]>(`/api/v5/authors?ids=${ids.join(",")}`, controller.signal)
         : []
       if (!controller.signal.aborted) {
         setResult({ books: data.items.map(book => mapDemoBook(book, [], authors)), total: data.total,

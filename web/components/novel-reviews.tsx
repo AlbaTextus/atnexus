@@ -120,7 +120,7 @@ export function NovelReviews() {
     setLoading(true); setError("")
     const query = new URLSearchParams({ offset: String(offset) })
     if (status !== "all") query.set("status", status)
-    api<{ items: ReviewItem[]; total: number }>(`/api/v1/admin/athub/reviews?${query}`, { signal: controller.signal })
+    api<{ items: ReviewItem[]; total: number }>(`/api/v4/admin/athub/reviews?${query}`, { signal: controller.signal })
       .then(result => { if (!controller.signal.aborted) { setItems(result.items); setTotal(result.total) } })
       .catch(reason => { if (!controller.signal.aborted) setError(errorMessage(reason)) })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
@@ -130,7 +130,7 @@ export function NovelReviews() {
     setDetail(null); setDetailError(""); setNote("")
     if (!selected) return
     const controller = new AbortController()
-    api<ReviewItem>(`/api/v1/admin/athub/reviews/${selected}`, { signal: controller.signal })
+    api<ReviewItem>(`/api/v4/admin/athub/reviews/${selected}`, { signal: controller.signal })
       .then(item => { if (!controller.signal.aborted) setDetail(item) })
       .catch(reason => { if (!controller.signal.aborted) setDetailError(errorMessage(reason)) })
     return () => controller.abort()
@@ -140,7 +140,7 @@ export function NovelReviews() {
     if (decision === "reject" && !note.trim()) { setDecisionError("请填写驳回原因。"); return }
     setBusy(true); setDecisionError("")
     try {
-      const updated = await api<ReviewItem>(`/api/v1/admin/athub/reviews/${detail.id}`, { method: "POST", body: JSON.stringify({ decision, note: note.trim() }) })
+      const updated = await api<ReviewItem>(`/api/v4/admin/athub/reviews/${detail.id}`, { method: "POST", body: JSON.stringify({ decision, note: note.trim() }) })
       setDetail(updated); setDecision(null); setRevision(value => value + 1)
       feedback.success(updated.status === "approved" ? "审核通过，内容已生效" : updated.status === "rejected" ? "已驳回提交" : "内容未能生效，请查看处理结果")
     } catch (reason) { setDecisionError(errorMessage(reason)) }

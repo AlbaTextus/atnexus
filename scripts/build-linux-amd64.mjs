@@ -19,6 +19,8 @@ Target server: Linux AMD64 with glibc, Node.js >= 20.9, PostgreSQL.
 Optional build environment:
   OAUTH_BACKEND_URL          http://127.0.0.1:8001
   NEXT_PUBLIC_ATHUB_API_URL https://api.albatextus.com
+  NEXT_PUBLIC_CREATPLAT_API_URL  public creator API origin
+  CREATPLAT_BACKEND_URL     http://127.0.0.1:8004
   NEXT_PUBLIC_WIKI_URL      http://localhost:3200
   NEXT_PUBLIC_CREDIT_URL    http://localhost:3300
 
@@ -78,7 +80,9 @@ for (const suffix of ["", ".tar.gz", ".tar.gz.sha256"]) {
 }
 const urls = {
   OAUTH_BACKEND_URL: process.env.OAUTH_BACKEND_URL || "http://127.0.0.1:8001",
-  NEXT_PUBLIC_ATHUB_API_URL: process.env.NEXT_PUBLIC_ATHUB_API_URL || "https://api.albatextus.com",
+  CREATPLAT_BACKEND_URL: process.env.CREATPLAT_BACKEND_URL || "http://127.0.0.1:8004",
+  NEXT_PUBLIC_ATHUB_API_URL: process.env.NEXT_PUBLIC_ATHUB_API_URL || "http://localhost:8005",
+  NEXT_PUBLIC_CREATPLAT_API_URL: process.env.NEXT_PUBLIC_CREATPLAT_API_URL || "http://localhost:8004",
   NEXT_PUBLIC_WIKI_URL: process.env.NEXT_PUBLIC_WIKI_URL || "http://localhost:3200",
   NEXT_PUBLIC_CREDIT_URL: process.env.NEXT_PUBLIC_CREDIT_URL || "http://localhost:3300",
 }
@@ -129,16 +133,22 @@ try {
   console.log("[1/5] Copying current sources without local .env or build outputs")
   await mkdir(source, { recursive: true })
   await mkdir(frontend, { recursive: true })
-  for (const item of ["go.mod", "go.sum", "cmd", "internal", "modules", "prisma", "web",
+  for (const item of ["go.mod", "go.sum", "cmd", "internal", "modules", "pkg", "prisma", "web",
     "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"]) {
     await copySource(path.join(repo, item), path.join(source, item))
   }
   await cp(path.join(repo, ".env.example"), path.join(bundle, ".env.example"))
   await cp(path.join(source, "prisma"), path.join(bundle, "database/account"), { recursive: true })
   await cp(path.join(source, "modules/athub/prisma"), path.join(bundle, "database/content"), { recursive: true })
+  await cp(path.join(source, "modules/creatplat/prisma"), path.join(bundle, "database/creator"), { recursive: true })
+  await cp(path.join(source, "modules/image/prisma"), path.join(bundle, "database/image"), { recursive: true })
 
   console.log("[2/5] Cross-compiling Go server for linux/amd64")
   run("go", ["build", "-trimpath", "-ldflags=-s -w", "-o", path.join(bundle, "atnexus"), "./cmd/server"],
+    source, { CGO_ENABLED: "0", GOOS: "linux", GOARCH: "amd64", GOAMD64: "v1" })
+  run("go", ["build", "-trimpath", "-ldflags=-s -w", "-o", path.join(bundle, "atnexus-migrate-creatplat"), "./cmd/migrate-creatplat"],
+    source, { CGO_ENABLED: "0", GOOS: "linux", GOARCH: "amd64", GOAMD64: "v1" })
+  run("go", ["build", "-trimpath", "-ldflags=-s -w", "-o", path.join(bundle, "atnexus-migrate-image"), "./cmd/migrate-image"],
     source, { CGO_ENABLED: "0", GOOS: "linux", GOARCH: "amd64", GOAMD64: "v1" })
 
   console.log("[3/5] Building Next.js using the host toolchain")
@@ -183,6 +193,7 @@ cd "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/frontend/web"
 export NEXT_TELEMETRY_DISABLED=1
 export NEXT_OUTPUT_DIR=.next
 if [ -z "\${OAUTH_BACKEND_URL:-}" ]; then export OAUTH_BACKEND_URL=${shellQuote(urls.OAUTH_BACKEND_URL)}; fi
+if [ -z "\${CREATPLAT_BACKEND_URL:-}" ]; then export CREATPLAT_BACKEND_URL=${shellQuote(urls.CREATPLAT_BACKEND_URL)}; fi
 exec node ../node_modules/next/dist/bin/next start --hostname "\${HOSTNAME_OVERRIDE:-0.0.0.0}" --port "\${PORT:-3288}"
 `)
   await writeFile(path.join(bundle, "README.txt"), `ATNexus Linux AMD64
@@ -196,9 +207,9 @@ Verify archive: sha256sum -c ${name}.tar.gz.sha256
 Verify extracted files: sha256sum -c SHA256SUMS
 Preserve the existing .env, encryption keys, databases and user data.
 For a new installation, copy .env.example to .env and configure it; chmod 600 .env.
-chmod +x atnexus start-backend.sh start-frontend.sh
+chmod +x atnexus atnexus-migrate-creatplat atnexus-migrate-image start-backend.sh start-frontend.sh
 Run ./start-backend.sh and ./start-frontend.sh as separate services.
-Ports: OAuth 8001, ATHub 8003, frontend 3288.
+Ports: OAuth 8001, image 8002, creator platform 8004, ATHub 8005, frontend 3288.
 HOSTNAME_OVERRIDE and PORT configure the frontend listener.
 
 Build-time configuration:
@@ -207,8 +218,18 @@ Public URLs and Next.js rewrites require a rebuild to change.
 OAUTH_BACKEND_URL also configures server-side API requests at runtime.
 Frontend launch does not load the backend .env.
 
-Database schemas and migrations: database/account and database/content.
+Database schemas and migrations: database/account, database/content, database/creator, database/image.
 Apply pending migrations using your established Prisma deployment workflow.
+CREATPLAT_DATABASE_URL must point to a separate PostgreSQL database.
+After applying creator migrations, stop all backend writers and run
+./atnexus-migrate-creatplat to import and verify legacy reviews/history.
+Source data is retained; do not resume the old backend after cutover.
+IMAGE_DATABASE_URL must point to its own PostgreSQL database. Apply account
+and image migrations, stop legacy image writers, back up SQLite and file bytes,
+then run ./atnexus-migrate-image -source /path/to/database.sqlite.
+Set IMAGE_LOCAL_ROOT to the existing byte directory and IMAGE_PUBLIC_URL to the
+public origin. IMAGE_LEGACY_HTTP_ADDR can preserve an old file-only listener.
+The original image frontend is not included or modified by this migration.
 Startup does not migrate databases or seed data.
 Local .env files are excluded from the build and package.
 `)

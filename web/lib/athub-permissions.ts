@@ -4,10 +4,16 @@ export type RolePolicy = { role: string; review_required: boolean; updated_at: s
 export type Endpoint = { method: string; path: string; operation: Operation }
 export const operationNames: Record<Operation, string> = { read: "查看 / 下载", upload: "上传 / 新建", edit: "修改", delete: "删除", review: "审核" }
 export const permissionLevels = [{ role: "USER", label: "LT1" }, { role: "LEVEL_2", label: "LT2" }, { role: "ADMIN", label: "LT3" }, { role: "SUPER_ADMIN", label: "LT4" }]
+// Persisted policy/review operation labels retain v2/v3; HTTP callers use v5/v4.
 export const endpointNames: Record<string, string> = {
   "/api/v2/platforms": "平台", "/api/v2/authors": "作者", "/api/v2/tags": "标签",
   "/api/v2/novelinfo": "小说资料", "/api/v2/content": "章节正文", "/api/v2/toc": "目录",
   "/api/v2/volumes": "分卷", "/api/v2/upload": "批量上传", "/api/v2/illustrations": "插图", "/api/v2/illustration-layout": "插图布局", "/api/v3/history": "变更历史", "/api/v3/contributors": "贡献者",
+}
+export function publicEndpointPath(path: string) {
+  if (path.startsWith("/api/v2/")) return path.replace("/api/v2/", "/api/v5/")
+  if (/^\/api\/v3\/(history|contributors)$/.test(path)) return path.replace("/api/v3/", "/api/v4/")
+  return path
 }
 export function hasOperation(policy: RolePolicy, operation: Operation) {
   return policy.rules.some(rule => rule.operation === operation && rule.method === "" && rule.allowed)

@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const backend = process.env.OAUTH_BACKEND_URL || "http://localhost:8001"
+const creatorBackend = process.env.CREATPLAT_BACKEND_URL || "http://localhost:8004"
 // Documentation lives in the standalone Wiki service; historic in-app addresses redirect there.
 const wiki = (process.env.NEXT_PUBLIC_WIKI_URL || "http://localhost:3200").replace(/\/+$/, "")
 
@@ -28,6 +29,7 @@ const nextConfig = {
     return [
       { source: "/healthz", destination: `${backend}/healthz` },
       { source: "/api/v1/:path*", destination: `${backend}/api/v1/:path*` },
+      { source: "/api/v4/:path*", destination: `${creatorBackend}/api/v4/:path*` },
       { source: "/oauth/:path*", destination: `${backend}/oauth/:path*` },
       { source: "/.well-known/:path*", destination: `${backend}/.well-known/:path*` },
     ]

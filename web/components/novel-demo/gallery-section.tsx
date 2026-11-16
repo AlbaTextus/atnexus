@@ -47,7 +47,7 @@ export function GallerySection({ novelId }: { novelId: number }) {
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true); setLoadError("");
-    readAllContent<NovelIllustration>(request, `/api/v2/illustrations?novelId=${novelId}`, controller.signal)
+    readAllContent<NovelIllustration>(request, `/api/v5/illustrations?novelId=${novelId}`, controller.signal)
       .then(value => { if (!controller.signal.aborted) setImages(value); })
       .catch(reason => { if (!controller.signal.aborted) setLoadError(reason instanceof Error ? reason.message : "插图加载失败。"); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -80,7 +80,7 @@ export function GallerySection({ novelId }: { novelId: number }) {
           if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) throw new Error("请选择 JPG、PNG、WebP 或 GIF 图片。");
           const form = new FormData();
           form.append("file", file);
-          const result = await api<UploadResult>(`/api/v1/account/athub/novels/${novelId}/illustrations`, { method: "POST", body: form });
+          const result = await api<UploadResult>(`/api/v4/account/athub/novels/${novelId}/illustrations`, { method: "POST", body: form });
           if ("review_id" in result && result.status === "pending" && result.review_id) pending++;
           else if ("id" in result && result.novelId === novelId && safeContentURL(result.url)) saved++;
           else throw new Error("未能确认保存结果，请刷新查看后再重试。");
@@ -109,7 +109,7 @@ export function GallerySection({ novelId }: { novelId: number }) {
       setPolicy(current);
       if (!canDelete(current)) throw new Error("当前账户没有删除插图的权限。");
       const result = await api<{ status: "pending"; review_id: string } | null>(
-        `/api/v1/account/athub/novels/${novelId}/illustrations/${image.id}`, { method: "DELETE" });
+        `/api/v4/account/athub/novels/${novelId}/illustrations/${image.id}`, { method: "DELETE" });
       if (result?.status === "pending" && result.review_id) {
         setPendingDeletes(value => [...value, image.id]);
         setMessage("删除已提交审核，通过后生效。");

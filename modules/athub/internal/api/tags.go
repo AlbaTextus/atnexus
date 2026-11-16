@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
 func (a *API) tags(w http.ResponseWriter, r *http.Request) error {

@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
 func TestIllustrationLayoutValidation(t *testing.T) {
@@ -23,7 +23,12 @@ func TestIllustrationLayoutValidation(t *testing.T) {
 		{"negative position", func(v *storage.IllustrationLayout) { v.Blocks[0].X = -1 }, false},
 		{"too wide", func(v *storage.IllustrationLayout) { v.Blocks[0].Width = 1001 }, false},
 		{"too low", func(v *storage.IllustrationLayout) { v.Blocks[0].Y = 4900 }, false},
-		{"too small", func(v *storage.IllustrationLayout) { v.Blocks[0].Height = 2 }, false},
+		{"narrow landscape", func(v *storage.IllustrationLayout) { v.Blocks[0].Height = 2 }, true},
+		{"narrow portrait", func(v *storage.IllustrationLayout) { v.Blocks[0].Width = 2 }, true},
+		{"too small", func(v *storage.IllustrationLayout) { v.Blocks[0].Width = 39; v.Blocks[0].Height = 20 }, false},
+		{"zero width", func(v *storage.IllustrationLayout) { v.Blocks[0].Width = 0 }, false},
+		{"zero height", func(v *storage.IllustrationLayout) { v.Blocks[0].Height = 0 }, false},
+		{"negative size", func(v *storage.IllustrationLayout) { v.Blocks[0].Width = -1 }, false},
 		{"nonfinite", func(v *storage.IllustrationLayout) { v.Blocks[0].X = math.NaN() }, false},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {

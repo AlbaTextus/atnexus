@@ -1,0 +1,59 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("IMAGE_DATABASE_URL")
+}
+
+model ImageFile {
+  id        String   @id
+  value     String   @default("")
+  metadata  Json
+  state     String   @default("ready") @db.VarChar(16)
+  revision  BigInt   @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  @@map("image_files")
+}
+
+model ImageSetting {
+  key   String @id
+  value String
+  @@map("image_settings")
+}
+
+model ImageLegacyRow {
+  sourceTable String @map("source_table")
+  rowKey      String @map("row_key")
+  ciphertext  String
+  digest      String @db.Char(64)
+  @@id([sourceTable, rowKey])
+  @@map("image_legacy_rows")
+}
+
+model ImageImport {
+  key       String   @id
+  source    String
+  digest    String   @db.Char(64)
+  counts    Json
+  completed DateTime @default(now()) @db.Timestamptz(6)
+  @@map("image_imports")
+}
+
+model ImageUpload {
+  id        String   @id
+  owner     String
+  data      Json
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  parts     ImageUploadPart[]
+  @@index([expiresAt])
+  @@map("image_uploads")
+}
+
+model ImageUploadPart {
+  uploadId String @map("upload_id")
+  number   Int
+  size     BigInt
+  digest   String @db.Char(64)
+  upload   ImageUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  @@id([uploadId, number])
+  @@map("image_upload_parts")
+}

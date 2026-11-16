@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )

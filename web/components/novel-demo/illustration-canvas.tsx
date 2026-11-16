@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { Loader2, Magnet, Plus, RotateCcw, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNovelAccess } from "@/components/novel-access";
@@ -8,7 +8,7 @@ import { useNovelEditor } from "@/components/novel-inline-editor";
 import { api, ApiError } from "@/lib/api";
 import type { IllustrationBlock, IllustrationLayout, NovelIllustration } from "@/lib/athub-client";
 import { allowsEndpoint, type RolePolicy } from "@/lib/athub-permissions";
-import { createIllustrationBlock, fitIllustrationBlock, transformIllustrationBlock, ILLUSTRATION_CANVAS_WIDTH as WIDTH, type BlockOperation, type LayoutGuides, type ResizeHandle } from "@/lib/illustration-layout";
+import { createIllustrationBlock, fitIllustrationBlock, normalizeIllustrationBlock, transformIllustrationBlock, ILLUSTRATION_CANVAS_WIDTH as WIDTH, type BlockOperation, type LayoutGuides, type ResizeHandle } from "@/lib/illustration-layout";
 import { IllustrationImage } from "./illustration-image";
 import { NovelAutoHeight } from "@/components/novel-motion";
 
@@ -19,7 +19,7 @@ const handles: { handle: ResizeHandle; label: string }[] = [
 ];
 type Gesture = {
   pointer: number; x: number; y: number; clientX: number; clientY: number; altKey: boolean; height: number; operation: BlockOperation;
-  block: IllustrationBlock; before: IllustrationBlock[]; moved: boolean;
+  block: IllustrationBlock; before: IllustrationBlock[]; layout: IllustrationBlock[]; moved: boolean;
 };
 
 export function IllustrationCanvas({ novelId, images, editing, policy, onPreview, resourceActions, onDisplayChange }: {
@@ -50,12 +50,16 @@ export function IllustrationCanvas({ novelId, images, editing, policy, onPreview
   dirtyRef.current = dirty;
   const allowed = Boolean(policy && allowsEndpoint(policy, "edit", "PUT", "/api/v2/illustration-layout"));
   const interactive = editing && allowed && !busy && !editor?.busy && !loading && Boolean(saved);
-  const imageMap = new Map(images.map(image => [image.id, image]));
+  const imageMap = useMemo(() => new Map(images.map(image => [image.id, image])), [images]);
+  const normalizeBlocks = useCallback((items: IllustrationBlock[]) => items.map(block => {
+    const image = imageMap.get(block.imageId);
+    return image ? normalizeIllustrationBlock(block, image) : block;
+  }), [imageMap]);
 
   useEffect(() => {
     const abort = new AbortController();
     setLoading(true);
-    request<IllustrationLayout>(`/api/v2/illustration-layout?novelId=${novelId}`, abort.signal)
+    request<IllustrationLayout>(`/api/v5/illustration-layout?novelId=${novelId}`, abort.signal)
       .then(value => {
         if (abort.signal.aborted) return;
         if (value.novelId !== novelId || !Array.isArray(value.blocks) || !Number.isInteger(value.revision)) throw new Error("插图布局数据无效。");
@@ -83,8 +87,8 @@ export function IllustrationCanvas({ novelId, images, editing, policy, onPreview
     saving.current = true; setBusy(true); setError(""); setNotice("");
     try {
       const value = await api<IllustrationLayout | { status: "pending"; review_id: string }>(
-        `/api/v1/account/athub/novels/${novelId}/illustration-layout`,
-        { method: "PUT", body: JSON.stringify({ novelId, revision: saved.revision, blocks }) });
+        `/api/v4/account/athub/novels/${novelId}/illustration-layout`,
+        { method: "PUT", body: JSON.stringify({ novelId, revision: saved.revision, blocks: normalizeBlocks(blocks) }) });
       if ("status" in value && value.status === "pending" && value.review_id) {
         setBlocks(saved.blocks); setNotice("插图布局已提交审核，通过后生效。"); return "pending";
       }
@@ -98,7 +102,7 @@ export function IllustrationCanvas({ novelId, images, editing, policy, onPreview
         : reason instanceof Error ? reason.message : "布局保存失败，请重试。");
       return null;
     } finally { saving.current = false; setBusy(false); }
-  }, [novelId, saved, blocks, dirty]);
+  }, [novelId, saved, blocks, dirty, normalizeBlocks]);
 
   useEffect(() => {
     registerLayout?.({ dirty, busy, save, cancel: reset });
@@ -107,7 +111,11 @@ export function IllustrationCanvas({ novelId, images, editing, policy, onPreview
 
   function add(image: NovelIllustration, point?: { x: number; y: number }) {
     if (!interactive) return;
-    setBlocks(current => current.some(block => block.imageId === image.id) ? current : [...current, createIllustrationBlock(image, current, point)]);
+    setBlocks(current => {
+      if (current.some(block => block.imageId === image.id)) return current;
+      const layout = normalizeBlocks(current);
+      return [...layout, createIllustrationBlock(image, layout, point)];
+    });
     setSelected(image.id); setError(""); setNotice("");
   }
   function remove(id: number) {
@@ -127,7 +135,7 @@ export function IllustrationCanvas({ novelId, images, editing, policy, onPreview
     event.preventDefault(); event.stopPropagation();
     event.currentTarget.focus({ preventScroll: true });
     const point = canvasPoint(event.clientX, event.clientY);
-    gesture.current = { pointer: event.pointerId, x: point.x, y: point.y, clientX: event.clientX, clientY: event.clientY, altKey: event.altKey, height, operation, block: { ...block }, before: blocks, moved: false };
+    gesture.current = { pointer: event.pointerId, x: point.x, y: point.y, clientX: event.clientX, clientY: event.clientY, altKey: event.altKey, height, operation, block: { ...block }, before: blocks, layout: normalizeBlocks(blocks), moved: false };
     canvas.current.setPointerCapture(event.pointerId);
     setSelected(block.imageId); setNotice("");
   }
@@ -139,9 +147,9 @@ export function IllustrationCanvas({ novelId, images, editing, policy, onPreview
     const point = canvasPoint(clientX, clientY);
     active.moved = true;
     const next = transformIllustrationBlock(active.block, active.operation, point.x - active.x, point.y - active.y,
-      active.before.filter(block => block.imageId !== active.block.imageId), snapping && !altKey ? 8 * point.scale : 0);
+      active.layout.filter(block => block.imageId !== active.block.imageId), snapping && !altKey ? 8 * point.scale : 0);
     active.height = Math.max(active.height, next.block.y + next.block.height + 140);
-    setBlocks([...active.before.filter(block => block.imageId !== active.block.imageId), next.block]);
+    setBlocks(active.layout.map(block => block.imageId === active.block.imageId ? next.block : block));
     setGuides(next.guides); setDragging(true);
   }, [snapping]);
   function move(event: PointerEvent) {
@@ -164,7 +172,7 @@ export function IllustrationCanvas({ novelId, images, editing, policy, onPreview
     setGuides({}); setDragging(false);
   }
   const displayed = editing ? blocks : saved?.blocks || [];
-  const visible = displayed.filter(block => imageMap.has(block.imageId));
+  const visible = normalizeBlocks(displayed).filter(block => imageMap.has(block.imageId));
   const height = Math.max(editing ? 400 : 1, gesture.current?.height || 0, ...visible.map(block => block.y + block.height + (editing ? 140 : 0)));
   const legacy = !editing && saved?.revision === 0;
   const hasDisplay = loading || Boolean(error) || !saved || (saved.revision === 0 ? images.length > 0 : saved.blocks.some(block => imageMap.has(block.imageId)));

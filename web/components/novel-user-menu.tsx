@@ -1,7 +1,7 @@
 "use client"
 
 import { Menu } from "@base-ui/react/menu"
-import { ClipboardCheck, Moon, Sun, UserRound } from "lucide-react"
+import { Moon, SquarePen, Sun, UserRound } from "lucide-react"
 import { useTheme } from "next-themes"
 import { Link } from "next-view-transitions"
 import type { AccountUser } from "@/components/account-shell"
@@ -10,7 +10,7 @@ import { UserAvatar } from "@/components/user-avatar"
 
 const itemClass = "flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-none select-none data-highlighted:bg-muted data-highlighted:text-foreground [&_svg]:size-4 [&_svg]:shrink-0"
 
-export function NovelUserMenu({ user, canReview }: { user: AccountUser | null; canReview: boolean }) {
+export function NovelUserMenu({ user }: { user: AccountUser | null }) {
   const { setTheme } = useTheme()
   const accountHref = user ? `/account/${user.numeric_id}` : "/account"
 
@@ -26,9 +26,9 @@ export function NovelUserMenu({ user, canReview }: { user: AccountUser | null; c
           <Menu.LinkItem render={<Link href={accountHref} />} closeOnClick className={itemClass}>
             <UserRound className="text-blue-500 dark:text-blue-400" aria-hidden="true" />用户中心
           </Menu.LinkItem>
-          {canReview && <Menu.LinkItem render={<Link href="/library/reviews" />} closeOnClick className={itemClass}>
-            <ClipboardCheck className="text-pink-500 dark:text-pink-400" aria-hidden="true" />审核中心
-          </Menu.LinkItem>}
+          <Menu.LinkItem render={<Link href="/creatplat" />} closeOnClick className={itemClass}>
+            <SquarePen className="text-pink-500 dark:text-pink-400" aria-hidden="true" />创作者平台
+          </Menu.LinkItem>
           <Menu.Item closeOnClick={false} className={`${itemClass} theme-toggle`} onClick={() => setTheme(document.documentElement.classList.contains("dark") ? "light" : "dark")}>
             <Moon className="theme-icon-light text-violet-500" aria-hidden="true" />
             <Sun className="theme-icon-dark text-amber-400" aria-hidden="true" />

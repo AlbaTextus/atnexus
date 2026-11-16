@@ -2,7 +2,7 @@
 
 import { useFeedback, feedback } from "@/lib/feedback"
 
-import { useEffect, useState, type FormEvent, type ChangeEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent, type ChangeEvent } from "react"
 import { AlertCircle, Check, Crop, Pencil, RefreshCw, Save, Upload, UserRound } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import { managementError } from "@/lib/applications"
@@ -13,7 +13,7 @@ import { AvatarCropDialog } from "@/components/avatar-crop-dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ProfileImageUpload } from "@/components/profile-image-upload"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -21,7 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
-export function AvatarSettings() {
+export function AvatarSettings({ onPreviewChange }: { onPreviewChange?: (url: string | undefined) => void }) {
   const user = useAccountUser()
   const updateUser = useUpdateAccountUser()
   const [identities, setIdentities] = useState<ExternalIdentity[]>([])
@@ -38,6 +38,8 @@ export function AvatarSettings() {
   const [fileInputKey, setFileInputKey] = useState(0)
   const [cropFile, setCropFile] = useState<File | null>(null)
   const [originalFile, setOriginalFile] = useState<File | null>(null)
+  const [originalPreview, setOriginalPreview] = useState("")
+  const uploadInput = useRef<HTMLInputElement>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   function changeEditorOpen(open: boolean) {
     if (busy || cropFile) return
@@ -50,6 +52,12 @@ export function AvatarSettings() {
     setFilePreview(url)
     return () => URL.revokeObjectURL(url)
   }, [file])
+  useEffect(() => {
+    if (!originalFile) { setOriginalPreview(""); return }
+    const url = URL.createObjectURL(originalFile)
+    setOriginalPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [originalFile])
 
   function selectFile(event: ChangeEvent<HTMLInputElement>) {
     const selected = event.target.files?.[0]
@@ -79,6 +87,9 @@ export function AvatarSettings() {
   const displayName = user.display_name || (user.email_is_alias ? "用户" : user.email.split("@")[0])
   const dirty = source !== (user.avatar_source || "auto") || (source === "custom" && Boolean(file))
   const missingCustom = source === "custom" && !file && !user.custom_avatar_url
+  useEffect(() => {
+    onPreviewChange?.(dirty ? preview || "" : undefined)
+  }, [dirty, preview, onPreviewChange])
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -87,21 +98,24 @@ export function AvatarSettings() {
     try {
       const form = new FormData()
       if (file) form.append("file", file)
+      if (originalFile) form.append("original", originalFile)
       const updated = await api<AccountUser>("/api/v1/account/avatar", source === "custom" && file ? { method: "POST", body: form } : { method: "PATCH", body: JSON.stringify({ source }) })
       updateUser(updated); setSource(updated.avatar_source || "auto"); setFile(null); setOriginalFile(null); setFileInputKey(key => key + 1); setSaved(true); setEditorOpen(false); feedback.success("头像设置已保存")
     } catch (reason) { setError(reason instanceof ApiError && reason.code.startsWith("avatar_") ? reason.message : managementError(reason)) } finally { setBusy(false) }
   }
 
   return <Dialog open={editorOpen} onOpenChange={changeEditorOpen}>
-    <Card>
-      <CardHeader><CardTitle>我的头像</CardTitle><CardDescription>使用你熟悉的头像，让每个应用都能认出你。</CardDescription></CardHeader>
-      <CardContent className="flex justify-center">
-        <div className="relative">
-          <UserAvatar src={user.avatar_url} name={displayName} className="size-16" />
-          <DialogTrigger render={<Button type="button" variant="outline" size="icon-sm" className="avatar-editor-pencil" aria-label="编辑头像" />}><Pencil /></DialogTrigger>
-        </div>
-      </CardContent>
-    </Card>
+    <section className="profile-image-section" aria-labelledby="profile-avatar-heading">
+      <h2 id="profile-avatar-heading">头像</h2>
+      <input ref={uploadInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" aria-label="选择头像原图" disabled={busy} onChange={selectFile} />
+      <ProfileImageUpload title="头像" src={originalPreview || user.avatar_original_url || user.avatar_url} disabled={busy} onClick={() => uploadInput.current?.click()} />
+      <div className="profile-image-controls">
+        {originalFile && <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setCropFile(originalFile)}><Crop />裁剪</Button>}
+        <DialogTrigger render={<Button type="button" variant="ghost" size="sm" disabled={busy} />}><Pencil />头像来源</DialogTrigger>
+      </div>
+      {!editorOpen && error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {!editorOpen && dirty && <form onSubmit={submit} className="profile-image-controls"><Button type="submit" size="sm" disabled={busy || loading || Boolean(loadError) || missingCustom}>{busy ? <Spinner /> : <Save />}保存头像</Button><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => changeEditorOpen(false)}>取消</Button></form>}
+    </section>
     <DialogContent className="center-dialog profile-editor-page avatar-editor-dialog max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-lg" showCloseButton={!busy}>
       <DialogHeader><DialogTitle>编辑头像</DialogTitle><DialogDescription>选择头像来源，或上传并裁剪自己的图片。</DialogDescription></DialogHeader>
       <form onSubmit={submit} aria-busy={busy} className="flex flex-col gap-5">
@@ -131,8 +145,8 @@ export function AvatarSettings() {
         <Button type="submit" disabled={busy || loading || Boolean(loadError) || !dirty || missingCustom}>{busy ? <Spinner data-icon="inline-start" /> : <Save data-icon="inline-start" />}{busy && source === "custom" && file ? "正在上传…" : "保存头像"}</Button>
         <Button type="button" variant="outline" disabled={busy} onClick={() => changeEditorOpen(false)}>取消</Button>
       </DialogFooter>
-    {cropFile && <AvatarCropDialog file={cropFile} onCancel={() => setCropFile(null)} onConfirm={cropped => { setOriginalFile(cropFile); setFile(cropped); setSource("custom"); setSaved(false); setError(""); setCropFile(null) }} />}
       </form>
     </DialogContent>
+    {cropFile && <AvatarCropDialog file={cropFile} onCancel={() => setCropFile(null)} onConfirm={cropped => { setOriginalFile(cropFile); setFile(cropped); setSource("custom"); setSaved(false); setError(""); setCropFile(null) }} />}
   </Dialog>
 }

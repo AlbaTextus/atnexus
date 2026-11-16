@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
 func (s *fakeStore) GetPlatform(_ context.Context, id int32) (storage.Platform, error) {

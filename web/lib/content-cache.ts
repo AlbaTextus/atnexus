@@ -47,7 +47,7 @@ export class ContentCache {
       const next: Pending = { controller, users: 0, promise: Promise.resolve() }
       next.promise = load(controller.signal).then(value => {
         if (!controller.signal.aborted && this.generation === generation) {
-          const ttl = /^\/api\/v2\/(tags|platforms)(\?|$)/.test(path) ? 5 * 60_000 : 30_000
+          const ttl = /^\/api\/v5\/(tags|platforms)(\?|$)/.test(path) ? 5 * 60_000 : 30_000
           this.entries.set(path, { value, expires: Date.now() + ttl })
           while (this.entries.size > maxEntries) this.entries.delete(this.entries.keys().next().value!)
           this.persist()
@@ -84,7 +84,7 @@ export class ContentCache {
         json = JSON.stringify(entries)
       }
       // History and chapter bodies need not survive reloads.
-      entries = entries.filter(([path]) => !/^\/api\/v3\/history/.test(path) && !/^\/api\/v2\/content/.test(path))
+      entries = entries.filter(([path]) => !/^\/api\/v4\/history(\?|$)/.test(path) && !/^\/api\/v5\/content(\?|$)/.test(path))
       sessionStorage.setItem(prefix + this.scope, JSON.stringify(entries))
     } catch { /* Storage is optional. */ }
   }

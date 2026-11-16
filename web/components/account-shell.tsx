@@ -18,7 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { SiteHeader, navigationTransition, type NavigationItem } from "@/components/site-header"
 import { ThemeToggle } from "@/components/theme-toggle"
 
-export type AccountUser = { id: string; numeric_id: number; bio?: string; email: string; email_verified?: boolean; profile_setup_required?: boolean; display_name?: string | null; role: string; level: 1 | 2 | 3 | 4; created_at?: string; has_password?: boolean; email_is_alias?: boolean; avatar_source?: string; avatar_url?: string; custom_avatar_url?: string }
+export type AccountUser = { id: string; numeric_id: number; bio?: string; background_url?: string; background_original_url?: string; avatar_original_url?: string; email: string; email_verified?: boolean; profile_setup_required?: boolean; display_name?: string | null; role: string; level: 1 | 2 | 3 | 4; created_at?: string; has_password?: boolean; email_is_alias?: boolean; avatar_source?: string; avatar_url?: string; custom_avatar_url?: string }
 const AccountContext = createContext<{ user: AccountUser; updateUser: (user: AccountUser) => void } | null>(null)
 function useAccountContext() {
   const context = useContext(AccountContext)
@@ -75,19 +75,22 @@ export function AccountShell({ children, area = "account", initialUser }: { chil
   }, [pathname, Boolean(user), denied, reducedMotion, pageAnimation])
 
   useEffect(() => {
-    let cancelled = false
-    api<AccountUser>("/api/v1/user").then(value => {
-      if (cancelled) return
+    // The private account layout has already validated this session on the server.
+    if (initialUser) return
+    const controller = new AbortController()
+    api<AccountUser>("/api/v1/user", { signal: controller.signal, cache: "no-store" }).then(value => {
+      if (controller.signal.aborted) return
       if (value.profile_setup_required) { window.location.replace(profileSetupPath(window.location.pathname + window.location.search)); return }
       setUser(value)
+      setError("")
     }).catch(reason => {
-      if (cancelled) return
+      if (controller.signal.aborted) return
       if (reason instanceof ApiError && reason.status === 401) {
         window.location.href = `/login?return_to=${encodeURIComponent(window.location.pathname)}`
       } else setError(managementError(reason))
     })
-    return () => { cancelled = true }
-  }, [])
+    return () => controller.abort()
+  }, [initialUser, setError])
 
   async function logout() {
     setLeaving(true)

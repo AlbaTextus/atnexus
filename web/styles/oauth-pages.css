@@ -127,6 +127,19 @@
 .profile-editor-page [data-slot="input"] { text-align: center; }
 .profile-editor-page [data-slot="textarea"], .profile-editor-page .profile-editor-avatar { flex-direction: column; justify-content: center; }
 .profile-editor-avatar > div:last-child { align-items: center; }
+.profile-editor-layout { max-width: 1080px; padding-top: 4px; }
+.profile-media-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 336px) minmax(0, 1fr); align-items: start; gap: 32px; }
+.profile-card-preview { padding-top: 36px; }
+.profile-image-section { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 14px; }
+.profile-image-section h2 { margin: 0; font-size: 15px; font-weight: 500; line-height: 22px; }
+.profile-image-upload { position: relative; display: flex; width: 100%; height: 196px; align-items: center; justify-content: center; overflow: hidden; border: 1px dashed var(--input); border-radius: 16px; background: var(--card); transition: border-color 160ms ease, background-color 160ms ease; }
+.profile-image-upload:hover { border-color: var(--foreground); background: var(--accent); }
+.profile-image-upload:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
+.profile-image-upload:disabled { cursor: wait; opacity: .6; }
+.profile-image-upload > img { width: 100%; height: 100%; object-fit: contain; }
+.profile-image-upload-action { position: absolute; bottom: 10px; left: 50%; display: inline-flex; max-width: calc(100% - 16px); align-items: center; gap: 6px; transform: translateX(-50%); white-space: nowrap; border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 6px 10px; color: var(--foreground); font-size: 12px; }
+.profile-image-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.profile-bio-section { width: 100%; max-width: 768px; margin-inline: auto; }
 .avatar-editor-pencil { position: absolute; right: -6px; bottom: -4px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 5px #14141312; }
 .avatar-editor-dialog [data-slot="dialog-footer"] { justify-content: center; background: #ffffff; }
 .account-profile-joined-icon { background: #ffafe3; color: #8c0055; }

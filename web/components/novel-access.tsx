@@ -9,7 +9,7 @@ import { api, ApiError } from "@/lib/api"
 import { ContentApiError, fetchContent } from "@/lib/athub-client"
 import { ContentCache, clearStoredContent } from "@/lib/content-cache"
 
-type Session = { access_token: string; expires_at: string; cache_scope: string }
+type Session = { expires_at: string; cache_scope: string }
 type AccessContext = {
   ready: boolean
   authenticated: boolean
@@ -33,7 +33,7 @@ export function NovelAccessProvider({ children }: { children: ReactNode }) {
 
   const obtain = useCallback(async () => {
     if (!pending.current) {
-      pending.current = api<Session>("/api/v1/account/athub/session", { method: "POST", body: "{}" })
+      pending.current = api<Session>("/api/v1/session")
         .then(value => {
           // During a rolling deployment an older backend may omit the scope.
           // Use an ephemeral scope rather than sharing a persisted cache.
@@ -91,13 +91,13 @@ export function NovelAccessProvider({ children }: { children: ReactNode }) {
     if (!current || Date.parse(current.expires_at) <= Date.now() + 15000) current = await obtain()
     const credential = current
     const load = async (sharedSignal: AbortSignal) => {
-      try { return await fetchContent<T>(path, credential.access_token, sharedSignal) }
+      try { return await fetchContent<T>(path, sharedSignal) }
       catch (reason) {
         if (!(reason instanceof ContentApiError) || reason.status !== 401 || sharedSignal.aborted) throw reason
         contentCache.current?.cache.clear(false)
         const renewed = await obtain()
         if (renewed.cache_scope !== credential.cache_scope) throw new DOMException("Account session changed", "AbortError")
-        return fetchContent<T>(path, renewed.access_token, sharedSignal)
+        return fetchContent<T>(path, sharedSignal)
       }
     }
     return contentCache.current!.cache.read(path, load, signal)

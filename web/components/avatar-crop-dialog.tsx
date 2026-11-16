@@ -14,7 +14,9 @@ function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("无法生成头像，请重新选择图片。")), "image/png"))
 }
 
-export function AvatarCropDialog({ file, onCancel, onConfirm }: { file: File; onCancel: () => void; onConfirm: (file: File) => void }) {
+export function AvatarCropDialog({ file, onCancel, onConfirm, target = "avatar" }: { file: File; onCancel: () => void; onConfirm: (file: File) => void; target?: "avatar" | "background" }) {
+  const isBackground = target === "background"
+  const label = isBackground ? "背投" : "头像"
   const [imageURL, setImageURL] = useState("")
   const [crop, setCrop] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
@@ -80,25 +82,26 @@ export function AvatarCropDialog({ file, onCancel, onConfirm }: { file: File; on
         return
       }
       const canvas = document.createElement("canvas")
-      canvas.width = canvas.height = 512
+      canvas.width = isBackground ? 1536 : 512
+      canvas.height = 512
       const context = canvas.getContext("2d")
       if (!context) throw new Error("浏览器无法处理图片，请重试。")
       context.imageSmoothingQuality = "high"
-      context.drawImage(source.current!, area.x, area.y, area.width, area.height, 0, 0, 512, 512)
-      onConfirm(new File([await canvasBlob(canvas)], "avatar.png", { type: "image/png" }))
+      context.drawImage(source.current!, area.x, area.y, area.width, area.height, 0, 0, canvas.width, canvas.height)
+      onConfirm(new File([await canvasBlob(canvas)], `${target}.png`, { type: "image/png" }))
     } catch (reason) { setError(reason instanceof Error ? reason.message : "裁剪失败，请重试或重新选择图片。"); setBusy(false) }
   }
 
   return <Dialog open onOpenChange={open => { if (!open && !busy) onCancel() }}>
     <DialogContent className="center-dialog avatar-crop-dialog max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-lg" showCloseButton={!busy}>
-      <DialogHeader><DialogTitle>裁剪头像</DialogTitle><DialogDescription>拖动图片调整位置，缩放到合适大小。圆框内是头像显示范围。</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>裁剪{label}</DialogTitle><DialogDescription>拖动、缩放图片，{isBackground ? "横框内是卡片背投的显示范围。" : "圆框内是头像显示范围。"}</DialogDescription></DialogHeader>
       {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}</AlertDescription></Alert>}
       <div className="avatar-crop-stage" aria-busy={!imageURL || busy}>
-        {imageURL ? <Cropper image={imageURL} crop={crop} zoom={zoom} aspect={1} cropShape="round" showGrid={false} minZoom={1} maxZoom={4} onCropChange={setCrop} onZoomChange={setZoom} onCropAreaChange={(_, pixels) => setArea(pixels)} cropperProps={{ "aria-label": "移动头像裁剪区域", "aria-describedby": "avatar-crop-keyboard-help" }} /> : !error && <Spinner aria-label="正在读取图片" />}
+        {imageURL ? <Cropper image={imageURL} crop={crop} zoom={zoom} aspect={isBackground ? 3 : 1} cropShape={isBackground ? "rect" : "round"} showGrid={isBackground} minZoom={1} maxZoom={4} onCropChange={setCrop} onZoomChange={setZoom} onCropAreaChange={(_, pixels) => setArea(pixels)} cropperProps={{ "aria-label": `移动${label}裁剪区域`, "aria-describedby": "avatar-crop-keyboard-help" }} /> : !error && <Spinner aria-label="正在读取图片" />}
       </div>
       <Field data-disabled={busy || !imageURL}>
         <div className="flex items-center justify-between"><FieldLabel>缩放</FieldLabel><span className="text-xs text-muted-foreground">{Math.round(zoom * 100)}%</span></div>
-        <Slider aria-label="缩放头像" min={1} max={4} step={0.01} value={[zoom]} onValueChange={value => setZoom(Array.isArray(value) ? value[0] : value)} disabled={busy || !imageURL} className="py-3" />
+        <Slider aria-label={`缩放${label}`} min={1} max={4} step={0.01} value={[zoom]} onValueChange={value => setZoom(Array.isArray(value) ? value[0] : value)} disabled={busy || !imageURL} className="py-3" />
       </Field>
       <p id="avatar-crop-keyboard-help" className="text-xs text-muted-foreground">支持触屏拖动、双指缩放；聚焦图片后可用方向键微调。</p>
       <DialogFooter className="flex-wrap">

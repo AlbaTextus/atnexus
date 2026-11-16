@@ -27,6 +27,7 @@ const date = (value: string | null) => value ? new Date(value).toLocaleString("z
 function errorMessage(reason: unknown) {
   if (reason instanceof ApiError) {
     if (reason.status === 401) return "登录已过期，请重新登录。"
+    if (reason.status === 429) return "刷新过于频繁，请稍后重试。"
     if (reason.code === "athub_admin_disabled") return "API 密钥已被管理员禁用，无法自行重置或启用。"
   }
   return "暂时无法完成操作，请稍后重试。"
@@ -41,7 +42,8 @@ export function AccountKeys() {
   const [days, setDays] = useState(7)
   const [revision, setRevision] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
+  const [keysError, setKeysError] = useState("")
+  const [usageError, setUsageError] = useState("")
   const [secretOpen, setSecretOpen] = useState(false)
   const [secret, setSecret] = useState("")
   const [copied, setCopied] = useState(false)
@@ -59,41 +61,46 @@ export function AccountKeys() {
   const [callsLoading, setCallsLoading] = useState(true)
   const [callsError, setCallsError] = useState("")
   const [hasNext, setHasNext] = useState(false)
+  const error = keysError || usageError
 
   useEffect(() => {
     let active = true
-    setKeysLoading(true); setError("")
+    setKeysLoading(true); setKeysError("")
     if (!provision.current || provision.current.revision !== revision) {
-      provision.current = { revision, promise: api<KeyResult>(keyPath, { method: "POST", body: "{}" }) }
+      const promise = api<{ keys: APIKey[] }>(keyPath).then(result => result.keys.length
+        ? { key: result.keys[0] }
+        : api<KeyResult>(keyPath, { method: "POST", body: "{}" }))
+      provision.current = { revision, promise }
     }
     void provision.current.promise.then(result => {
       if (!active) return
       setKeys([result.key])
+      setKeysError("")
       if (result.api_key) { setSecret(result.api_key); setCopied(false); setCopyError(""); setSecretOpen(true) }
-    }).catch(reason => { if (active) setError(errorMessage(reason)) })
+    }).catch(reason => { if (active) setKeysError(errorMessage(reason)) })
       .finally(() => { if (active) setKeysLoading(false) })
     return () => { active = false }
   }, [revision])
 
   useEffect(() => {
-    let active = true
-    setLoading(true)
-    void api<ATHubUsage>(`${usagePath}/usage?days=${days}`).then(result => {
-      if (active) setUsage(result)
-    }).catch(reason => { if (active) setError(errorMessage(reason)) })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
+    const controller = new AbortController()
+    setLoading(true); setUsageError("")
+    void api<ATHubUsage>(`${usagePath}/usage?days=${days}`, { signal: controller.signal }).then(result => {
+      if (!controller.signal.aborted) { setUsage(result); setUsageError("") }
+    }).catch(reason => { if (!controller.signal.aborted) setUsageError(errorMessage(reason)) })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
   }, [days, revision])
 
   useEffect(() => {
-    let active = true
+    const controller = new AbortController()
     setCallsLoading(true); setCallsError("")
     // Request one extra record to determine pagination without a separate count.
-    void api<{ calls: Call[] }>(`${usagePath}/calls?limit=${pageSize + 1}&offset=${offset}`).then(data => {
-      if (active) { setCalls(data.calls.slice(0, pageSize)); setHasNext(data.calls.length > pageSize) }
-    }).catch(reason => { if (active) setCallsError(errorMessage(reason)) })
-      .finally(() => { if (active) setCallsLoading(false) })
-    return () => { active = false }
+    void api<{ calls: Call[] }>(`${usagePath}/calls?limit=${pageSize + 1}&offset=${offset}`, { signal: controller.signal }).then(data => {
+      if (!controller.signal.aborted) { setCalls(data.calls.slice(0, pageSize)); setHasNext(data.calls.length > pageSize); setCallsError("") }
+    }).catch(reason => { if (!controller.signal.aborted) setCallsError(errorMessage(reason)) })
+      .finally(() => { if (!controller.signal.aborted) setCallsLoading(false) })
+    return () => controller.abort()
   }, [offset, revision])
 
   function closeSecret(open: boolean) {

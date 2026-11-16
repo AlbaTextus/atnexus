@@ -5,10 +5,10 @@ import { BookOpen, Building2, Tags, UsersRound } from "lucide-react"
 import { ContentFailure, NovelAccessGate, useNovelAccess } from "@/components/novel-access"
 
 const resources = [
-  { path: "/api/v2/novelinfo", title: "小说", icon: BookOpen, tone: "blue" },
-  { path: "/api/v2/tags", title: "标签", icon: Tags, tone: "violet" },
-  { path: "/api/v2/authors", title: "作者", icon: UsersRound, tone: "teal" },
-  { path: "/api/v2/platforms", title: "发行方", icon: Building2, tone: "pink" },
+  { path: "/api/v5/novelinfo", title: "小说", icon: BookOpen, tone: "blue" },
+  { path: "/api/v5/tags", title: "标签", icon: Tags, tone: "violet" },
+  { path: "/api/v5/authors", title: "作者", icon: UsersRound, tone: "teal" },
+  { path: "/api/v5/platforms", title: "发行方", icon: Building2, tone: "pink" },
 ] as const
 
 export function NovelResources() {

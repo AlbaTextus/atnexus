@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
 func (a *API) platforms(w http.ResponseWriter, r *http.Request) error {

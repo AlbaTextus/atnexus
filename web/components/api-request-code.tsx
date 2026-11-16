@@ -1,4 +1,5 @@
 import { cn } from "cn"
+import { publicEndpointPath } from "@/lib/athub-permissions"
 
 const methodColors: Record<string, string> = {
   GET: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
@@ -13,7 +14,7 @@ const methodColors: Record<string, string> = {
 export function APIRequestCode({ method, path, className }: { method: string; path: string; className?: string }) {
   return <span className={cn("inline-flex items-center gap-3 font-mono text-xs", className)}>
     <span className={cn("inline-flex min-w-14 shrink-0 justify-center rounded-md px-2 py-1 font-semibold", methodColors[method.toUpperCase()] || "bg-muted text-muted-foreground")}>{method}</span>
-    <code className="min-w-0 break-all rounded-md bg-sky-500/5 px-2 py-1 text-sky-700 dark:text-sky-300">{path}</code>
+    <code className="min-w-0 break-all rounded-md bg-sky-500/5 px-2 py-1 text-sky-700 dark:text-sky-300">{publicEndpointPath(path)}</code>
   </span>
 }
 

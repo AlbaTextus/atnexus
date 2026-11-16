@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
 type cachedStore struct {

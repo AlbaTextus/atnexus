@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "background_url" VARCHAR(2048) NOT NULL DEFAULT '';

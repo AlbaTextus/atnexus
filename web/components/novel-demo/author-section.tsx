@@ -19,7 +19,7 @@ export function AuthorSection({ novelId, authorId }: { novelId: string; authorId
     const controller = new AbortController()
     setLoading(true)
     setError("")
-    void readAllContent<Novel>(request, `/api/v2/novelinfo?authorId=${authorId}`, controller.signal)
+    void readAllContent<Novel>(request, `/api/v5/novelinfo?authorId=${authorId}`, controller.signal)
       .then(items => {
         if (!controller.signal.aborted) {
           setBooks(items.filter(book => String(book.id) !== novelId))

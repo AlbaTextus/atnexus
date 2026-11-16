@@ -17,7 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
 const MaxBodyBytes int64 = 8 << 20

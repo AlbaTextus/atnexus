@@ -5,7 +5,7 @@ import (
 	"math"
 	"net/http"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
 type illustrationLayoutStore interface {
@@ -66,7 +66,9 @@ func validateIllustrationLayout(input storage.IllustrationLayout, novelID int32)
 				return badRequest("invalid illustration coordinates")
 			}
 		}
-		if block.X < 0 || block.Y < 0 || block.Width < 40 || block.Height < 40 ||
+		// The longer side sets the minimum size so narrow images can keep
+		// their original aspect ratio without padding inside the selection.
+		if block.X < 0 || block.Y < 0 || block.Width <= 0 || block.Height <= 0 || math.Max(block.Width, block.Height) < 40 ||
 			block.X+block.Width > 1000.001 || block.Y+block.Height > 5000.001 {
 			return badRequest("illustration outside canvas")
 		}

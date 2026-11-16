@@ -1,7 +1,17 @@
 # atnexus
 
-atnexus 是 ALBATEXTUS 的统一服务：v1 是账户中心与 OAuth 2.0 授权，v2 是 ATHub 内容存储。
-两套功能编译成一个程序，由 `cmd/server` 一起初始化，OAuth 监听 `8001`，ATHub 监听 `8003`，分别连接各自数据库。
+atnexus 是 ALBATEXTUS 的统一服务，当前由一个 Go 程序运行四个模块：
+
+| 模块 | 本地默认监听 | 公开业务前缀 | 职责 |
+| --- | --- | --- | --- |
+| `modules/oauth/` | `8001` | `/api/v1` | 账户、session、OAuth 与外部 API Key 管理/校验 |
+| `modules/image/` | `8002` | `/api/v2` | 图床上传、文件管理、本地/S3 存储 |
+| `modules/creatplat/` | `8004` | `/api/v4` | 投稿、审核、历史、修订 |
+| `modules/athub/` | `8005` | `/api/v5` | 书库与正式内容 |
+
+image 已将原 imgbed 后端改写为 Go，元数据迁入独立 PostgreSQL，原图床前端保持原样；library 已取消；other 未指定业务，暂不启动。
+OAuth、ATHub、创作者平台和图床分别使用自己的数据库，可位于同一 PostgreSQL 实例。图床保留原 `/file/` 文件地址。迁移与恢复说明见 [image 模块](modules/image/README.md)，完整实施边界见 [重构计划](atnpan-ban.md)。
+
 Go module 路径为 `github.com/AlbaTextus/atnexus`，根工作区包为 `@albatextus/atnexus`，
 账户前端包为 `@albatextus/atnexus-web`，统一程序名为 `atnexus`。
 
@@ -17,23 +27,24 @@ Go module 路径为 `github.com/AlbaTextus/atnexus`，根工作区包为 `@albat
 导航已预留分类、阅读记录、书架、收藏、数据来源、下载和设置，
 对应 `/library/{categories,history,bookshelf,favorites,sources,downloads,settings}`。
 书库列表、标签分类、数据来源、作品详情及章节目录通过浏览器
-直接请求 `NEXT_PUBLIC_ATHUB_API_URL` 下的 `/api/v2/*`，Next.js 不转发小说接口。
+直接请求 `NEXT_PUBLIC_ATHUB_API_URL` 下的 `/api/v5/*`，Next.js 不转发小说接口。
 书库与详情直接复制 `demo-2` 原组件及其 Button、Badge、Tabs、ToggleGroup 等控件到
 `web/components/novel-demo/`，原样复用 DOM、类名和 CSS 声明；样式仅加
 `.novel-demo` 作用域，避免影响主页和用户中心。与后端的连接由
 `web/lib/novel-demo-data.ts` 适配，共用站点顶部导航；不改演示仓库，不引入其 SQLite、
 固定书名、示例封面或跨项目源码引用。
-作品详情沿用原图标页签，增加章节目录入口。目录仅使用 `/api/v2/toc` 返回的标题，
+作品详情沿用原图标页签，增加章节目录入口。目录仅使用 `/api/v5/toc` 返回的标题，
 按“作品 → 卷 → 章节”展开和收起，卷与章节分别按 `order` 排序。
 未分卷章节不会丢失：有卷时归入“未分卷”，整本无卷时直接列在作品下。
-章节标题为普通文字，不提供阅读跳转，不请求 `/api/v2/content` 或显示正文。
-小说库自动联动用户中心登录，无需输入 API Key。账户接口
-`POST /api/v1/account/athub/session` 使用现有会话签发最长 5 分钟的只读凭证，
-浏览器仅在内存保存，自动续期并直连内容后端；不生成、读取或重置个人 Key。
-内容后端每次读取都在账户库检查会话有效期、撤销状态、账户封禁与管理员限制。
-退出登录或管理员禁用后，已签发凭证也无法继续从服务端读取。会话调用保留审计记录，`key_id` 为空，
-不计入个人 API Key 的总数、趋势、调用明细或管理员调用排行。
-外部调用继续使用个人 API Key；个人 Key 的停用和重置不影响网站登录会话。
+章节标题为普通文字，不提供阅读跳转，不请求 `/api/v5/content` 或显示正文。
+小说库自动使用 OAuth session Cookie。`GET /api/v1/session` 只返回到期时间和缓存隔离标识，
+浏览器不再申请 ATHub 专用短时 bearer 凭证。读取正式内容直连
+`NEXT_PUBLIC_ATHUB_API_URL` 的 `/api/v5/*`，读取历史和贡献者直连
+`NEXT_PUBLIC_CREATPLAT_API_URL` 的 `/api/v4/history` 与 `/api/v4/contributors`。
+两个公开地址都必须与账户入口共享同一 Cookie 主机范围，本地统一使用 localhost。
+各监听器校验 OAuth session 与账户状态，再执行模块权限。退出或账户禁用后拒绝后续访问。
+网站请求不生成个人 Key，不计入外部 Key 的调用额度；外部 Key 的生命周期与校验归 OAuth。
+
 书库使用 `view=page` 每次读取 24 本，搜索书名/作者、排序、筛选及总数统计均由后端完成，
 仅批量查询当前页的作者。页码和搜索条件保存在 URL，返回页面时可恢复。
 资源统计使用 `view=count`，不下载完整列表。详情先显示基础资料，其余资料和目录独立加载。
@@ -46,10 +57,9 @@ F5 后先验证登录态，再复用当前会话在 `sessionStorage` 中仍有�
 作者 API 提供可空的 `name`，书库列表和详情使用真实姓名；未补录姓名时保留作者编号。
 没有接口字段的发行日期、年龄限制、总字数和资源链接不使用示例值，相关区域保留占位，不新增数据业务。
 下载资源、阅读记录、书架和收藏仍是待接入区域。
-8003 允许 `AUTH_UI_URL` 与 `WEBAUTHN_RP_ORIGINS` 对应来源进行带 Authorization 的 GET 跨域读取，
-预检不消耗调用统计；实际 GET 仍执行鉴权与记账，不跨域传递账户 Cookie。
-`NEXT_PUBLIC_ATHUB_API_URL` 是构建时配置，部署后端后需重新构建前端；反代须保留 Origin、
-Authorization、OPTIONS 及后端的跨域响应头。
+8002、8004、8005 允许配置的账户 UI 来源携带 Cookie 跨端口访问；预检不鉴权、不计入调用统计。
+修改请求校验客户端标记与来源。公开地址通过前端环境配置读取，变化后需要重建前端。
+账户和投稿/审核操作通过 Next.js 转发到对应模块，内容与历史查询由浏览器直连。
 用户中心与管理后台继续使用原页面和鉴权，小说库侧栏不包裹这些页面。
 
 ## 功能
@@ -65,23 +75,23 @@ Authorization、OPTIONS 及后端的跨域响应头。
 | OAuth 服务 | 授权码、S256 PKCE、刷新令牌轮换、客户端凭证、令牌撤销与自省 |
 | 授权确认 | 展示应用与申请权限，用户明确允许后才签发授权码 |
 | 管理后台 | 应用接入、客户端密钥、最低访问角色、用户管理、协议编辑 |
-| 内容存储（v2） | 平台、作者、小说、卷、章节、全书目录与批量上传 |
-| 贡献历史（v3） | 贡献者、按请求合并的变更记录、字段前后对比 |
+| ATHub 内容（v5） | 平台、作者、小说、卷、章节、全书目录与批量上传 |
+| 创作者平台（v4） | 投稿、审核、修订、贡献者、按请求合并的变更记录、字段前后对比 |
 
 ## 模块维护与路由
 
-OAuth 业务继续使用 `/api/v1/*`，OAuth 协议端点 `/oauth/*` 和发现端点保持原路径。
-ATHub 代码合入 [`modules/athub/`](modules/athub/README.md)，直接使用 `/api/v2/content`、
-`/api/v2/upload` 等路径，不加 `/athub`。同一进程开两个监听器，模块之间没有内部 HTTP 转发。
-v1 与 v2 在这里代表不同功能模块。
+OAuth 使用 `/api/v1/*`，协议端点 `/oauth/*` 和发现端点保持原路径。
+ATHub 公开入口改为 `/api/v5/*`，创作者平台为 `/api/v4/*`。
+底层内容引擎、权限配置与历史审计的 v2/v3 操作标签暂保留，通过边界适配转换。
+这不表示 image 使用了旧内容接口，也不创建新的 library 模块。
 
-`8003/api/v3/history?novelId=2&limit=20&offset=0` 返回分页变更历史，
-`8003/api/v3/contributors?novelId=2` 返回真实创建者与后续贡献者。
-两个接口使用现有网站只读凭证或个人 Key 鉴权，浏览器直连后端；Next.js 不代理 v3。
+`8004/api/v4/history?novelId=2&limit=20&offset=0` 返回分页变更历史，
+`8004/api/v4/contributors?novelId=2` 返回真实创建者与后续贡献者。
+两个接口使用现有网站 session 或个人 Key 鉴权，浏览器直连后端；Next.js 不代理历史查询。
 作品详情的贡献者卡片链接到 `/library/books/2/history`，沿用现有组件、字体和面板。
 
-历史表 `novel_revisions` 位于服务账户库 `DATABASE_URL`，迁移为根目录
-`20261110050000_novel_history`；ATHub 小说库不新增历史表或账号表。
+审核表 `athub_reviews` 和历史表 `novel_revisions` 由独立创作者库 `CREATPLAT_DATABASE_URL` 管理，迁移链位于 `modules/creatplat/prisma/`。
+旧账户库中对应两张表保留为升级导入来源；部署前按 [创作者数据库说明](modules/creatplat/DATABASE.md) 完成建库、迁移和数据核对。ATHub 小说库不新增历史表或账号表。
 修改者由宿主根据已认证的账号或 Key 所属账号确定，客户端不能指定贡献者。
 小说元数据、卷、章节、批量上传以及已有作者/标签名称的修改都记录变更；
 同一次请求按小说合并为一条记录，无实际变化不新增记录。
@@ -90,18 +100,19 @@ v1 与 v2 在这里代表不同功能模块。
 旧历史只有摘要哈希、字数及变动标记，无法追溯补出当时的正文差异。
 旧数据不补造创建者，后续编辑者只列为贡献者。删除条目后服务库仍保留历史。
 
-跨库写入先在服务库保存 pending 记录，再提交小说事务，最后确认历史为 completed；
+跨库写入先在创作者库保存 pending 记录，再提交小说事务，最后确认历史为 completed；
 准备记录失败会回滚小说写入。只有 completed 记录用于历史页与贡献统计，
 内容提交与历史确认之间发生崩溃或服务库中断时，pending 记录保留供核对，不冒充已完成记录。
 
-ATHub 保留独立 `go.mod`、存储实现、测试和 Prisma 迁移；根模块通过本地 `replace` 引用。
+ATHub 保留自己的存储实现、测试和 Prisma 迁移；Go 依赖统一由根 `go.mod` 管理，准入层位于 `modules/athub/access/`。
 维护内容功能时修改该目录，再重新构建统一程序。普通 Git 克隆即可取得全部源码，
 不需要相邻 ATHub 目录或初始化子模块。原 ATHub 工作目录保留。
 
-v2 的外部调用使用登录用户在 `8001/api/v1/account/key` 创建的个人 API Key，不接受原全局密钥、
-OAuth access token 或账户 Cookie。每个 Key 归属一个用户，创建时仅返回一次明文，账户库只保存哈希。
-账户维护模式沿用 v1 范围；v2 内容请求不经过账户维护拦截。
-`8001/healthz` 检查账户库，账户维护状态仍返回 `433`；`8003/healthz` 检查内容库，
+v5 的外部调用使用登录用户在 `8001/api/v1/account/key` 创建的个人 API Key，由 OAuth 统一管理与校验；
+站内调用使用 OAuth session Cookie，不接受原全局密钥或用 OAuth access token 替代 session。
+每个 Key 归属一个用户，创建时仅返回一次明文，账户库只保存哈希。
+账户维护模式沿用 v1 范围；内容请求不经过账户维护拦截。
+`8001/healthz` 检查账户库，账户维护状态仍返回 `433`；`8005/healthz` 检查内容库，
 数据库不可用返回 `503`。任一端口绑定失败会释放已绑定端口并退出整个程序。
 
 本项目提供 OAuth 2.0 服务，**不签发 OpenID Connect ID Token**。访问令牌是不透明字符串；应用通过 `/api/v1/user` 获取用户身份，不应将令牌当作 JWT 解码。
@@ -141,7 +152,7 @@ Key 为 `ath_` 加 32 个随机字节的 Base64URL 编码，账户库仅保存 S
 内容请求先在账户库写入待完成记录，再执行内容读写，最后补齐状态码、耗时和响应字节数。
 统计按调用次数计数，不把上传的章节数量当成调用次数；可归属 Key 的失败调用也计数。
 缺失/未知 Key 的失败调用以匿名记录保存，不出现在任何用户的个人统计里。
-不保存 Authorization、查询字符串、请求体和小说正文；未知路由归类为 `/api/v2/{unknown}`。
+不保存 Authorization、查询字符串、请求体和小说正文；未知路由归类为 `/api/v5/{unknown}`。
 健康检查和账户管理请求不计入内容调用次数。账户库无法校验或无法开始记录时，
 返回 `503` 并停止内容业务；完成记录失败或进程中断时，保留 `status=null` 的待完成记录。
 Key 目前拥有共享内容库读写权限，用户归属用于鉴权与统计，不会自动按用户隔离小说。
@@ -150,7 +161,7 @@ Key 目前拥有共享内容库读写权限，用户归属用于鉴权与统计�
 `bucket_seconds` 和 `trend`（`started_at`、`port`、`calls`）。
 `days=1` 使用最近 24 个小时桶，`days=7/30` 使用最近 7/30 个 UTC 日桶，均包含当前桶。
 没有调用的桶由前端补零，趋势从全部匹配记录聚合，不受最近调用分页限制。
-端口取自服务端监听配置，目前内容调用记录来自 `8003`，账户 `8001` 的管理操作不计入。
+端口取自服务端监听配置，目前内容调用记录来自 `8005`，账户 `8001` 的管理操作不计入。
 
 部署先在账户库应用 `20261110000000_athub_user_keys` 迁移，再更新统一程序。
 迁移只新增两张表与索引，不修改内容库和用户数据。服务启动会检查这些表是否就绪。
@@ -243,7 +254,14 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 DATABASE_URL=postgresql://oauth:oauth@localhost:5432/oauth?sslmode=disable
 ATHUB_DATABASE_URL=postgresql://athub:athub@localhost:5433/athub?sslmode=disable
 HTTP_ADDR=:8001
-ATHUB_HTTP_ADDR=:8003
+ATHUB_HTTP_ADDR=:8005
+CREATPLAT_HTTP_ADDR=:8004
+IMAGE_HTTP_ADDR=:8002
+# 独立图床库；使用实际连接和已有文件目录。
+IMAGE_DATABASE_URL=
+IMAGE_LOCAL_ROOT=
+IMAGE_TEMP_ROOT=temp/image
+IMAGE_PUBLIC_URL=http://localhost:8002
 ISSUER_URL=http://localhost:3288
 AUTH_UI_URL=http://localhost:3288
 COOKIE_SECURE=false
@@ -253,12 +271,12 @@ WEBAUTHN_RP_ORIGINS=http://localhost:3288
 
 ### 2. 初始化数据库
 
-已有 PostgreSQL 时，分别配置账户库 `DATABASE_URL` 和内容库 `ATHUB_DATABASE_URL`。
+已有 PostgreSQL 时，分别配置账户库 `DATABASE_URL`、内容库 `ATHUB_DATABASE_URL` 和独立创作者库 `CREATPLAT_DATABASE_URL`。
 接入已有 ATHub 数据时直接使用原内容库连接地址，不需要复制小说数据；个人 Key 在账户库重新创建。
-也可以使用仓库提供的两个数据库容器：
+也可以配置创作者数据库凭据后使用仓库提供的三个数据库容器：
 
 ```bash
-docker compose up -d postgres athub-postgres
+docker compose up -d postgres athub-postgres creatplat-postgres
 ```
 
 如需启用 Redis 会话缓存，在 `.env` 设置 `REDIS_ENABLED=true`，再启动可选容器；不开启时 Go 服务不会连接 Redis：
@@ -267,7 +285,7 @@ docker compose up -d postgres athub-postgres
 docker compose --profile redis up -d redis
 ```
 
-数据库就绪后执行：
+创作者数据库先执行 `npm run db:creatplat:deploy`；已有安装须停止旧后端后执行 `npm run db:creatplat:import`，核对通过再启动新版本。完整步骤见 [DATABASE.md](modules/creatplat/DATABASE.md)。数据库就绪后执行：
 
 ```bash
 pnpm db:deploy
@@ -279,7 +297,7 @@ pnpm db:seed
 
 `db:athub:deploy` 只迁移内容库。迁移前备份数据库；其中保留的
 `20261103000000_remove_user_api` 会删除旧 `ApiUser`、`ApiKey` 和 `ApiUsage` 表及数据，
-保留内容数据。统一服务启动只检查两套数据库，任何一套初始化失败都不会开始监听。
+保留内容数据。图床库按 [image 迁移说明](modules/image/README.md) 建在现有 PostgreSQL 实例中，设置 `IMAGE_DATABASE_URL` 和已有对象目录后执行 `npm run db:image:deploy`；升级现有 SQLite 图床还需停写备份并执行 `npm run db:image:import`。统一服务检查账户、内容、创作者和图床四套数据库，任何一套初始化失败都不会开始监听。
 
 | 项目 | 默认值 |
 | --- | --- |
@@ -308,11 +326,11 @@ go run ./cmd/server
 pnpm web:dev
 ```
 
-访问 [首页](http://localhost:3288/)、[登录页](http://localhost:3288/login) 或 [用户中心](http://localhost:3288/account)。OAuth 默认监听 `8001`，ATHub 默认监听 `8003`，两个端口均提供 `/healthz`。内容接口例如 `http://localhost:8003/api/v2/content?novelId=1&order=1`。
+访问 [首页](http://localhost:3288/)、[登录页](http://localhost:3288/login) 或 [用户中心](http://localhost:3288/account)。OAuth 监听 `8001`，图床 `8002`，创作者平台 `8004`，ATHub `8005`，四个模块均提供 `/healthz`。内容接口例如 `http://localhost:8005/api/v5/content?novelId=1&order=1`。
 
-账户前端通过 `localhost:3288` 访问：Next.js 仅将 `/api/v1/*`、`/oauth/*` 和 `/.well-known/*` 转发至 `OAUTH_BACKEND_URL`（默认 `http://localhost:8001`），使账户页面与登录会话保持同源。Key 管理和调用统计属于账户接口，继续由该入口提供。不要混用 `localhost` 和 `127.0.0.1`，否则 Cookie 和 Passkey 的来源校验可能不一致。
+账户前端通过 `localhost:3288` 访问：Next.js 将 `/api/v1/*`、`/oauth/*` 和 `/.well-known/*` 转发至 `OAUTH_BACKEND_URL`（默认 `http://localhost:8001`），将创作者操作 `/api/v4/*` 转发至 `CREATPLAT_BACKEND_URL`（默认 `http://localhost:8004`）。Key 管理和暂未进一步拆分的统计接口继续通过账户入口提供。不要混用 `localhost` 和 `127.0.0.1`，否则 Cookie 和 Passkey 的来源校验可能不一致。
 
-小说内容 `/api/v2/*` 不在前端域名下提供，也不经过 Next.js 转发。调用方直接访问 `https://api.albatextus.com/api/v2/*`，由外部反向代理转发到后端 `8003`；本地可直接请求 `http://localhost:8003/api/v2/*`。前端不需要配置或连接 ATHub 内容端口。
+小说内容 `/api/v5/*` 不经过 Next.js 转发。浏览器使用 `NEXT_PUBLIC_ATHUB_API_URL` 直连 ATHub（本地 `http://localhost:8005`），历史查询使用 `NEXT_PUBLIC_CREATPLAT_API_URL`（本地 `http://localhost:8004`）；两个变量都需在前端构建前配置。生产入口须与账户页面共享 Cookie 主机范围。
 
 `pnpm web:dev` 默认使用 Turbopack。中文字体的 `regular.css` 和 `medium.css` 在 `web/app/layout.tsx` 中作为独立 CSS 入口加载，不要再通过 `web/styles/fonts.css` 的 `@import` 合并。Windows 本地环境中，两套分片字体及其 source map 合并为大型 PostCSS IPC 结果时会卡住首次编译；分离入口保留相同的字体、字重和样式，并缩小单次转换结果。
 
@@ -361,9 +379,9 @@ pnpm web:dev
 
 选图后会弹出裁剪窗口，可拖动图片、缩放并查看圆形头像范围，支持触屏和方向键调整。确认裁剪后可重新裁剪；取消会保留已有预览，点击「保存头像」才会上传到图床。
 
-在「个人资料 → 我的头像」选择「自定义上传」，选图预览后点击「保存头像」。支持 PNG、JPEG、WebP、GIF，最大 5 MB、1600 万像素；静态图片生成最大 512 × 512 的 PNG，GIF 逐帧裁剪并保留动画、帧间隔和循环次数。GIF 最多 200 帧，各帧完整画面合计不超过 4000 万像素，裁剪结果也不超过 5 MB。裁剪预览接口只返回图片，点击保存才上传图床并更新账户。头像通过 `POST /api/categories/user/avatars/upload?entityId=<用户 UUID>&returnFormat=full` 上传，保存在图床的 `user/<用户 UUID>/avatars/` 分类下；`entityId` 使用账户 UUID，而非页面地址中的数字 ID。用户中心、授权确认页和 OAuth 用户资料同步使用保存后的地址，旧头像链接继续有效。切换到平台或默认头像会保留已上传的自定义头像，方便再次选择。
+在「个人资料 → 我的头像」选择「自定义上传」，选图预览后点击「保存头像」。支持 PNG、JPEG、WebP、GIF，最大 5 MB、1600 万像素；静态图片生成最大 512 × 512 的 PNG，GIF 逐帧裁剪并保留动画、帧间隔和循环次数。GIF 最多 200 帧，各帧完整画面合计不超过 4000 万像素，裁剪结果也不超过 5 MB。裁剪预览接口只返回图片，点击保存才上传图床并更新账户。Go 通过 `POST /api/v2/categories/user/avatars/upload?entityId=<用户 UUID>&returnFormat=full` 上传，保存在图床的 `user/<用户 UUID>/avatars/` 分类下；`entityId` 使用账户 UUID，而非页面地址中的数字 ID。用户中心、授权确认页和 OAuth 用户资料同步使用保存后的地址，旧头像链接继续有效。切换到平台或默认头像会保留已上传的自定义头像，方便再次选择。
 
-Go 服务的 `.env` 需配置 `IMGBED_URL`（图床根地址）和 `IMGBED_API_TOKEN`（图床管理后台创建的、仅有 `upload` 权限的 API Token），配置后重启 API。令牌只供服务端使用，不要放入 `NEXT_PUBLIC_*`。生产图床地址须为 HTTPS，本地开发允许回环 HTTP。升级时先执行 `pnpm db:deploy` 应用头像字段迁移。
+Go 服务的 `.env` 配置 `IMGBED_URL`（本地 `http://localhost:8002`）和 `IMGBED_API_TOKEN`（OAuth 创建或迁入的上传 Key），配置后重启 API。令牌只供服务端使用，不放入 `NEXT_PUBLIC_*`。生产图床地址须为 HTTPS，本地开发允许回环 HTTP。图床后端迁移不要求修改原前端。
 
 ### Turnstile
 
@@ -413,13 +431,15 @@ Go 服务在注册、密码登录、第三方登录发起、通行密钥登录�
 
 `/admin/settings` 分别提供 Key 总调用限制与接口权限配置。默认 LT1 仅可 GET 查看、读取资源；LT2 可上传、新建和修改，但提交需审核后生效；LT3 可直接上传、修改并审核，不能删除；LT4 拥有全部操作。接口权限只配置允许／禁止及审核要求，具体接口按方法与路径覆盖分类开关，不再设置或执行分类、具体接口的次数限制，旧配置中的次数上限也不再生效。网页登录的接口权限同样生效。Key 累计总调用限制保留，默认不限次。接口权限由超级管理员保存，管理员可查看。
 
-作品详情「贡献者」标题右侧的红色铅笔进入原位编辑模式，点击可编辑内容即可修改，也可在浏览状态双击内容直接编辑。作品名称、来源平台、关联作者、连载状态、封面链接、简介和标签可编辑；字数、章节数、更新时间和贡献记录保持只读。顶部操作栏统一保存或取消资料修改，需审核时提交后继续展示正式资料。`/admin/settings` 的「接口权限 → 作品资料编辑」可按等级选择继承、允许或禁止，审核要求沿用该等级的「内容写入（含作品资料编辑）需审核后生效」。浏览器通过 `PUT /api/v1/account/athub/novels/{id}` 提交，服务端绑定登录会话及作品编号，复用 `PUT /api/v2/novelinfo` 的权限、审核和变更历史；只读内容凭据不能用于写入。
+作品详情「贡献者」标题右侧的红色铅笔进入原位编辑模式，点击可编辑内容即可修改，也可在浏览状态双击内容直接编辑。作品名称、来源平台、关联作者、连载状态、封面链接、简介和标签可编辑；字数、章节数、更新时间和贡献记录保持只读。顶部操作栏统一保存或取消资料修改，需审核时提交后继续展示正式资料。`/admin/settings` 的「接口权限 → 作品资料编辑」可按等级选择继承、允许或禁止，审核要求沿用该等级的「内容写入（含作品资料编辑）需审核后生效」。浏览器通过 `PUT /api/v4/account/athub/novels/{id}` 提交，服务端绑定登录会话及作品编号，复用 `PUT /api/v5/novelinfo` 的权限、审核和变更历史；写入仍执行 session、来源与业务权限检查。
 
 编辑模式下，插图面板上方为展示画布，下方为当前作品的图片资源。将资源拖入画布后，拖动图片块内部调整位置，拖动四边或四角调整大小；靠近其他块的边缘时吸附并显示对齐线。移出画布保留图片资源，删除资源则同时清理画布引用。布局可在插图面板单独保存，也随顶部「保存修改」一起提交，取消修改还原未保存布局。浏览状态按已保存布局展示；未设置布局的作品沿用图片列表。
 
-插图资源上传使用 `POST /api/v1/account/athub/novels/{id}/illustrations`，删除使用 `DELETE /api/v1/account/athub/novels/{id}/illustrations/{illustrationId}`；资源操作单独提交，资料编辑的取消不会撤销已经提交的上传或删除。布局通过 `GET /api/v2/illustration-layout?novelId=…` 读取，浏览器以 `PUT /api/v1/account/athub/novels/{id}/illustration-layout` 保存，内部复用 `PUT /api/v2/illustration-layout?novelId=…` 的权限、审核和贡献历史。保存校验作品资源归属与布局版本；旧版本返回 409，避免覆盖他人的调整。待审核资源或布局继续展示正式数据。上线前应用模块迁移 `20261115010000_illustration_layout`。
+插图资源上传使用 `POST /api/v4/account/athub/novels/{id}/illustrations`，删除使用 `DELETE /api/v4/account/athub/novels/{id}/illustrations/{illustrationId}`；资源操作单独提交，资料编辑的取消不会撤销已经提交的上传或删除。布局通过 `GET /api/v5/illustration-layout?novelId=…` 读取，浏览器以 `PUT /api/v4/account/athub/novels/{id}/illustration-layout` 保存，内部复用 `PUT /api/v5/illustration-layout?novelId=…` 的权限、审核和贡献历史。保存校验作品资源归属与布局版本；旧版本返回 409，避免覆盖他人的调整。待审核资源或布局继续展示正式数据。上线前应用模块迁移 `20261115010000_illustration_layout`。
 
-需审核的内容写入返回 HTTP `202` 以及 `review_id`、`status: "pending"`，此时正式书库尚未变化。书库头像菜单内的审核入口位于 `/library/reviews`，LT3、LT4 可查看提交并通过或驳回；不能审核自己的提交，也不能借审核执行自己无权进行的操作。通过后应用原提交，保留提交者作为历史贡献者；驳回原因与审核结果会保存。重复或并发审核不会重复写入内容。提交者可通过 `/api/v1/account/athub/submissions` 及 `/{id}` 查询自己的状态和结果，审核接口为 `/api/v1/admin/athub/reviews`。
+创作者平台位于 `/creatplat`，默认进入 `/creatplat/upload` 提交小说，审核中心位于 `/creatplat/reviews`。两页共用可收起的侧栏。入口统一放在书库头像菜单的「创作者平台」中，原书库顶部的提交导航和头像菜单内的审核入口已移除，原 `/library/upload`、`/library/reviews` 路由已删除。
+
+需审核的内容写入返回 HTTP `202` 以及 `review_id`、`status: "pending"`，此时正式书库尚未变化。LT3、LT4 可在审核中心查看提交并通过或驳回；不能审核自己的提交，也不能借审核执行自己无权进行的操作。通过后应用原提交，保留提交者作为历史贡献者；驳回原因与审核结果会保存。重复或并发审核不会重复写入内容。提交者可通过 `/api/v4/account/athub/submissions` 及 `/{id}` 查询自己的状态和结果，审核接口为 `/api/v4/admin/athub/reviews`。
 
 权限配置接口为 `GET/PUT /api/v1/admin/athub/permissions`，当前账户能力接口为 `GET /api/v1/account/athub/permissions`。启用此功能需分别运行 `pnpm db:deploy` 和 `pnpm db:athub:deploy`，应用账户库权限／审核迁移及内容库幂等回执迁移，然后更新前后端；迁移不改变现有账户等级和 Key 总调用限额。
 
@@ -498,7 +518,15 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 | `CLIENT_SECRET_ENCRYPTION_KEY` | 客户端密钥与 PKCE verifier 加密密钥，必填并保持稳定 |
 | `APP_ENV` | 本地为 `development`，生产为 `production` |
 | `HTTP_ADDR` | OAuth 监听地址，默认 `:8001` |
-| `ATHUB_HTTP_ADDR` | ATHub 监听地址，默认 `:8003` |
+| `ATHUB_HTTP_ADDR` | ATHub 监听地址，默认 `:8005` |
+| `CREATPLAT_HTTP_ADDR` | 创作者平台监听地址，默认 `:8004` |
+| `IMAGE_HTTP_ADDR` | 图床监听地址，默认 `:8002` |
+| `IMAGE_DATABASE_URL` | 必填，独立图床 PostgreSQL 数据库 |
+| `IMAGE_LOCAL_ROOT` | 必填，已有图床文件目录 |
+| `IMAGE_PUBLIC_URL` | 图床公开根地址 |
+| `IMAGE_LEGACY_HTTP_ADDR` | 可选，旧文件端口兼容监听 |
+| `NEXT_PUBLIC_CREATPLAT_API_URL` | 浏览器直连历史查询的创作者平台公开地址 |
+| `CREATPLAT_BACKEND_URL` | Next.js 转发创作者操作的后端地址 |
 | `ISSUER_URL` | 对外 OAuth 地址；本地应为 `http://localhost:3288` |
 | `AUTH_UI_URL` | 认证前端对外地址 |
 | `COOKIE_SECURE` | HTTPS 部署设为 `true` |
@@ -558,7 +586,8 @@ Go 服务可用 `go build -o ../release/atnexus ./cmd/server` 构建，Windows �
 
 ## API
 
-账户与 OAuth 路由以 [internal/httpapi/api.go](internal/httpapi/api.go) 为准；
+账户与 OAuth 路由以 [modules/oauth/api/api.go](modules/oauth/api/api.go) 为准；
+创作路由见 [modules/creatplat/api/api.go](modules/creatplat/api/api.go)，
 内容路由见 [ATHub 模块接口](modules/athub/README.md#http-接口)。
 以下路径中的 `{id}`、`{provider}` 为参数；协议 `{slug}` 仅支持 `privacy`、`terms`。
 
@@ -583,6 +612,7 @@ Go 服务可用 `go build -o ../release/atnexus ./cmd/server` 构建，Windows �
 | POST | `/api/v1/users` | 注册 |
 | POST | `/api/v1/sessions` | 密码登录 |
 | DELETE | `/api/v1/sessions/current` | 退出当前会话 |
+| GET | `/api/v1/session` | 当前 session 到期时间及缓存隔离标识，不返回凭证明文 |
 | GET | `/api/v1/user` | 当前账户或 Bearer 用户身份 |
 | POST | `/api/v1/auth/providers/{provider}/start` | 开始第三方登录或绑定 |
 | GET | `/api/v1/auth/providers/{provider}/callback` | 第三方回调 |
@@ -692,21 +722,25 @@ Wiki 和 Credit 分别为 `http://localhost:3200`、`http://localhost:3300`。
 
 ```text
 cmd/                  服务入口、开发 seed 与本地图床接入工具
-internal/             配置、HTTP API、OAuth、Passkey、第三方登录、存储
-modules/athub/        独立维护的内容模块、测试及内容库迁移
-prisma/               数据库 schema 与迁移
+internal/             配置、统一 HTTP 装配、账户存储及过渡适配
+modules/oauth/        账户、session、OAuth、外部 Key、Passkey 与第三方登录
+modules/creatplat/    投稿、审核、历史、修订及独立创作者库迁移
+modules/athub/        正式内容、准入适配、测试及内容库迁移
+prisma/               账户数据库 schema 与完整历史迁移
 web/app/              Next.js 页面与全局样式
 web/components/       账户、管理后台与基础 UI 组件
 web/lib/              前端 API 与共享逻辑
-temps/                本地临时脚本、检查与日志
+temp/                 本地临时脚本、检查与日志
 release/              本地构建与发布产物
 ```
 
 | 命令 | 用途 |
 | --- | --- |
-| `npm run server:dev` | 一个进程启动 OAuth 8001 与 ATHub 8003 |
-| `npm run test:go` | 运行宿主与 ATHub 两个 Go 模块的测试 |
+| `npm run server:dev` | 一个进程启动 OAuth 8001、image 8002、creatplat 8004、ATHub 8005 |
+| `npm run test:go` | 运行正式 Go 代码及所有业务模块测试，排除 temp 中的过程脚本 |
 | `npm run db:athub:deploy` | 应用内容库迁移 |
+| `npm run db:creatplat:deploy` | 应用创作者独立库迁移 |
+| `npm run db:creatplat:import` | 停写后导入并核对旧审核和历史数据 |
 | `pnpm web:dev` | 前端开发服务 |
 | `pnpm web:typecheck` | TypeScript 类型检查 |
 | `pnpm db:validate` | 校验 Prisma schema |
@@ -714,7 +748,6 @@ release/              本地构建与发布产物
 | `pnpm db:migrate` | 在开发数据库创建、应用迁移 |
 | `pnpm db:deploy` | 应用已提交的迁移 |
 | `pnpm db:studio` | 打开数据库管理界面 |
-| `go test ./...` | 仅运行宿主 Go 模块测试；不遍历独立 ATHub 模块 |
 
 Prisma schema 与迁移是数据库结构的来源；Go 服务没有 Prisma Client，也不会在启动时自动建表。首次检查前端或更换构建目录时，先完成一次前端构建，生成 Next.js 路由类型。
 

@@ -24,7 +24,7 @@ function DetailData({ id }: { id: number }) {
     const controller = new AbortController()
     setError(""); setPartialError(""); setCatalogError(""); setCatalogLoading(true)
     async function load() {
-      const book = await request<Novel>(`/api/v2/novelinfo?id=${id}`, controller.signal)
+      const book = await request<Novel>(`/api/v5/novelinfo?id=${id}`, controller.signal)
       let tags: ContentTag[] = [], toc: TableOfContents | null = null
       let platform: ContentPlatform | null = null, author: ContentAuthor | null = null
       let contributions: NovelContributors | undefined
@@ -33,11 +33,11 @@ function DetailData({ id }: { id: number }) {
       }
       publish()
       const sections = [
-        readAllContent<ContentTag>(request, "/api/v2/tags", controller.signal).then(value => { tags = value; publish() }),
-        request<ContentPlatform>(`/api/v2/platforms?id=${book.platformId}`, controller.signal).then(value => { platform = value; publish() }),
-        book.authorId === null ? Promise.resolve() : request<ContentAuthor>(`/api/v2/authors?id=${book.authorId}`, controller.signal).then(value => { author = value; publish() }),
-        request<NovelContributors>(`/api/v3/contributors?novelId=${id}`, controller.signal).then(value => { contributions = value; publish() }),
-        request<TableOfContents>(`/api/v2/toc?novelId=${id}`, controller.signal)
+        readAllContent<ContentTag>(request, "/api/v5/tags", controller.signal).then(value => { tags = value; publish() }),
+        request<ContentPlatform>(`/api/v5/platforms?id=${book.platformId}`, controller.signal).then(value => { platform = value; publish() }),
+        book.authorId === null ? Promise.resolve() : request<ContentAuthor>(`/api/v5/authors?id=${book.authorId}`, controller.signal).then(value => { author = value; publish() }),
+        request<NovelContributors>(`/api/v4/contributors?novelId=${id}`, controller.signal).then(value => { contributions = value; publish() }),
+        request<TableOfContents>(`/api/v5/toc?novelId=${id}`, controller.signal)
           .then(value => { toc = value; publish() })
           .catch(reason => {
             if (!controller.signal.aborted) setCatalogError(reason instanceof Error ? reason.message : "目录加载失败。")

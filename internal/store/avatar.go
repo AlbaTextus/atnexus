@@ -15,11 +15,11 @@ type AvatarStore interface {
 }
 
 type CustomAvatarStore interface {
-	UpdateCustomAvatar(context.Context, uuid.UUID, string) (User, error)
+	UpdateCustomAvatar(context.Context, uuid.UUID, string, string) (User, error)
 }
 
-func (p *Postgres) UpdateCustomAvatar(ctx context.Context, userID uuid.UUID, avatarURL string) (User, error) {
-	user, err := scanUser(p.pool.QueryRow(ctx, `UPDATE users SET custom_avatar_url=$2,avatar_source='custom',updated_at=NOW() WHERE id=$1 AND is_active=true RETURNING `+userColumns, userID, avatarURL))
+func (p *Postgres) UpdateCustomAvatar(ctx context.Context, userID uuid.UUID, avatarURL, originalURL string) (User, error) {
+	user, err := scanUser(p.pool.QueryRow(ctx, `UPDATE users SET custom_avatar_url=$2,avatar_original_url=$3,avatar_source='custom',updated_at=NOW() WHERE id=$1 AND is_active=true RETURNING `+userColumns, userID, avatarURL, originalURL))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrInactiveUser
 	}

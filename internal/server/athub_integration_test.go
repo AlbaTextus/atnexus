@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"albatextus/athub"
-	"github.com/AlbaTextus/atnexus/internal/athubaccess"
+	"github.com/AlbaTextus/atnexus/modules/athub"
+	"github.com/AlbaTextus/atnexus/modules/athub/access"
 	"github.com/AlbaTextus/atnexus/internal/config"
-	"github.com/AlbaTextus/atnexus/internal/httpapi"
 	"github.com/AlbaTextus/atnexus/internal/security"
 	"github.com/AlbaTextus/atnexus/internal/server"
 	"github.com/AlbaTextus/atnexus/internal/store"
+	"github.com/AlbaTextus/atnexus/modules/oauth/api"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )

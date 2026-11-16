@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
 var testToken = strings.Repeat("t", 32)

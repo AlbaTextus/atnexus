@@ -38,8 +38,10 @@ export type TableOfContents = {
   chapters: ChapterSummary[]
 }
 
-// The account backend supplies a short-lived, read-only session credential.
-export const contentApiURL = (process.env.NEXT_PUBLIC_ATHUB_API_URL || "https://api.albatextus.com").replace(/\/+$/, "")
+// Module endpoints are deployment configuration; the browser carries the OAuth
+// session cookie directly and never receives a module-specific bearer token.
+export const contentApiURL = (process.env.NEXT_PUBLIC_ATHUB_API_URL || "").replace(/\/+$/, "")
+const creatorApiURL = (process.env.NEXT_PUBLIC_CREATPLAT_API_URL || "").replace(/\/+$/, "")
 
 export class ContentApiError extends Error {
   constructor(public status: number) {
@@ -50,14 +52,16 @@ export class ContentApiError extends Error {
   }
 }
 
-export async function fetchContent<T>(path: string, credential: string, signal?: AbortSignal): Promise<T> {
-  if (!path.startsWith("/api/v2/") && !/^\/api\/v3\/(history|contributors)\?/.test(path)) throw new Error("无效的内容接口路径。")
+export async function fetchContent<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const history = /^\/api\/v4\/(history|contributors)(\?|$)/.test(path)
+  if (!path.startsWith("/api/v5/") && !history) throw new Error("无效的内容接口路径。")
+  const base = history ? creatorApiURL : contentApiURL
+  if (!base) throw new Error(history ? "尚未配置创作者平台接口地址。" : "尚未配置 ATHub 接口地址。")
   let response: Response
   try {
-    response = await fetch(`${contentApiURL}${path}`, {
+    response = await fetch(`${base}${path}`, {
       method: "GET",
-      headers: { Authorization: `Bearer ${credential}` },
-      credentials: "omit",
+      credentials: "include",
       cache: "no-store",
       referrerPolicy: "no-referrer",
       redirect: "error",

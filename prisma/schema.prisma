@@ -27,6 +27,9 @@ model User {
   displayName  String?             @map("display_name") @db.VarChar(100)
   avatarSource String              @default("auto") @map("avatar_source") @db.VarChar(40)
   customAvatarUrl String           @default("") @map("custom_avatar_url") @db.VarChar(2048)
+  backgroundUrl String             @default("") @map("background_url") @db.VarChar(2048)
+  avatarOriginalUrl String         @default("") @map("avatar_original_url") @db.VarChar(2048)
+  backgroundOriginalUrl String     @default("") @map("background_original_url") @db.VarChar(2048)
   role         String              @default("USER") @db.VarChar(20)
   isActive     Boolean             @default(true) @map("is_active")
   createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -49,6 +52,8 @@ model User {
   @@map("users")
 }
 
+// Legacy migration source only after creator cutover. Runtime creator writes use
+// modules/creatplat/prisma and CREATPLAT_DATABASE_URL. Keep existing source rows.
 model NovelRevision {
   id String @id @db.Uuid
   batchId String @map("batch_id") @db.Uuid
@@ -99,6 +104,7 @@ model ATHubAccessRule {
   @@map("athub_access_rules")
 }
 
+// Legacy migration source only; retained for verified import and rollback audit.
 model ATHubReview {
   id String @id @db.Uuid
   userId String? @map("user_id") @db.Uuid
@@ -377,4 +383,28 @@ model OAuthToken {
   @@index([accessExpiresAt])
   @@index([refreshExpiresAt])
   @@map("oauth_tokens")
+}
+
+// External image credentials are issued and verified by OAuth. Image metadata
+// and upload sessions live in the independent IMAGE_DATABASE_URL database.
+model ImageAPIKey {
+  id          String    @id
+  name        String
+  owner       String
+  tokenHash   String    @unique @map("token_hash") @db.Char(64)
+  permissions String[]
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz(6)
+  disabled    Boolean   @default(false)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  autoDelete  Boolean   @default(false) @map("auto_delete")
+  @@map("image_api_keys")
+}
+
+model ImageKeyImport {
+  sourceDigest String   @id @map("source_digest") @db.Char(64)
+  keyDigest    String   @map("key_digest") @db.Char(64)
+  keyCount     Int      @map("key_count")
+  completedAt  DateTime @default(now()) @map("completed_at") @db.Timestamptz(6)
+  @@map("image_key_imports")
 }

@@ -1,0 +1,60 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("CREATPLAT_DATABASE_URL")
+}
+
+// Account and content IDs are external references. No account/authentication
+// tables or cross-database foreign keys are created in this database.
+model CreatorReview {
+  id           String    @id @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  contributor  Json
+  operation    String    @db.VarChar(16)
+  method       String    @db.VarChar(16)
+  path         String    @db.VarChar(255)
+  query        String    @default("") @db.Text
+  payload      Json
+  status       String    @default("pending") @db.VarChar(16)
+  reviewerId   String?   @map("reviewer_id") @db.Uuid
+  reviewer     Json?
+  note         String    @default("") @db.Text
+  resultStatus Int?      @map("result_status")
+  result       Json?
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  reviewedAt   DateTime? @map("reviewed_at") @db.Timestamptz(6)
+
+  @@index([status, createdAt, id], map: "athub_reviews_status_created_idx")
+  @@index([userId, createdAt, id], map: "athub_reviews_user_created_idx")
+  @@map("athub_reviews")
+}
+
+model NovelRevision {
+  id            String    @id @db.Uuid
+  batchId       String    @map("batch_id") @db.Uuid
+  novelId       Int       @map("novel_id")
+  userId        String?   @map("user_id") @db.Uuid
+  contributor   Json
+  changes       Json
+  status        String    @default("pending") @db.VarChar(16)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt   DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  @@unique([batchId, novelId])
+  @@index([novelId, createdAt(sort: Desc), id(sort: Desc)], map: "novel_revisions_novel_history_idx")
+  @@index([batchId], map: "novel_revisions_batch_id_idx")
+  @@index([userId], map: "novel_revisions_user_id_idx")
+  @@map("novel_revisions")
+}
+
+model CreatorMigrationState {
+  key            String   @id @db.VarChar(32)
+  sourceDatabase String   @map("source_database") @db.Text
+  sourceServer   String   @map("source_server") @db.Text
+  reviewDigest   String   @map("review_digest") @db.Char(64)
+  historyDigest  String   @map("history_digest") @db.Char(64)
+  reviewCount    BigInt   @map("review_count")
+  historyCount   BigInt   @map("history_count")
+  completedAt    DateTime @default(now()) @map("completed_at") @db.Timestamptz(6)
+
+  @@map("creator_migration_state")
+}

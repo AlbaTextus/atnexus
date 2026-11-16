@@ -8,7 +8,6 @@ import { NovelUserMenu } from "@/components/novel-user-menu"
 import { SiteHeader } from "@/components/site-header"
 import { api } from "@/lib/api"
 import { novelSections } from "@/lib/novel-sections"
-import { hasOperation, type RolePolicy } from "@/lib/athub-permissions"
 import { useNovelScrollReveal } from "@/components/novel-motion"
 
 export function NovelShell({ children }: { children: ReactNode }) {
@@ -16,18 +15,13 @@ export function NovelShell({ children }: { children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null)
   useNovelScrollReveal(root, pathname)
   const [user, setUser] = useState<AccountUser | null>(null)
-  const [canReview, setCanReview] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
     api<AccountUser>("/api/v1/user", { signal: controller.signal, cache: "no-store" })
-      .then(async value => {
+      .then(value => {
         if (controller.signal.aborted) return
         setUser(value)
-        if (value.level >= 3) {
-          const permissions = await api<RolePolicy>("/api/v1/account/athub/permissions", { signal: controller.signal })
-          if (!controller.signal.aborted) setCanReview(hasOperation(permissions, "review"))
-        }
       })
       .catch(() => { /* The public library also works without an account session. */ })
     return () => controller.abort()
@@ -40,7 +34,7 @@ export function NovelShell({ children }: { children: ReactNode }) {
       <a className="novel-skip" href="#novel-content">跳转到主要内容</a>
       <SiteHeader items={[...novelSections]} activeHref={activeSection?.href} navigationLabel="小说库导航"
         routeKey={pathname} LinkComponent={Link}
-        actions={<NovelUserMenu user={user} canReview={canReview} />} />
+        actions={<NovelUserMenu user={user} />} />
       <main id="novel-content" tabIndex={-1} className="novel-surface">{children}</main>
     </div>
 }

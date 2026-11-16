@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"albatextus/athub/internal/api"
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/api"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

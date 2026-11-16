@@ -66,9 +66,9 @@ function SubmissionForm() {
     const controller = new AbortController()
     setLoadError("")
     Promise.all([
-      readAllContent<ContentPlatform>(request, "/api/v2/platforms", controller.signal),
-      readAllContent<ContentAuthor>(request, "/api/v2/authors", controller.signal),
-      readAllContent<ContentTag>(request, "/api/v2/tags", controller.signal),
+      readAllContent<ContentPlatform>(request, "/api/v5/platforms", controller.signal),
+      readAllContent<ContentAuthor>(request, "/api/v5/authors", controller.signal),
+      readAllContent<ContentTag>(request, "/api/v5/tags", controller.signal),
       api<RolePolicy>("/api/v1/account/athub/permissions", { signal: controller.signal, cache: "no-store" }),
     ]).then(([platforms, authors, tags, policy]) => {
       if (!controller.signal.aborted) {
@@ -173,7 +173,7 @@ function SubmissionForm() {
       if (epubCover?.file && !coverUrl.trim()) {
         const form = new FormData()
         form.append("file", epubCover.file)
-        const uploaded = await api<{ url: string }>("/api/v1/account/athub/cover", { method: "POST", body: form })
+        const uploaded = await api<{ url: string }>("/api/v4/account/athub/cover", { method: "POST", body: form })
         const url = safeContentURL(uploaded?.url)
         if (!url) throw new ApiError(502, "cover_upload_failed", "封面上传未返回有效链接，请重试。")
         setCoverUrl(url)
@@ -182,7 +182,7 @@ function SubmissionForm() {
         if (new TextEncoder().encode(body).length > 8 * 1024 * 1024) throw new ApiError(413, "payload_too_large", "本次提交超过 8 MiB。")
       }
       uploadingCover = false
-      const response = await api<SubmissionResult>("/api/v1/account/athub/submissions", { method: "POST", body })
+      const response = await api<SubmissionResult>("/api/v4/account/athub/submissions", { method: "POST", body })
       if (!response || !("novel" in response && response.novel?.id > 0) &&
         !("status" in response && response.status === "pending" && response.review_id)) throw new Error("提交服务返回的数据格式不正确。")
       setResult(response)

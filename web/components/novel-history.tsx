@@ -98,8 +98,8 @@ function HistoryData({ id }: { id: number }) {
     const controller = new AbortController()
     setData(null); setError("")
     void Promise.all([
-      request<Novel>(`/api/v2/novelinfo?id=${id}`, controller.signal),
-      request<NovelHistory>(`/api/v3/history?novelId=${id}&limit=20&offset=${page * 20}`, controller.signal),
+      request<Novel>(`/api/v5/novelinfo?id=${id}`, controller.signal),
+      request<NovelHistory>(`/api/v4/history?novelId=${id}&limit=20&offset=${page * 20}`, controller.signal),
     ]).then(([book, history]) => {
       if (!controller.signal.aborted) setData({ book, history })
     }).catch(reason => {

@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
 type libraryStore struct {

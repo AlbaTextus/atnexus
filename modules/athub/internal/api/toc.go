@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
 func (a *API) toc(w http.ResponseWriter, r *http.Request) error {

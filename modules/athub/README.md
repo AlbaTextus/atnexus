@@ -1,4 +1,4 @@
-# ATHub 内容模块（v2）
+# ATHub 正式内容模块
 
 本目录是 atnexus 统一服务内独立维护的内容模块。宿主通过 `module.go` 初始化数据库、取得
 HTTP Handler 并负责关闭连接池；模块不启动 HTTP 服务。只依赖本目录源码，不引用相邻
@@ -9,48 +9,58 @@ ATHub 工作目录。单独修改、测试模块后，由宿主重新编译发�
 这是源码合入，未建立 submodule 或 subtree 同步关系；后续源码以本目录为维护入口。
 原工作目录保留。
 
+## 当前宿主入口
+
+ATN 主服务现在对外使用 `8005/api/v5/*`，由 `ATHUB_HTTP_ADDR` 配置。
+本模块引擎仍使用 v2 路由，宿主通过边界适配转换并修正响应 Location；不重写已有权限和审计标签。
+站内访问直接校验 OAuth session Cookie，外部 API Key 的管理和凭据校验也由 OAuth 提供。
+审核、历史和修订的业务实现归 `modules/creatplat/`，公开入口为 `8004/api/v4/*`。
+根目录原图床保持不动。
+
+以下列出宿主对外的 v5 接口；内容引擎内部继续保留 v2 契约，由宿主转换。
+
 ## HTTP 接口
 
-宿主在同一进程中启动两个监听器：OAuth 使用 `8001`，本模块使用 `8003`
-（可由 `ATHUB_HTTP_ADDR` 修改）。内容接口直接使用 `/api/v2/`：
+宿主在同一进程中启动三个监听器：OAuth 使用 `8001`、creatplat 使用 `8004`、本模块对外使用 `8005`
+（可由 `ATHUB_HTTP_ADDR` 修改）。公开内容接口使用 `/api/v5/`：
 
 | 路径 | 方法 |
 | --- | --- |
-| `/api/v2/platforms` | GET、POST |
-| `/api/v2/authors` | GET、POST、PUT |
-| `/api/v2/tags` | GET、POST、PUT、DELETE |
-| `/api/v2/novelinfo` | GET、POST、PUT、DELETE |
-| `/api/v2/volumes` | GET、PUT、DELETE |
-| `/api/v2/toc` | GET |
-| `/api/v2/content` | GET、PUT、DELETE |
-| `/api/v2/upload` | POST |
-| `/api/v2/illustrations` | GET、POST |
+| `/api/v5/platforms` | GET、POST |
+| `/api/v5/authors` | GET、POST、PUT |
+| `/api/v5/tags` | GET、POST、PUT、DELETE |
+| `/api/v5/novelinfo` | GET、POST、PUT、DELETE |
+| `/api/v5/volumes` | GET、PUT、DELETE |
+| `/api/v5/toc` | GET |
+| `/api/v5/content` | GET、PUT、DELETE |
+| `/api/v5/upload` | POST |
+| `/api/v5/illustrations` | GET、POST、DELETE |
+| `/api/v5/illustration-layout` | GET、PUT |
 
-请求需 `Authorization: Bearer <API_KEY>`。登录用户在宿主 `8001/api/v1/account/key`
+外部 Key 请求使用 `Authorization: Bearer <API_KEY>`。登录用户在 OAuth `8001/api/v1/account/key`
 自动生成唯一的永久 Key，支持重置和停用；宿主注入的鉴权与记账中间件校验归属、当前 Key、停用状态和用户启用状态。
 Key 只在生成或重置时显示明文，账户库只保存 SHA-256 哈希。停用后不会自动恢复，重置保留历史调用记录。
-原全局密钥、OAuth access token、会话 Cookie 和旧个人密钥不能替代新 Key。
-内置小说库另由宿主账户会话签发短时只读凭证（`ats_`），仅允许 GET，
-并在宿主账户库逐次核验会话和管理员限制；无需输入或生成个人 Key。
+原全局密钥、OAuth access token 和旧个人密钥不能替代新 Key。
+站内小说库使用 OAuth session Cookie，并通过 OAuth 权威接口逐次核验会话；内容准入和业务权限仍由原适配器执行，无需输入或生成个人 Key。旧 `ats_` 凭证仅保留过渡兼容，前端不再申请。
 本模块仍只接收宿主鉴权后的请求，不处理用户或会话。
 没有 `/athub` 中间路径。旧 `/api/content` 等路径不提供兼容。
 
 作者支持可空的 `name`（最多 200 个字符），GET 单项和列表都会返回此字段。
-`POST /api/v2/authors` 可提交 `{"platformId":1,"name":"作者笔名"}`；
-省略姓名仍兼容原请求。`PUT /api/v2/authors?id=3` 提交 `{"name":"作者笔名"}`，
+`POST /api/v5/authors` 可提交 `{"platformId":1,"name":"作者笔名"}`；
+省略姓名仍兼容原请求。`PUT /api/v5/authors?id=3` 提交 `{"name":"作者笔名"}`，
 只修改姓名，不改作者 ID、所属平台或小说关联。名称首尾空白会清理；
 `null`、空字符串或省略 `name` 清空姓名，包含 NUL 或超过 200 字符返回 400。
-修改接口要求外部个人 API Key，网站自动登录的只读凭证不允许 PUT。
+修改接口接受获授权的个人 API Key 或站内 session；session 写入还需通过来源校验。旧只读凭证不允许 PUT。
 现有请求字段、分页、8 MiB JSON 上限、批量上传事务、分卷和章节排序规则保持不变。
-创建资源返回的 `Location` 使用 `/api/v2/`。
+创建资源返回的公开 `Location` 使用 `/api/v5/`。
 
 ### 插图
 
-`GET /api/v2/illustrations?novelId={id}&limit=100&offset=0` 返回按上传顺序排列的插图数组，
+`GET /api/v5/illustrations?novelId={id}&limit=100&offset=0` 返回按上传顺序排列的插图数组，
 支持现有分页规则。作品不存在返回 404，没有插图返回空数组。
 每项包含 `id`、`novelId`、`url`、`sha256`、`width`、`height`、`createdAt`。
 
-网站通过 `POST /api/v1/account/athub/novels/{id}/illustrations` 上传，
+网站通过 creatplat 的 `POST /api/v4/account/athub/novels/{id}/illustrations` 上传，
 请求为 `multipart/form-data`，单个 `file` 字段。界面支持选择多张图片，逐张提交并单独报告失败。
 宿主验证登录会话、CSRF 和当前插图上传权限后，校验实际图片内容，
 接受 JPG、PNG、WebP、GIF（GIF 使用首帧）；原图最大 5 MiB、单边 8192 像素、总像素 1600 万。
@@ -60,7 +70,7 @@ Key 只在生成或重置时显示明文，账户库只保存 SHA-256 哈希。�
 图床密钥仅在服务端使用。
 
 上传后宿主把图片 URL、归一化后图片的 SHA-256、宽高提交到
-`POST /api/v2/illustrations?novelId={id}`（JSON 字段为 `url`、`sha256`、`width`、`height`）。
+内容关联能力（公开对应 `POST /api/v5/illustrations?novelId={id}`，JSON 字段为 `url`、`sha256`、`width`、`height`）。
 个人 API Key 也可调用此接口关联已有图片；URL 只接受有效 HTTP/HTTPS 地址，
 SHA-256 为 64 位小写十六进制，宽高必须为正且不超过归一化尺寸上限。
 该接口按 `upload` 权限记账并遵循现有审核策略：直接保存返回 201；
@@ -69,10 +79,10 @@ SHA-256 为 64 位小写十六进制，宽高必须为正且不超过归一化�
 
 网站按需使用下列 GET 查询，原有列表的数组响应保持兼容：
 
-- `/api/v2/novelinfo?view=page&limit=24&offset=0&sort=updated&q=关键词` 返回
+- `/api/v5/novelinfo?view=page&limit=24&offset=0&sort=updated&q=关键词` 返回
   `{"items":[...],"total":123}`。`sort` 支持 `updated`、`title`，并支持原有
   `platformId`、`authorId`、`tagId` 筛选；`q` 按 NFKC 归一化后匹配书名或作者，最多 200 字符。
-- `/api/v2/authors?ids=1,2,3` 批量返回指定作者，最多 100 个正整数 ID，不能组合其他参数。
+- `/api/v5/authors?ids=1,2,3` 批量返回指定作者，最多 100 个正整数 ID，不能组合其他参数。
 - `novelinfo`、`authors`、`tags`、`platforms` 支持单独的 `?view=count`，返回 `{"total":123}`。
 
 宿主模式下，内容模块在鉴权之后缓存成功的 GET 响应，合并同路径的并发回源。
@@ -122,9 +132,9 @@ npm run db:athub:deploy
 不会推测或自动填入示例姓名。前端有姓名时显示笔名，无姓名时继续显示作者编号。
 
 ```powershell
-# 在统一仓库根目录执行；根目录 go test ./... 不会遍历独立 Go 模块。
+# 在统一仓库根目录执行；全部 Go 业务模块使用根 go.mod，测试排除 temp 过程脚本。
 npm run test:go
-go -C modules/athub vet ./...
+go vet ./modules/athub/...
 ```
 
 设置 `ATHUB_TEST_DATABASE_URL` 后可运行真实 PostgreSQL 集成测试；测试创建并清理临时

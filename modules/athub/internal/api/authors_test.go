@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
 func (s *fakeStore) UpdateAuthorName(_ context.Context, id int32, name *string) (storage.Author, error) {

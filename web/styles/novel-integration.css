@@ -81,8 +81,8 @@
 .novel-illustration-item-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; }
 .illustration-composer { margin-top: 20px; }
 .illustration-canvas-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; font-size: 13px; font-weight: 500; }
-.illustration-canvas { position: relative; width: 100%; isolation: isolate; }
-.illustration-canvas[data-editing] { border: 1px solid var(--border); border-radius: 8px; background-color: color-mix(in srgb, var(--background) 45%, transparent); background-image: radial-gradient(color-mix(in srgb, var(--foreground) 16%, transparent) 1px, transparent 1px); background-size: 16px 16px; }
+.illustration-canvas { position: relative; box-sizing: content-box; width: 100%; isolation: isolate; }
+.illustration-canvas[data-editing] { width: calc(100% - 2px); border: 1px solid var(--border); border-radius: 8px; background-color: color-mix(in srgb, var(--background) 45%, transparent); background-image: radial-gradient(color-mix(in srgb, var(--foreground) 16%, transparent) 1px, transparent 1px); background-size: 16px 16px; }
 .illustration-canvas[data-drop-over] { outline: 2px solid var(--ring); outline-offset: 2px; background-color: color-mix(in srgb, var(--primary) 5%, var(--background)); }
 .illustration-canvas-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted-foreground); font-size: 14px; pointer-events: none; }
 .illustration-block { position: absolute; outline: none; }

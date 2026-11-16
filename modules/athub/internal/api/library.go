@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"albatextus/athub/internal/storage"
+	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
 // Opt-in representations preserve the existing array responses for API clients.

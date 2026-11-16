@@ -8,7 +8,7 @@ import { feedback } from "@/lib/feedback"
 import { useAccountUser, useUpdateAccountUser, type AccountUser } from "@/components/account-shell"
 import { MarkdownContent } from "@/components/markdown-content"
 import { Button } from "@/components/ui/button"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
 import { Spinner } from "@/components/ui/spinner"
@@ -27,7 +27,7 @@ export function BioEditor() {
   catch(reason){feedback.error(managementError(reason))}finally{setBusy(false)}
  }
  return <form onSubmit={save} aria-busy={busy}><Card>
-  <CardHeader><CardTitle>个人简介</CardTitle><CardDescription>写一点关于自己的介绍，保存后显示在用户中心。</CardDescription></CardHeader>
+  <CardHeader><CardTitle>个人简介</CardTitle></CardHeader>
   <CardContent className="flex flex-col gap-5">
    <Field data-disabled={busy} data-invalid={length>3000}><FieldLabel htmlFor="profile-bio">简介内容</FieldLabel><Textarea id="profile-bio" value={bio} disabled={busy} aria-invalid={length>3000} aria-describedby="profile-bio-help" onChange={event=>setBio(event.target.value)} className="min-h-48" placeholder={'## 关于我\n\n喜欢阅读、创作和分享。'} /><FieldDescription id="profile-bio-help">支持 Markdown 标题、列表、链接、引用与代码。{length} / 3000 字符，清空后保存可移除简介。</FieldDescription></Field>
    <section aria-label="简介预览" className="profile-bio-preview"><h3 className="mb-3 text-sm font-medium">预览</h3>{bio.trim()?<MarkdownContent content={bio}/>:<p className="text-sm text-muted-foreground">写下内容后，这里会实时显示排版效果。</p>}</section>

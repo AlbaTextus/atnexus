@@ -5,7 +5,7 @@ import { Select } from "@base-ui/react/select"
 import { AlertCircle, Check, ChevronDown, RefreshCw } from "lucide-react"
 import { api } from "@/lib/api"
 import { feedback } from "@/lib/feedback"
-import { type AccessRule, type Endpoint, type Operation, type RolePolicy, endpointNames, operationNames, permissionLevels } from "@/lib/athub-permissions"
+import { type AccessRule, type Endpoint, type Operation, type RolePolicy, endpointNames, operationNames, permissionLevels, publicEndpointPath } from "@/lib/athub-permissions"
 import { useAccountUser } from "@/components/account-shell"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -143,8 +143,8 @@ export function AdminInterfaces() {
           const override = draft.rules.find(rule => ruleKey(rule) === ruleKey(endpoint))
           const base = draft.rules.find(rule => rule.operation === endpoint.operation && rule.method === "")
           return <div key={ruleKey(endpoint)} className="flex flex-col gap-2 border-b pb-4 last:border-0 sm:flex-row sm:items-center">
-            <div className="min-w-0 flex-1 text-sm"><p>{operationNames[endpoint.operation]} · {endpointNames[endpoint.path]}</p><code className="break-all text-xs text-muted-foreground">{endpoint.method} {endpoint.path}</code></div>
-            <EndpointPermissionSelect label={`${endpoint.method} ${endpoint.path}权限`} disabled={disabled || !privileged(role, endpoint.operation)}
+            <div className="min-w-0 flex-1 text-sm"><p>{operationNames[endpoint.operation]} · {endpointNames[endpoint.path]}</p><code className="break-all text-xs text-muted-foreground">{endpoint.method} {publicEndpointPath(endpoint.path)}</code></div>
+            <EndpointPermissionSelect label={`${endpoint.method} ${publicEndpointPath(endpoint.path)}权限`} disabled={disabled || !privileged(role, endpoint.operation)}
               inheritedAllowed={Boolean(base?.allowed)} value={override ? override.allowed ? "allow" : "deny" : "inherit"}
               onValueChange={value => value === "inherit" ? inherit(endpoint) : changeRule({ ...endpoint, allowed: value === "allow" })} />
           </div>

@@ -15,15 +15,18 @@ const fields: Record<string, string> = {
   platformId: "平台 ID", authorId: "作者 ID", authorName: "作者名称", platformName: "平台名称",
   tagIds: "标签 ID", tagNames: "标签", order: "顺序", volumeId: "所属卷",
   contentHash: "章节正文", contentLength: "正文字数",
+  url: "图片链接", sha256: "图片校验值", width: "宽度", height: "高度",
+  blocks: "图片块布局",
 }
 const actions: Record<string, string> = { INSERT: "新增", UPDATE: "修改", DELETE: "删除" }
-const entities: Record<string, string> = { Novel: "小说条目", Volume: "卷", Chapter: "章节" }
+const entities: Record<string, string> = { Novel: "小说条目", Volume: "卷", Chapter: "章节", Illustration: "插图", IllustrationLayout: "插图布局" }
 
 function valueText(value: unknown): string {
   if (value === null || value === undefined || value === "") return "未设置"
   if (Array.isArray(value)) return value.map(valueText).join("、") || "无"
   if (value === "ONGOING") return "连载中"
   if (value === "COMPLETED") return "已完结"
+  if (value === "ABANDONED") return "太监"
   return typeof value === "object" ? JSON.stringify(value) : String(value)
 }
 
@@ -56,7 +59,7 @@ function ChangeDetail({ change }: { change: NovelChange }) {
     JSON.stringify(before[key]) !== JSON.stringify(after[key]))
   const bodyChanged = before.contentHash !== after.contentHash
   return <div className="novel-history-change">
-    <strong>{actions[change.action] || change.action}{entities[change.entity] || change.entity}{change.entity !== "Novel" && ` · ${valueText(after.title ?? before.title)}`}</strong>
+    <strong>{actions[change.action] || change.action}{entities[change.entity] || change.entity}{(change.entity === "Volume" || change.entity === "Chapter") && ` · ${valueText(after.title ?? before.title)}`}</strong>
     <dl>{changed.map(key => <div key={key}>
       <dt>{fields[key] || key}</dt>
       <dd>{change.action === "UPDATE" && typeof before[key] === "string" && typeof after[key] === "string"
@@ -75,12 +78,12 @@ export function NovelHistoryPage({ id }: { id: number }) {
 }
 
 function HistoryRevision({ item }: { item: NovelRevision }) {
-  const [open, setOpen] = useState(false)
+  const [opened, setOpened] = useState(false)
   return <li>
     <GitCommitHorizontal className="novel-history-node" aria-hidden="true"/>
     <article className="panel">
       <div className="novel-history-meta"><ContributorAvatar contributor={item.contributor}/><strong>{item.contributor.name || "未记录账号"}</strong><time dateTime={item.createdAt} title={item.startedAt && item.startedAt !== item.createdAt ? `开始于 ${new Date(item.startedAt).toLocaleString("zh-CN", { hour12: false })}` : undefined}>{new Date(item.createdAt).toLocaleString("zh-CN", { hour12: false })}</time><Tooltip><TooltipTrigger render={<code />} tabIndex={0} aria-label={`最新记录编号：${item.id}`}>{item.id.slice(0, 8)}</TooltipTrigger><TooltipContent className="break-all">{item.id}</TooltipContent></Tooltip></div>
-      <details onToggle={event => setOpen(event.currentTarget.open)}><summary>{(item.revisionCount ?? 1) > 1 && `${item.revisionCount} 次提交 · `}{item.changes.length} 处变更</summary>{open && <div>{item.changes.map((change, index) => <ChangeDetail key={index} change={change}/>)}</div>}</details>
+      <details onToggle={event => { if (event.currentTarget.open) setOpened(true) }}><summary>{(item.revisionCount ?? 1) > 1 && `${item.revisionCount} 次提交 · `}{item.changes.length} 处变更</summary>{opened && <div>{item.changes.map((change, index) => <ChangeDetail key={index} change={change}/>)}</div>}</details>
     </article>
   </li>
 }

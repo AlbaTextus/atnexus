@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Link } from "next-view-transitions"
 import { usePathname } from "next/navigation"
 import type { AccountUser } from "@/components/account-shell"
@@ -9,9 +9,12 @@ import { SiteHeader } from "@/components/site-header"
 import { api } from "@/lib/api"
 import { novelSections } from "@/lib/novel-sections"
 import { hasOperation, type RolePolicy } from "@/lib/athub-permissions"
+import { useNovelScrollReveal } from "@/components/novel-motion"
 
 export function NovelShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
+  const root = useRef<HTMLDivElement>(null)
+  useNovelScrollReveal(root, pathname)
   const [user, setUser] = useState<AccountUser | null>(null)
   const [canReview, setCanReview] = useState(false)
 
@@ -33,7 +36,7 @@ export function NovelShell({ children }: { children: ReactNode }) {
   const activeSection = novelSections.find(section => section.href === pathname ||
     (section.id === "library" && pathname.startsWith("/library/books/")))
 
-  return <div className="novel-workspace">
+  return <div ref={root} className="novel-workspace">
       <a className="novel-skip" href="#novel-content">跳转到主要内容</a>
       <SiteHeader items={[...novelSections]} activeHref={activeSection?.href} navigationLabel="小说库导航"
         routeKey={pathname} LinkComponent={Link}

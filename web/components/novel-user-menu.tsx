@@ -19,7 +19,7 @@ export function NovelUserMenu({ user, canReview }: { user: AccountUser | null; c
       {user ? <UserAvatar src={user.avatar_url} name={user.display_name || user.email} decorative />
         : <UserRound aria-hidden="true" />}
     </Menu.Trigger>
-    <Menu.Portal style={{ zoom: "calc(1 / var(--site-scale, 1))" }}>
+    <Menu.Portal style={{ zoom: "calc(1 / var(--site-root-scale, var(--site-scale, 1)))" }}>
       <Menu.Positioner side="bottom" align="center" sideOffset={10} collisionPadding={12} className="z-50">
         <Menu.Popup aria-label="用户菜单" style={{ zoom: "var(--site-scale, 1)" }}
           className="w-56 max-w-[calc(100vw-2rem)] origin-(--transform-origin) rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg outline-none">

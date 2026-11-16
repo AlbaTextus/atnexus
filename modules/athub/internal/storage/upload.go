@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -19,7 +20,17 @@ func (p *Postgres) Upload(ctx context.Context, input UploadInput) (UploadResult,
 	}
 	defer tx.Rollback(ctx)
 	if input.NovelID == nil {
-		result.Novel, err = createNovel(ctx, tx, *input.Novel)
+		novel := *input.Novel
+		if input.AuthorName != nil && novel.AuthorID == nil {
+			// Resolve inside the upload transaction: failed uploads and pending
+			// reviews must never leave an orphan author behind.
+			id, err := uploadAuthor(ctx, tx, novel.PlatformID, *input.AuthorName)
+			if err != nil {
+				return UploadResult{}, err
+			}
+			novel.AuthorID = &id
+		}
+		result.Novel, err = createNovel(ctx, tx, novel)
 	} else {
 		// Serialize uploads to one novel and prevent deletion during the batch.
 		result.Novel, err = scanNovel(tx.QueryRow(ctx, `SELECT `+novelReadColumns+` FROM "Novel" WHERE "id" = $1 FOR NO KEY UPDATE`, *input.NovelID))
@@ -94,6 +105,19 @@ func (p *Postgres) Upload(ctx context.Context, input UploadInput) (UploadResult,
 		return UploadResult{}, databaseError(err)
 	}
 	return result, nil
+}
+
+func uploadAuthor(ctx context.Context, tx pgx.Tx, platformID int32, name string) (int32, error) {
+	// Serialize same-platform/name imports, including when no author exists yet.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1, hashtext($2))`, platformID, name); err != nil {
+		return 0, databaseError(err)
+	}
+	var id int32
+	err := tx.QueryRow(ctx, `SELECT "id" FROM "Author" WHERE "platformId"=$1 AND btrim("name")=$2 ORDER BY "id" LIMIT 1 FOR KEY SHARE`, platformID, name).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = tx.QueryRow(ctx, `INSERT INTO "Author" ("platformId", "name") VALUES ($1, $2) RETURNING "id"`, platformID, name).Scan(&id)
+	}
+	return id, databaseError(err)
 }
 
 func uploadVolumes(ctx context.Context, tx pgx.Tx, novelID int32, inputs []UploadVolume) ([]Volume, error) {

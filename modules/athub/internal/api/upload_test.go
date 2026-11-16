@@ -122,6 +122,10 @@ func TestNewRouteRejections(t *testing.T) {
 		{"POST", "/api/v2/upload", `{"novelId":0}`},
 		{"POST", "/api/v2/upload", `{"novelId":7,"novel":{"platformId":2,"title":"Book"}}`},
 		{"POST", "/api/v2/upload", `{"novelId":7}`},
+		{"POST", "/api/v2/upload", `{"novelId":7,"authorName":"作者","chapters":[{"order":1,"title":"C","content":"B"}]}`},
+		{"POST", "/api/v2/upload", `{"novel":{"platformId":2,"title":"Book","authorId":3},"authorName":"作者"}`},
+		{"POST", "/api/v2/upload", `{"novel":{"platformId":2,"title":"Book"},"authorName":"bad\u0000name"}`},
+		{"POST", "/api/v2/upload", `{"novel":{"platformId":2,"title":"Book"},"authorName":"` + strings.Repeat("作", 201) + `"}`},
 		{"POST", "/api/v2/upload", `{"novel":{"platformId":2,"title":" "}}`},
 		{"POST", "/api/v2/upload", `{"novelId":7,"volumes":[{"order":1,"title":"P"},{"order":1,"title":"P"}]}`},
 		{"POST", "/api/v2/upload", `{"novelId":7,"volumes":[{"order":1,"title":" "}]}`},
@@ -201,5 +205,26 @@ func TestUploadValidationAndResponse(t *testing.T) {
 	w := request(testHandler(t, &fakeStore{err: storage.ErrVolumeNotEmpty}), "DELETE", "/api/v2/volumes?novelId=7&order=1", "", "Bearer "+testToken)
 	if w.Code != 409 {
 		t.Fatalf("nonempty volume: %d", w.Code)
+	}
+}
+
+func TestUploadAuthorName(t *testing.T) {
+	for _, name := range []string{"  EPUB 作者  ", "   "} {
+		input := storage.UploadInput{Novel: &storage.NovelInput{PlatformID: 2, Title: "Book"}, AuthorName: &name}
+		if err := validateUpload(&input); err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(name) == "" {
+			if input.AuthorName != nil {
+				t.Fatal("blank name should not create an author")
+			}
+		} else if input.AuthorName == nil || *input.AuthorName != "EPUB 作者" {
+			t.Fatal("author name was lost or not trimmed")
+		}
+	}
+	w := request(testHandler(t, &fakeStore{}), "POST", "/api/v2/upload",
+		`{"novel":{"platformId":2,"title":"Book"},"authorName":"EPUB 作者"}`, "Bearer "+testToken)
+	if w.Code != 201 {
+		t.Fatalf("upload rejected authorName: %d %s", w.Code, w.Body.String())
 	}
 }

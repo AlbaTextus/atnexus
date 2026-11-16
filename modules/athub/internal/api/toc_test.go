@@ -31,7 +31,7 @@ func (s *tocStore) GetTOC(_ context.Context, novelID int32) (storage.TOC, error)
 func TestTOCResponse(t *testing.T) {
 	volumeID := int32(5)
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
-	want := storage.TOC{NovelID: 7,
+	want := storage.TOC{NovelID: 7, WordCount: 12345,
 		Volumes: []storage.Volume{{ID: volumeID, VolumeInput: storage.VolumeInput{NovelID: 7, Order: 1, Title: "Part 1"}, CreatedAt: now, UpdatedAt: now}},
 		Chapters: []storage.ChapterSummary{
 			{ID: 8, NovelID: 7, Order: 1, Title: "Prologue", UpdatedAt: now},
@@ -54,7 +54,7 @@ func TestTOCResponse(t *testing.T) {
 	}
 	// Nil store slices must still serialize as arrays, not null.
 	w = request(testHandler(t, &fakeStore{}), "GET", "/api/v2/toc?novelId=7", "", "Bearer "+testToken)
-	if w.Code != 200 || strings.TrimSpace(w.Body.String()) != `{"novelId":7,"volumes":[],"chapters":[]}` {
+	if w.Code != 200 || strings.TrimSpace(w.Body.String()) != `{"novelId":7,"wordCount":0,"volumes":[],"chapters":[]}` {
 		t.Fatalf("empty TOC: %d %s", w.Code, w.Body.String())
 	}
 }

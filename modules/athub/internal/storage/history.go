@@ -189,7 +189,11 @@ func snapshot(ctx context.Context, q database, id int32) (map[string]map[string]
 		UNION ALL SELECT 'Chapter',c."id"::text,
 			(to_jsonb(c)-'content'-'updatedAt') || jsonb_build_object(
 				'contentHash',md5(c.content),'contentLength',length(c.content))
-		FROM "Chapter" c WHERE "novelId"=$1`, id)
+		FROM "Chapter" c WHERE "novelId"=$1
+		UNION ALL SELECT 'Illustration',i.id::text,to_jsonb(i)-'createdAt'
+		FROM "Illustration" i WHERE "novelId"=$1
+		UNION ALL SELECT 'IllustrationLayout',l."novelId"::text,to_jsonb(l)-'revision'
+		FROM "IllustrationLayout" l WHERE "novelId"=$1`, id)
 	if err != nil {
 		return nil, err
 	}

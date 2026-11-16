@@ -159,6 +159,72 @@ func TestRoutes(t *testing.T) {
 	}
 }
 
+func TestAbandonedNovelStatus(t *testing.T) {
+	for _, tc := range []struct {
+		method, path, body, called string
+		status                     int
+	}{
+		{"POST", "/api/v2/novelinfo", `{"platformId":2,"title":"Book","status":"ABANDONED"}`, "createNovel", http.StatusCreated},
+		{"PUT", "/api/v2/novelinfo?id=7", `{"platformId":2,"title":"Book","status":"ABANDONED"}`, "updateNovel", http.StatusOK},
+		{"POST", "/api/v2/upload", `{"novel":{"platformId":2,"title":"Book","status":"ABANDONED"}}`, "upload", http.StatusCreated},
+	} {
+		t.Run(tc.method+tc.path, func(t *testing.T) {
+			store := &fakeStore{}
+			w := request(testHandler(t, store), tc.method, tc.path, tc.body, "Bearer "+testToken)
+			if w.Code != tc.status || store.called != tc.called || store.novel.Status != "ABANDONED" {
+				t.Fatalf("status=%d called=%s novel=%+v body=%s", w.Code, store.called, store.novel, w.Body.String())
+			}
+			var result struct {
+				Status string `json:"status"`
+				Novel  struct {
+					Status string `json:"status"`
+				} `json:"novel"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			if result.Status != "ABANDONED" && result.Novel.Status != "ABANDONED" {
+				t.Fatalf("response lost novel status: %s", w.Body.String())
+			}
+		})
+	}
+}
+
+func TestNovelReferenceNames(t *testing.T) {
+	for _, method := range []string{http.MethodPost, http.MethodPut} {
+		t.Run(method, func(t *testing.T) {
+			store := &fakeStore{}
+			path := "/api/v2/novelinfo"
+			wantStatus := http.StatusCreated
+			if method == http.MethodPut {
+				path += "?id=7"
+				wantStatus = http.StatusOK
+			}
+			w := request(testHandler(t, store), method, path,
+				`{"platformId":2,"title":"Book","authorName":" 新作者 ","tagNames":[" 科幻 ","冒险","科幻"]}`, "Bearer "+testToken)
+			if w.Code != wantStatus || store.novel.AuthorName == nil || *store.novel.AuthorName != "新作者" || store.novel.AuthorID != nil {
+				t.Fatalf("status=%d novel=%+v body=%s", w.Code, store.novel, w.Body.String())
+			}
+			if strings.Join(store.novel.TagNames, ",") != "科幻,冒险" {
+				t.Fatalf("tag names were not normalized: %v", store.novel.TagNames)
+			}
+		})
+	}
+	for _, body := range []string{
+		`{"platformId":2,"title":"Book","authorId":3,"authorName":"新作者"}`,
+		`{"platformId":2,"title":"Book","authorName":"bad\u0000name"}`,
+		`{"platformId":2,"title":"Book","authorName":"` + strings.Repeat("作", 201) + `"}`,
+		`{"platformId":2,"title":"Book","tagNames":[" "]}`,
+		`{"platformId":2,"title":"Book","tagNames":["bad\u0000tag"]}`,
+	} {
+		store := &fakeStore{}
+		w := request(testHandler(t, store), http.MethodPut, "/api/v2/novelinfo?id=7", body, "Bearer "+testToken)
+		if w.Code != http.StatusBadRequest || store.called != "" {
+			t.Fatalf("invalid references reached storage: status=%d called=%s body=%s", w.Code, store.called, w.Body.String())
+		}
+	}
+}
+
 func TestRejectedRequests(t *testing.T) {
 	for _, tc := range []struct {
 		method, path, body string

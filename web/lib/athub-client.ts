@@ -5,12 +5,15 @@ export type Novel = {
   title: string
   summary: string | null
   coverUrl: string | null
-  status: "ONGOING" | "COMPLETED"
+  status: "ONGOING" | "COMPLETED" | "ABANDONED"
   tagIds?: number[]
   createdAt: string
   updatedAt: string
 }
 export type ContentTag = { id: number; name: string }
+export type NovelIllustration = { id: number; novelId: number; url: string; sha256: string; width: number; height: number; createdAt: string }
+export type IllustrationBlock = { imageId: number; x: number; y: number; width: number; height: number }
+export type IllustrationLayout = { novelId: number; revision: number; blocks: IllustrationBlock[] }
 export type ContentAuthor = { id: number; platformId: number; name: string | null }
 export type ContentPlatform = { id: number; name: string; url: string | null }
 export type NovelContributor = { id: string; name: string; avatar: string; createdAt: string; edits: number }
@@ -30,6 +33,7 @@ export type ChapterSummary = { id: number; novelId: number; volumeId: number | n
 export type Chapter = ChapterSummary & { content: string }
 export type TableOfContents = {
   novelId: number
+  wordCount?: number
   volumes: { id: number; order: number; title: string }[]
   chapters: ChapterSummary[]
 }
@@ -69,7 +73,12 @@ export async function fetchContent<T>(path: string, credential: string, signal?:
 }
 
 export function novelStatus(status: Novel["status"]) {
-  return status === "COMPLETED" ? "已完结" : "连载中"
+  const labels: Record<Novel["status"], string> = {
+    ONGOING: "连载中",
+    COMPLETED: "已完结",
+    ABANDONED: "太监",
+  }
+  return labels[status]
 }
 
 export function contentDate(value: string) {

@@ -61,7 +61,7 @@ func tokenFrom(r *http.Request) string {
 // Bound labels keep query-string credentials and arbitrary paths out of audit data.
 func endpoint(path string) string {
 	switch path {
-	case "/api/v2/platforms", "/api/v2/authors", "/api/v2/tags", "/api/v2/novelinfo", "/api/v2/volumes", "/api/v2/toc", "/api/v2/content", "/api/v2/upload", "/api/v3/history", "/api/v3/contributors":
+	case "/api/v2/platforms", "/api/v2/authors", "/api/v2/tags", "/api/v2/novelinfo", "/api/v2/volumes", "/api/v2/toc", "/api/v2/content", "/api/v2/upload", "/api/v2/illustrations", "/api/v2/illustration-layout", "/api/v3/history", "/api/v3/contributors":
 		return path
 	default:
 		return "/api/v2/{unknown}"
@@ -120,8 +120,9 @@ func (a *Access) Wrap(next http.Handler) http.Handler {
 		w.Header().Set("X-Request-ID", requestID.String())
 		call := store.ATHubCall{ID: uuid.New(), RequestID: requestID, Method: method(r.Method), Path: endpoint(r.URL.Path), Port: a.port}
 		if identity, ok := r.Context().Value(submissionIdentityKey{}).(submissionIdentity); ok &&
-			((r.Method == http.MethodPost && r.URL.Path == "/api/v2/upload") ||
-				(r.Method == http.MethodPut && r.URL.Path == "/api/v2/novelinfo")) {
+			((r.Method == http.MethodPost && (r.URL.Path == "/api/v2/upload" || r.URL.Path == "/api/v2/illustrations")) ||
+				(r.Method == http.MethodPut && (r.URL.Path == "/api/v2/novelinfo" || r.URL.Path == "/api/v2/illustration-layout")) ||
+				(r.Method == http.MethodDelete && r.URL.Path == "/api/v2/illustrations")) {
 			call.UserID, call.SessionID = &identity.user, &identity.session
 			call.Authenticated = true
 		}

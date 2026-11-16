@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { api, ApiError } from "@/lib/api"
 import { allowsEndpoint, type RolePolicy } from "@/lib/athub-permissions"
-import { safeContentURL, type ContentAuthor, type ContentPlatform, type ContentTag } from "@/lib/athub-client"
+import { novelStatus, safeContentURL, type ContentAuthor, type ContentPlatform, type ContentTag, type Novel } from "@/lib/athub-client"
 import { readAllContent } from "@/lib/novel-demo-data"
 import { MAX_CHAPTERS, parseEpub, type EpubVolume, type EpubCover } from "@/lib/epub-import"
 import { NovelUploadPreview, type UploadChapterDraft } from "@/components/novel-upload-preview"
@@ -32,7 +32,7 @@ function SubmissionForm() {
   const [title, setTitle] = useState("")
   const [platformId, setPlatformId] = useState("")
   const [authorId, setAuthorId] = useState("")
-  const [status, setStatus] = useState<"ONGOING" | "COMPLETED">("ONGOING")
+  const [status, setStatus] = useState<Novel["status"]>("ONGOING")
   const [summary, setSummary] = useState("")
   const [coverUrl, setCoverUrl] = useState("")
   const [tagIds, setTagIds] = useState<number[]>([])
@@ -84,7 +84,7 @@ function SubmissionForm() {
   const authorOptions = catalog?.authors.filter(author => author.platformId === Number(platformId)) || []
   const canUpload = Boolean(catalog && allowsEndpoint(catalog.policy, "upload", "POST", "/api/v2/upload"))
   const wordCount = useMemo(() => chapters.reduce((total, chapter) => total + chapter.content.replace(/\s/g, "").length, 0), [chapters])
-  const authorName = authorOptions.find(author => author.id === Number(authorId))?.name || importedAuthor || "作者待补充"
+  const authorName = authorOptions.find(author => author.id === Number(authorId))?.name || (authorId === "none" ? "" : importedAuthor) || "作者待补充"
 
   function updateChapter(key: number, field: "title" | "content", value: string) {
     setChapters(current => current.map(chapter => chapter.key === key ? { ...chapter, [field]: value } : chapter))
@@ -149,15 +149,17 @@ function SubmissionForm() {
     if (!fileName || !chapters.length) { setError("请先导入 EPUB。"); return }
     if (!title.trim()) { setError("请补全小说名称。"); setEditingDetails(true); return }
     if (!catalog.platforms.some(platform => platform.id === Number(platformId))) { setError("请选择来源平台。"); return }
-    if (authorId && !authorOptions.some(author => author.id === Number(authorId))) { setError("请选择该平台下的作者。"); return }
+    if (authorId && authorId !== "none" && !authorOptions.some(author => author.id === Number(authorId))) { setError("请选择该平台下的作者。"); return }
+    if (!authorId && Array.from(importedAuthor.trim()).length > 200) { setError("作者名称不能超过 200 个字符。"); setEditingDetails(true); return }
     if (coverUrl.trim() && !safeContentURL(coverUrl.trim())) { setError("封面地址需要使用有效的 HTTP 或 HTTPS 链接。"); return }
     const invalidChapter = chapters.findIndex(chapter => !chapter.title.trim() || !chapter.content.trim())
     if (invalidChapter >= 0) { setError(`第 ${invalidChapter + 1} 章缺少标题或正文，请在目录预览中编辑或移除。`); return }
-    if ([title, summary, coverUrl, ...chapters.flatMap(chapter => [chapter.title, chapter.content])].some(value => value.includes("\0"))) {
+    if ([title, summary, coverUrl, !authorId ? importedAuthor : "", ...chapters.flatMap(chapter => [chapter.title, chapter.content])].some(value => value.includes("\0"))) {
       setError("提交的内容中含有无效字符，请移除后重试。"); return
     }
     const payload = {
-      novel: { title: title.trim(), platformId: Number(platformId), authorId: authorId ? Number(authorId) : null,
+      authorName: !authorId ? importedAuthor.trim() || null : null,
+      novel: { title: title.trim(), platformId: Number(platformId), authorId: authorId && authorId !== "none" ? Number(authorId) : null,
         status, summary: summary.trim() || null, coverUrl: coverUrl.trim() || null, tagIds },
       volumes,
       chapters: chapters.map((chapter, index) => ({ order: index + 1, title: chapter.title.trim(), content: chapter.content, volumeOrder: chapter.volumeOrder })),
@@ -252,7 +254,7 @@ function SubmissionForm() {
                   <h2>{title || "未命名作品"}</h2>
                   <p className="novel-upload-author"><UserRound aria-hidden="true" />{authorName}</p>
                   {tagIds.length > 0 && <div className="novel-upload-selected-tags">{catalog.tags.filter(tag => tagIds.includes(tag.id)).map(tag => <span key={tag.id}>{tag.name}</span>)}</div>}
-                  <dl className="novel-upload-facts">{volumes.length > 0 && <div><dt>分卷</dt><dd>{volumes.length} 卷</dd></div>}<div><dt>章节</dt><dd>{chapters.length} 章</dd></div><div><dt>字数</dt><dd>{wordCount.toLocaleString("zh-CN")} 字</dd></div><div><dt>状态</dt><dd>{status === "COMPLETED" ? "已完结" : "连载中"}</dd></div></dl>
+                  <dl className="novel-upload-facts">{volumes.length > 0 && <div><dt>分卷</dt><dd>{volumes.length} 卷</dd></div>}<div><dt>章节</dt><dd>{chapters.length} 章</dd></div><div><dt>字数</dt><dd>{wordCount.toLocaleString("zh-CN")} 字</dd></div><div><dt>状态</dt><dd>{novelStatus(status)}</dd></div></dl>
                 </section>
                 <section className="panel novel-upload-submit-card" aria-label="提交设置">
                   <label className="novel-submit-field" htmlFor="novel-platform">来源平台
@@ -264,7 +266,6 @@ function SubmissionForm() {
                       <option value="" disabled>选择平台</option>{catalog.platforms.map(platform => <option key={platform.id} value={platform.id}>{platform.name}</option>)}
                     </select>
                   </label>
-                  {importedAuthor && !authorId && <p className="novel-submit-review">作者尚未关联到书库。<button type="button" disabled={busy || parsing} onClick={() => setEditingDetails(true)}>关联作者</button></p>}
                   {catalog.policy.review_required && <p className="novel-submit-review"><Clock3 aria-hidden="true" />提交后需审核通过才会入库。</p>}
                   {error && <p className="novel-submit-error" role="alert">{error}</p>}
                   <Button type="submit" disabled={busy || parsing || !chapters.length} className="novel-submit-action">{busy ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Send aria-hidden="true" />}{busy ? "正在提交…" : catalog.policy.review_required ? "提交审核" : "提交小说"}</Button>
@@ -277,11 +278,13 @@ function SubmissionForm() {
                   <label className="novel-submit-field novel-submit-wide" htmlFor="novel-title">小说名称<Input id="novel-title" value={title} onChange={event => setTitle(event.target.value)} /></label>
                   <label className="novel-submit-field" htmlFor="novel-author">作者
                     <select id="novel-author" aria-label="作者" value={authorId} disabled={!platformId || busy || parsing} onChange={event => setAuthorId(event.target.value)}>
-                      <option value="">不关联作者</option>{authorOptions.map(author => <option key={author.id} value={author.id}>{author.name || `作者 #${author.id}`}</option>)}
+                      <option value="">{importedAuthor ? `使用 EPUB 作者：${importedAuthor}` : "不关联作者"}</option>
+                      {importedAuthor && <option value="none">不关联作者</option>}
+                      {authorOptions.map(author => <option key={author.id} value={author.id}>{author.name || `作者 #${author.id}`}</option>)}
                     </select>
                   </label>
                   <label className="novel-submit-field" htmlFor="novel-status">连载状态
-                    <select id="novel-status" aria-label="连载状态" value={status} onChange={event => setStatus(event.target.value as typeof status)}><option value="ONGOING">连载中</option><option value="COMPLETED">已完结</option></select>
+                    <select id="novel-status" aria-label="连载状态" value={status} onChange={event => setStatus(event.target.value as typeof status)}><option value="ONGOING">连载中</option><option value="COMPLETED">已完结</option><option value="ABANDONED">太监</option></select>
                   </label>
                   <div className="novel-submit-wide novel-upload-cover-field">
                     <label className="novel-submit-field" htmlFor="novel-cover">封面链接<Input id="novel-cover" type="url" value={coverUrl} placeholder={epubCover?.file ? "提交时自动生成封面链接" : ""} onChange={event => setCoverUrl(event.target.value)} /></label>

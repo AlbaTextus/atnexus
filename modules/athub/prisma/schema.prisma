@@ -10,6 +10,7 @@ datasource db {
 enum NovelStatus {
   ONGOING
   COMPLETED
+  ABANDONED
 }
 
 model MutationReceipt {
@@ -51,9 +52,32 @@ model Novel {
   volumes    Volume[]
   chapters   Chapter[]
   tags       NovelTag[]
+  illustrations Illustration[]
+  illustrationLayout IllustrationLayout?
 
   @@index([platformId])
   @@index([authorId])
+}
+
+model Illustration {
+  id        Int      @id @default(autoincrement())
+  novelId   Int
+  url       String   @db.VarChar(2048)
+  sha256    String   @db.VarChar(64)
+  width     Int
+  height    Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  novel     Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  @@unique([novelId, sha256])
+  @@index([novelId, id])
+}
+
+model IllustrationLayout {
+  novelId Int @id
+  blocks Json
+  revision Int @default(1)
+  novel Novel @relation(fields: [novelId], references: [id], onDelete: Cascade)
 }
 
 model Tag {

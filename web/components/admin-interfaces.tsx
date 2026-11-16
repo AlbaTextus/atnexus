@@ -53,7 +53,7 @@ function EndpointPermissionSelect({ value, inheritedAllowed, disabled, label, on
       <Select.Value className="min-w-0 flex-1 text-left">{content(value)}</Select.Value>
       <Select.Icon><ChevronDown className="size-3.5 text-muted-foreground transition-transform in-aria-expanded:rotate-180" /></Select.Icon>
     </Select.Trigger>
-    <Select.Portal className="pointer-events-none fixed inset-0 z-50" style={{ zoom: "calc(1 / var(--site-scale, 1))" }}>
+    <Select.Portal className="pointer-events-none fixed inset-0 z-50" style={{ zoom: "calc(1 / var(--site-root-scale, var(--site-scale, 1)))" }}>
       <Select.Positioner sideOffset={6} align="end" alignItemWithTrigger={false} className="pointer-events-auto isolate z-50">
         <Select.Popup data-slot="permission-select-popup" className="w-44 origin-(--transform-origin) rounded-xl border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg outline-none"
           style={{ zoom: "var(--site-scale, 1)" }}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Avatar } from "radix-ui";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { History, MoreHorizontal, UsersRound } from "lucide-react";
 import { Link } from "next-view-transitions";
 import { contentDate, safeContentURL } from "@/lib/athub-client";
@@ -88,14 +88,21 @@ function ContributorList({ contributors }: { contributors: Contributor[] }) {
   </ul>;
 }
 
-export function ContributorsCard({ novelId, creator, contributors = [] }: {
+export function ContributorsCard({ novelId, creator, contributors = [], actions }: {
   novelId: string;
   creator?: (Contributor & { createdAt?: string }) | null;
   contributors?: Contributor[];
+  actions?: ReactNode;
 }) {
   return (
     <section className="panel contributors-card" aria-labelledby="contributors-heading">
-      <div className="sidebar-heading"><h2 id="contributors-heading"><UsersRound aria-hidden="true"/>贡献者</h2><Tooltip><TooltipTrigger render={<Link href={`/library/books/${novelId}/history`} aria-label="查看变更历史" />}><History className="size-4" aria-hidden="true"/></TooltipTrigger><TooltipContent>变更历史</TooltipContent></Tooltip></div>
+      <div className="sidebar-heading">
+        <h2 id="contributors-heading"><UsersRound aria-hidden="true"/>贡献者</h2>
+        <div className="flex shrink-0 items-center gap-3">
+          {actions}
+          <Tooltip><TooltipTrigger render={<Link href={`/library/books/${novelId}/history`} aria-label="查看变更历史" />}><History className="size-4 text-blue-500" aria-hidden="true"/></TooltipTrigger><TooltipContent>变更历史</TooltipContent></Tooltip>
+        </div>
+      </div>
       <div className="contribution-entry">
         <ContributorAvatar contributor={creator} />
         <div className="contribution-content">

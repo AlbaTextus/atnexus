@@ -130,8 +130,8 @@
 .novel-demo .sidebar .author-card { display: flex; flex-direction: column; gap: 18px; }
 .novel-demo .author-card { --sidebar-icon: #b58a50; }
 .novel-demo .book-tags { --sidebar-icon: #9b78c2; }
-.novel-demo .book-information { --sidebar-icon: #5c8fc7; }
-.novel-demo .publication-card { --sidebar-icon: #cc8b69; }
+.novel-demo .book-information { --sidebar-icon: #4f97ed; }
+.novel-demo .publication-card { --sidebar-icon: #f08b52; }
 .novel-demo .contributors-card { --sidebar-icon: #64a08b; }
 .novel-demo .author-name { margin: 0; font-size: 14px; line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
 .novel-demo .book-information, .novel-demo .book-tags, .novel-demo .publication-card { display: flex; flex-direction: column; gap: 18px; }
@@ -149,6 +149,7 @@
 .novel-demo .book-tags .tag-cloud > [data-slot=badge]:nth-child(3n + 2) { --secondary: #fcebdc; --secondary-foreground: #a57140; }
 .novel-demo .book-tags .tag-cloud > [data-slot=badge]:nth-child(3n) { --secondary: #e4f2ec; --secondary-foreground: #518672; }
 .novel-demo .publication-producer dd { font-weight: 600; }
+.novel-demo .publication-platform-logo { width: 28px; height: 28px; flex-shrink: 0; object-fit: contain; }
 .novel-demo .publication-age { --secondary: #f9dfe8; --secondary-foreground: #b05778; }
 .novel-demo .contributors-card { display: flex; flex-direction: column; gap: 16px; }
 .novel-demo .contribution-entry { display: flex; align-items: center; gap: 10px; min-width: 0; }

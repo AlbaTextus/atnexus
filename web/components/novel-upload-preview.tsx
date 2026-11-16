@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/novel-demo/ui/tabs"
 import type { EpubChapter, EpubVolume } from "@/lib/epub-import"
+import { NovelAutoHeight } from "@/components/novel-motion"
 
 export type UploadChapterDraft = EpubChapter & { key: number }
 
@@ -71,20 +72,23 @@ export function NovelUploadPreview({ title, summary, chapters, volumes, disabled
         {editingDetails ? "完成修改" : <><Pencil aria-hidden="true" />修改资料</>}
       </Button>
     </div>
-    {editingDetails && <section className="panel novel-upload-edit-details" aria-label="修改小说资料">{details}</section>}
+    <NovelAutoHeight open={editingDetails}>
+      <section className="panel novel-upload-edit-details novel-motion-enter" aria-label="修改小说资料">{details}</section>
+    </NovelAutoHeight>
     <Tabs value={tab} onValueChange={setTab}>
       <TabsList className="novel-upload-tabs" aria-label="上传作品预览">
         <TabsTrigger value="intro"><FileText aria-hidden="true" />作品简介</TabsTrigger>
         <TabsTrigger value="catalog"><Library aria-hidden="true" />章节目录<span>{chapters.length}</span></TabsTrigger>
       </TabsList>
-      <TabsContent value="intro">
+      <NovelAutoHeight>
+      <TabsContent value="intro" className="novel-motion-enter">
         <section className="panel novel-upload-intro" aria-label="作品简介">
           <h2>简介</h2>
           <div className="synopsis">{summary.trim() ? summary.split(/\r?\n/).filter(line => line.trim()).map((line, index) => <p key={index}>{line}</p>) : <p>暂无简介</p>}</div>
           <Button type="button" variant="outline" disabled={disabled || !chapters.length} onClick={() => { setTab("catalog"); select(chapters[0]?.key ?? null) }}><BookOpen aria-hidden="true" />预览首章</Button>
         </section>
       </TabsContent>
-      <TabsContent value="catalog">
+      <TabsContent value="catalog" className="novel-motion-enter">
         <section className="panel novel-upload-catalog" aria-label="目录预览">
           <div className="novel-upload-catalog-heading">
             <h2>目录预览</h2>
@@ -104,7 +108,7 @@ export function NovelUploadPreview({ title, summary, chapters, volumes, disabled
                 {ungrouped.length > 0 && (volumes.length ? <details className="novel-upload-volume" open={query.trim() || selected?.volumeOrder === null ? true : undefined}><summary><ChevronRight aria-hidden="true" /><Folder aria-hidden="true" /><span>未分卷</span><span>{ungrouped.length}</span></summary>{chapterList(ungrouped)}</details> : chapterList(ungrouped))}
               </> : <p className="novel-upload-empty">没有匹配的章节</p>}
             </nav>
-            {selected && <section id="upload-chapter-reader" className="novel-upload-reader" aria-label="章节正文预览">
+            {selected && <section id="upload-chapter-reader" className="novel-upload-reader novel-motion-enter" aria-label="章节正文预览">
               <div className="novel-upload-reader-toolbar">
                 <span>{volumes.find(volume => volume.order === selected.volumeOrder)?.title && `${volumes.find(volume => volume.order === selected.volumeOrder)!.title} · `}第 {index + 1} / {chapters.length} 章</span>
                 <div>
@@ -113,6 +117,7 @@ export function NovelUploadPreview({ title, summary, chapters, volumes, disabled
                 </div>
               </div>
               <div ref={reader} className="novel-upload-reading-scroll">
+                <div key={`${selected.key}:${editingChapter}`} className="novel-motion-enter">
                 {editingChapter ? <fieldset disabled={disabled} className="novel-upload-chapter-editor">
                   <label className="novel-submit-field" htmlFor={`chapter-title-${selected.key}`}>章节标题<Input id={`chapter-title-${selected.key}`} value={selected.title} onChange={event => onChapterChange(selected.key, "title", event.target.value)} /></label>
                   <label className="novel-submit-field" htmlFor={`chapter-content-${selected.key}`}>正文<Textarea id={`chapter-content-${selected.key}`} value={selected.content} onChange={event => onChapterChange(selected.key, "content", event.target.value)} /></label>
@@ -121,6 +126,7 @@ export function NovelUploadPreview({ title, summary, chapters, volumes, disabled
                   <h3>{selected.title || "未命名章节"}</h3>
                   <div>{content}</div>
                 </article>}
+                </div>
               </div>
               <div className="novel-upload-reader-pagination">
                 <Button type="button" variant="ghost" size="sm" disabled={disabled || index <= 0} onClick={() => select(chapters[index - 1].key)}><ChevronLeft aria-hidden="true" />上一章</Button>
@@ -130,6 +136,7 @@ export function NovelUploadPreview({ title, summary, chapters, volumes, disabled
           </div>
         </section>
       </TabsContent>
+      </NovelAutoHeight>
     </Tabs>
   </div>
 }

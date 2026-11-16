@@ -24,6 +24,7 @@ ATHub 工作目录。单独修改、测试模块后，由宿主重新编译发�
 | `/api/v2/toc` | GET |
 | `/api/v2/content` | GET、PUT、DELETE |
 | `/api/v2/upload` | POST |
+| `/api/v2/illustrations` | GET、POST |
 
 请求需 `Authorization: Bearer <API_KEY>`。登录用户在宿主 `8001/api/v1/account/key`
 自动生成唯一的永久 Key，支持重置和停用；宿主注入的鉴权与记账中间件校验归属、当前 Key、停用状态和用户启用状态。
@@ -42,6 +43,29 @@ Key 只在生成或重置时显示明文，账户库只保存 SHA-256 哈希。�
 修改接口要求外部个人 API Key，网站自动登录的只读凭证不允许 PUT。
 现有请求字段、分页、8 MiB JSON 上限、批量上传事务、分卷和章节排序规则保持不变。
 创建资源返回的 `Location` 使用 `/api/v2/`。
+
+### 插图
+
+`GET /api/v2/illustrations?novelId={id}&limit=100&offset=0` 返回按上传顺序排列的插图数组，
+支持现有分页规则。作品不存在返回 404，没有插图返回空数组。
+每项包含 `id`、`novelId`、`url`、`sha256`、`width`、`height`、`createdAt`。
+
+网站通过 `POST /api/v1/account/athub/novels/{id}/illustrations` 上传，
+请求为 `multipart/form-data`，单个 `file` 字段。界面支持选择多张图片，逐张提交并单独报告失败。
+宿主验证登录会话、CSRF 和当前插图上传权限后，校验实际图片内容，
+接受 JPG、PNG、WebP、GIF（GIF 使用首帧）；原图最大 5 MiB、单边 8192 像素、总像素 1600 万。
+图片去除元数据，按原比例缩小至最长边 4096 像素以内，并转换为 JPEG；
+透明区域使用白底。图床使用现有 `IMGBED_URL`、`IMGBED_API_TOKEN`，
+保存到 `/api/categories/book/illustrations/upload?entityId={novelId}` 对应的作品目录。
+图床密钥仅在服务端使用。
+
+上传后宿主把图片 URL、归一化后图片的 SHA-256、宽高提交到
+`POST /api/v2/illustrations?novelId={id}`（JSON 字段为 `url`、`sha256`、`width`、`height`）。
+个人 API Key 也可调用此接口关联已有图片；URL 只接受有效 HTTP/HTTPS 地址，
+SHA-256 为 64 位小写十六进制，宽高必须为正且不超过归一化尺寸上限。
+该接口按 `upload` 权限记账并遵循现有审核策略：直接保存返回 201；
+需要审核时返回 202 和 `review_id`，审核通过后才公开显示。插图变更进入作品历史和贡献者记录。
+同一作品内相同校验值只保存一条记录，重复提交不会增加图片或历史记录。
 
 网站按需使用下列 GET 查询，原有列表的数组响应保持兼容：
 
@@ -66,6 +90,10 @@ Key 只在生成或重置时显示明文，账户库只保存 SHA-256 哈希。�
 内容库保存平台、作者、小说、标签库、小说标签关系、卷和章节。`athub_api_keys`、`athub_api_calls` 两张表均由
 宿主账户库维护；本模块只提供注入接口，不连接账户库、不定义用户或调用统计表。
 
+`20261115000000_novel_illustrations` 增量创建 `Illustration` 表，通过外键关联作品，
+并按作品和图片校验值去重。已有作品默认没有插图；删除作品时关联记录一并删除。
+部署包含插图功能的服务前，先执行内容库迁移。
+
 在统一仓库根目录执行：
 
 ```powershell
@@ -84,6 +112,8 @@ npm run db:athub:deploy
 覆盖小说元信息时省略 `tagIds`、传 `null` 或 `[]` 清空引用；任一标签不存在时整个事务回滚。
 续传保留标签，标签改名保留 ID；删除仍被引用的标签返回 `409`。
 删除小说只清理标签关系，保留标签库。新版本启动前先在统一仓库根目录执行 `npm run db:athub:deploy`。
+
+创建或覆盖小说元信息时，可以用 `authorName` 代替 `authorId`，按名称复用当前平台的作者，不存在时新增；两者不能同时传入非空值。`tagNames` 按名称复用或新增标签，并与 `tagIds` 合并去重。批量上传的 `novel` 对象也支持这些字段。名称解析与小说更新在同一事务中完成，只更换当前作品的关联，不修改共享作者、标签的名称；取消、保存失败或尚待审核时不会提前创建资料。
 
 ## 验证
 

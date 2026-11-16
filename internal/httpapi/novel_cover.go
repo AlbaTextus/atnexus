@@ -25,6 +25,10 @@ const maxNovelCoverBytes = 5 << 20
 
 // Preserve the entire cover's aspect ratio, with bounded decoding and no metadata.
 func normalizeNovelCover(data []byte) ([]byte, error) {
+	return normalizeNovelImage(data, 1600)
+}
+
+func normalizeNovelImage(data []byte, maxSide int) ([]byte, error) {
 	if len(data) == 0 || len(data) > maxNovelCoverBytes {
 		return nil, fmt.Errorf("invalid image size")
 	}
@@ -37,9 +41,9 @@ func normalizeNovelCover(data []byte) ([]byte, error) {
 		return nil, err
 	}
 	width, height := cfg.Width, cfg.Height
-	if max(width, height) > 1600 {
-		width = max(1, width*1600/max(cfg.Width, cfg.Height))
-		height = max(1, height*1600/max(cfg.Width, cfg.Height))
+	if max(width, height) > maxSide {
+		width = max(1, width*maxSide/max(cfg.Width, cfg.Height))
+		height = max(1, height*maxSide/max(cfg.Width, cfg.Height))
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, width, height))
 	stddraw.Draw(dst, dst.Bounds(), &image.Uniform{C: color.White}, image.Point{}, stddraw.Src)
@@ -100,6 +104,15 @@ func (a *API) uploadNovelCover(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "cover_invalid", "error_description": "EPUB 封面不是有效图片，或图片尺寸过大。请更换或移除封面后重试。"})
 		return
 	}
+	location, err := a.uploadNovelImage(r.Context(), data, "covers", user.ID.String())
+	if err != nil {
+		a.novelCoverUploadError(w)
+		return
+	}
+	writeJSON(w, 200, map[string]string{"url": location})
+}
+
+func (a *API) uploadNovelImage(ctx context.Context, data []byte, category, entityID string) (string, error) {
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
 	part, err := form.CreatePart(textproto.MIMEHeader{
@@ -107,45 +120,39 @@ func (a *API) uploadNovelCover(w http.ResponseWriter, r *http.Request) {
 		"Content-Type":        {"image/jpeg"},
 	})
 	if err != nil {
-		a.applicationError(w, err)
-		return
+		return "", err
 	}
 	_, _ = part.Write(data)
 	_ = form.Close()
-	target := a.cfg.ImgbedURL + "/api/categories/book/covers/upload?returnFormat=full&entityId=" + user.ID.String()
-	request, err := http.NewRequestWithContext(r.Context(), http.MethodPost, target, &body)
+	target := a.cfg.ImgbedURL + "/api/categories/book/" + category + "/upload?returnFormat=full&entityId=" + url.QueryEscape(entityID)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, target, &body)
 	if err != nil {
-		a.applicationError(w, err)
-		return
+		return "", err
 	}
 	request.Header.Set("Authorization", "Bearer "+a.cfg.ImgbedAPIToken)
 	request.Header.Set("Content-Type", form.FormDataContentType())
 	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(request)
 	if err != nil {
-		a.novelCoverUploadError(w)
-		return
+		return "", err
 	}
 	defer response.Body.Close()
 	var uploaded []struct {
 		Src string `json:"src"`
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 || json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&uploaded) != nil || len(uploaded) != 1 {
-		a.novelCoverUploadError(w)
-		return
+		return "", fmt.Errorf("image host upload failed")
 	}
 	base, _ := url.Parse(a.cfg.ImgbedURL)
 	ref, err := url.Parse(uploaded[0].Src)
 	if err != nil || uploaded[0].Src == "" {
-		a.novelCoverUploadError(w)
-		return
+		return "", fmt.Errorf("invalid image host response")
 	}
 	resolved := base.ResolveReference(ref)
 	if resolved.Scheme != base.Scheme || resolved.Host != base.Host || resolved.User != nil || resolved.Fragment != "" || !strings.HasPrefix(resolved.Path, "/file/") || len(resolved.String()) > 2048 {
-		a.novelCoverUploadError(w)
-		return
+		return "", fmt.Errorf("invalid image host URL")
 	}
-	writeJSON(w, 200, map[string]string{"url": resolved.String()})
+	return resolved.String(), nil
 }
 
 func (a *API) novelCoverUploadError(w http.ResponseWriter) {

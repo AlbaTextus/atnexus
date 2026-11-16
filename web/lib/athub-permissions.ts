@@ -7,7 +7,7 @@ export const permissionLevels = [{ role: "USER", label: "LT1" }, { role: "LEVEL_
 export const endpointNames: Record<string, string> = {
   "/api/v2/platforms": "平台", "/api/v2/authors": "作者", "/api/v2/tags": "标签",
   "/api/v2/novelinfo": "小说资料", "/api/v2/content": "章节正文", "/api/v2/toc": "目录",
-  "/api/v2/volumes": "分卷", "/api/v2/upload": "批量上传", "/api/v3/history": "变更历史", "/api/v3/contributors": "贡献者",
+  "/api/v2/volumes": "分卷", "/api/v2/upload": "批量上传", "/api/v2/illustrations": "插图", "/api/v2/illustration-layout": "插图布局", "/api/v3/history": "变更历史", "/api/v3/contributors": "贡献者",
 }
 export function hasOperation(policy: RolePolicy, operation: Operation) {
   return policy.rules.some(rule => rule.operation === operation && rule.method === "" && rule.allowed)

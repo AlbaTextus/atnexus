@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { readMaintenance } from "@/lib/maintenance"
+import { maintenanceDestination } from "@/lib/maintenance-navigation"
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
@@ -10,8 +11,10 @@ export async function proxy(request: NextRequest) {
   if (!state || (state.enabled && !state.bypass)) {
     if (path.startsWith("/oauth/") && request.method !== "GET") return NextResponse.next()
     const destination = request.nextUrl.clone()
+    const returnTo = request.nextUrl.pathname + request.nextUrl.search
     destination.pathname = "/maintenance"
     destination.search = ""
+    destination.searchParams.set("return_to", maintenanceDestination(returnTo))
     const response = NextResponse.redirect(destination, 307)
     response.headers.set("Cache-Control", "no-store")
     response.headers.set("Retry-After", "15")

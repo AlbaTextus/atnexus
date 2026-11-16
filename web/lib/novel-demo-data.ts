@@ -49,6 +49,7 @@ export function mapDemoNovel(book: Novel, tags: ContentTag[], toc: TableOfConten
     synopsis: synopsis.length ? synopsis : ["暂无简介"],
     language: "待补充",
     publisher: platform?.name,
+    words: typeof toc?.wordCount === "number" ? `${Number((toc.wordCount / 10000).toFixed(2))}w` : "待补充",
     chapterCount: toc?.chapters.length ?? null,
     chapters: toc?.chapters || [],
     volumes: toc?.volumes || [],

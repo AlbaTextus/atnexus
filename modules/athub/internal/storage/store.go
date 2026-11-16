@@ -35,13 +35,15 @@ type Author struct {
 }
 
 type NovelInput struct {
-	TagIDs     []int32 `json:"tagIds"`
-	PlatformID int32   `json:"platformId"`
-	AuthorID   *int32  `json:"authorId"`
-	Title      string  `json:"title"`
-	Summary    *string `json:"summary"`
-	CoverURL   *string `json:"coverUrl"`
-	Status     string  `json:"status"`
+	AuthorName *string  `json:"authorName,omitempty"`
+	TagNames   []string `json:"tagNames,omitempty"`
+	TagIDs     []int32  `json:"tagIds"`
+	PlatformID int32    `json:"platformId"`
+	AuthorID   *int32   `json:"authorId"`
+	Title      string   `json:"title"`
+	Summary    *string  `json:"summary"`
+	CoverURL   *string  `json:"coverUrl"`
+	Status     string   `json:"status"`
 }
 
 type Novel struct {
@@ -75,9 +77,10 @@ type ChapterSummary struct {
 }
 
 type TOC struct {
-	NovelID  int32            `json:"novelId"`
-	Volumes  []Volume         `json:"volumes"`
-	Chapters []ChapterSummary `json:"chapters"`
+	NovelID   int32            `json:"novelId"`
+	WordCount int64            `json:"wordCount"`
+	Volumes   []Volume         `json:"volumes"`
+	Chapters  []ChapterSummary `json:"chapters"`
 }
 
 type VolumeInput struct {
@@ -106,10 +109,11 @@ type UploadChapter struct {
 }
 
 type UploadInput struct {
-	NovelID  *int32          `json:"novelId"`
-	Novel    *NovelInput     `json:"novel"`
-	Volumes  []UploadVolume  `json:"volumes"`
-	Chapters []UploadChapter `json:"chapters"`
+	AuthorName *string         `json:"authorName,omitempty"`
+	NovelID    *int32          `json:"novelId"`
+	Novel      *NovelInput     `json:"novel"`
+	Volumes    []UploadVolume  `json:"volumes"`
+	Chapters   []UploadChapter `json:"chapters"`
 }
 
 type UploadedChapter struct {

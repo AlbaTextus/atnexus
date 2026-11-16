@@ -1,10 +1,27 @@
 @import "../styles/oauth.css";
+@import "../styles/scrollbars.css";
 
-/* Apply the site's default scale to content and body-mounted portals alike. */
-html { --site-scale: 0.8; zoom: var(--site-scale); }
+/* Keep text spacing consistent across route styles, utilities, and portals. */
+*,
+*::before,
+*::after {
+  letter-spacing: normal !important;
+}
+
+/* Keep the visual scale separate from the document's coordinate scale. */
+html { --site-scale: 0.9; --site-root-scale: var(--site-scale); zoom: var(--site-root-scale); }
+
+/* Password-manager overlays use viewport coordinates. Leave their document
+   unscaled on auth pages, and scale only the app-owned content. */
+html:has(.auth-shell) { --site-root-scale: 1; }
+html:has(.auth-shell) :is(.auth-shell, .operation-toast-viewport) { zoom: var(--site-scale); }
 
 /* Viewport units do not account for CSS zoom; keep full-page shells full height. */
-html body,
+html body {
+  min-height: calc(100vh / var(--site-root-scale));
+  min-height: calc(100svh / var(--site-root-scale));
+}
+
 html :is(.home-shell, .auth-shell, .center-shell, .maintenance-shell, .not-found-shell, .novel-workspace) {
   min-height: calc(100vh / var(--site-scale));
   min-height: calc(100svh / var(--site-scale));

@@ -99,6 +99,9 @@ func (p *Postgres) CreateNovel(ctx context.Context, n NovelInput) (Novel, error)
 }
 
 func createNovel(ctx context.Context, q pgx.Tx, n NovelInput) (Novel, error) {
+	if err := resolveNovelReferences(ctx, q, &n); err != nil {
+		return Novel{}, err
+	}
 	result, err := scanNovel(q.QueryRow(ctx, `INSERT INTO "Novel"
 		("platformId", "authorId", "title", "summary", "coverUrl", "status", "createdAt", "updatedAt")
 		SELECT $1, $2, $3, $4, $5, $6::"NovelStatus", now(), now()
@@ -127,6 +130,9 @@ func (p *Postgres) UpdateNovel(ctx context.Context, id int32, n NovelInput) (Nov
 	var existingID int32
 	if err := tx.QueryRow(ctx, `SELECT "id" FROM "Novel" WHERE "id" = $1 FOR UPDATE`, id).Scan(&existingID); err != nil {
 		return Novel{}, databaseError(err)
+	}
+	if err := resolveNovelReferences(ctx, tx, &n); err != nil {
+		return Novel{}, err
 	}
 	result, err := scanNovel(tx.QueryRow(ctx, `UPDATE "Novel" SET
 		"platformId" = $2, "authorId" = $3, "title" = $4, "summary" = $5, "coverUrl" = $6,
@@ -234,6 +240,7 @@ func (p *Postgres) CheckSchema(ctx context.Context) error {
 	for _, query := range []string{
 		`SELECT "id", "platformId", "name" FROM "Author" LIMIT 0`,
 		`SELECT id,response FROM "MutationReceipt" LIMIT 0`,
+		`SELECT ` + illustrationColumns + ` FROM "Illustration" LIMIT 0`,
 		`SELECT "id", "name", "url" FROM "Platform" LIMIT 0`,
 		`SELECT "id", "name" FROM "Tag" LIMIT 0`,
 		`SELECT "novelId", "tagId" FROM "NovelTag" LIMIT 0`,

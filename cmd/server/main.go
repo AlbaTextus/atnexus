@@ -73,6 +73,9 @@ func run(logger *slog.Logger) error {
 	api.SetATHubReviewExecutor(access.ApplyReview)
 	api.SetATHubSubmitter(access.SubmitUpload)
 	api.SetATHubNovelEditor(access.SubmitNovelEdit)
+	api.SetATHubIllustrationSubmitter(access.SubmitIllustration)
+	api.SetATHubIllustrationDeleter(access.DeleteIllustration)
+	api.SetATHubIllustrationLayoutEditor(access.SubmitIllustrationLayout)
 	// ATHub owns its 15s database deadline and accepts uploads up to 8 MiB.
 	requestTimeout := max(cfg.HTTPRequestTimeout, 30*time.Second)
 	oauthServer := &http.Server{Addr: cfg.HTTPAddr, Handler: api.Router(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.HTTPRequestTimeout, WriteTimeout: cfg.HTTPRequestTimeout, IdleTimeout: 60 * time.Second}

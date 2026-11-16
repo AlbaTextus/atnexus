@@ -49,16 +49,16 @@ type ATHubEndpoint struct {
 
 func ATHubEndpoints() []ATHubEndpoint {
 	var endpoints []ATHubEndpoint
-	for _, path := range []string{"/api/v2/platforms", "/api/v2/authors", "/api/v2/tags", "/api/v2/novelinfo", "/api/v2/content", "/api/v2/toc", "/api/v2/volumes", "/api/v3/history", "/api/v3/contributors"} {
+	for _, path := range []string{"/api/v2/platforms", "/api/v2/authors", "/api/v2/tags", "/api/v2/novelinfo", "/api/v2/content", "/api/v2/toc", "/api/v2/volumes", "/api/v2/illustrations", "/api/v2/illustration-layout", "/api/v3/history", "/api/v3/contributors"} {
 		endpoints = append(endpoints, ATHubEndpoint{"GET", path, "read"})
 	}
-	for _, path := range []string{"/api/v2/platforms", "/api/v2/authors", "/api/v2/tags", "/api/v2/novelinfo", "/api/v2/upload"} {
+	for _, path := range []string{"/api/v2/platforms", "/api/v2/authors", "/api/v2/tags", "/api/v2/novelinfo", "/api/v2/upload", "/api/v2/illustrations"} {
 		endpoints = append(endpoints, ATHubEndpoint{"POST", path, "upload"})
 	}
-	for _, path := range []string{"/api/v2/authors", "/api/v2/tags", "/api/v2/novelinfo", "/api/v2/content", "/api/v2/volumes"} {
+	for _, path := range []string{"/api/v2/authors", "/api/v2/tags", "/api/v2/novelinfo", "/api/v2/content", "/api/v2/volumes", "/api/v2/illustration-layout"} {
 		endpoints = append(endpoints, ATHubEndpoint{"PUT", path, "edit"})
 	}
-	for _, path := range []string{"/api/v2/tags", "/api/v2/novelinfo", "/api/v2/content", "/api/v2/volumes"} {
+	for _, path := range []string{"/api/v2/tags", "/api/v2/novelinfo", "/api/v2/content", "/api/v2/volumes", "/api/v2/illustrations"} {
 		endpoints = append(endpoints, ATHubEndpoint{"DELETE", path, "delete"})
 	}
 	return endpoints

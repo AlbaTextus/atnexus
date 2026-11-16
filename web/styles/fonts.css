@@ -14,12 +14,11 @@
   font-display: swap;
 }
 
-
 :root {
   /* Chinese font files provide real 400/500 weights; avoid synthetic bold. */
   font-synthesis-weight: none;
   --atui-font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --atui-font-sans: "Maple Mono", "Maple Mono CN", var(--atui-font-system);
+  --atui-font-sans: "Maple Mono", "Alba CJK Compact", "Maple Mono CN", var(--atui-font-system);
   --atui-font-mono: "Maple Mono", "Maple Mono CN", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --atui-font-brand: Arial, "Helvetica Neue", sans-serif;
   --font-sans: var(--atui-font-sans);
@@ -28,6 +27,7 @@
 }
 
 :root[data-atui-font="system"] {
+  font-synthesis-weight: auto;
   --atui-font-sans: var(--atui-font-system);
 }
 

@@ -152,6 +152,10 @@ func (a *API) dispatch(w http.ResponseWriter, r *http.Request) error {
 		err = a.volumes(w, r)
 	case "/api/v2/upload":
 		err = a.upload(w, r)
+	case "/api/v2/illustrations":
+		err = a.illustrations(w, r)
+	case "/api/v2/illustration-layout":
+		err = a.illustrationLayout(w, r)
 	default:
 		writeError(w, http.StatusNotFound, "not found")
 		return nil
@@ -343,6 +347,25 @@ func (a *API) content(w http.ResponseWriter, r *http.Request) error {
 }
 
 func validateNovel(n *storage.NovelInput) error {
+	if n.AuthorName != nil && n.AuthorID != nil {
+		return badRequest("provide authorName or authorId, not both")
+	}
+	if err := normalizeAuthorName(&n.AuthorName); err != nil {
+		return err
+	}
+	names := make([]string, 0, len(n.TagNames))
+	seenNames := make(map[string]bool, len(n.TagNames))
+	for _, name := range n.TagNames {
+		name = strings.TrimSpace(name)
+		if name == "" || strings.ContainsRune(name, 0) {
+			return badRequest("tagNames must contain nonempty names without NUL characters")
+		}
+		if !seenNames[name] {
+			names = append(names, name)
+			seenNames[name] = true
+		}
+	}
+	n.TagNames = names
 	seenTags := make(map[int32]bool, len(n.TagIDs))
 	for _, id := range n.TagIDs {
 		if id <= 0 || seenTags[id] {
@@ -366,8 +389,8 @@ func validateNovel(n *storage.NovelInput) error {
 	if n.Status == "" {
 		n.Status = "ONGOING"
 	}
-	if n.Status != "ONGOING" && n.Status != "COMPLETED" {
-		return badRequest("status must be ONGOING or COMPLETED")
+	if n.Status != "ONGOING" && n.Status != "COMPLETED" && n.Status != "ABANDONED" {
+		return badRequest("status must be ONGOING, COMPLETED or ABANDONED")
 	}
 	return nil
 }

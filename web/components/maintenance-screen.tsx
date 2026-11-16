@@ -8,8 +8,9 @@ import { HomeHeader } from "@/components/home-header"
 import { SiteFooter } from "@/components/site-footer"
 import { Spinner } from "@/components/ui/spinner"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
+import { maintenanceDestination } from "@/lib/maintenance-navigation"
 
-export function MaintenanceScreen({ unavailable = false }: { unavailable?: boolean }) {
+export function MaintenanceScreen({ unavailable = false, returnTo }: { unavailable?: boolean; returnTo?: string }) {
   const [checking, setChecking] = useState(false)
   const [message, setMessage] = useState("")
   const [lights, setLights] = useState(0)
@@ -39,11 +40,12 @@ export function MaintenanceScreen({ unavailable = false }: { unavailable?: boole
       const response = await fetch("/api/v1/maintenance", { cache: "no-store", signal: AbortSignal.timeout(5000) })
       if (!response.ok) throw new Error("unavailable")
       const state = await response.json()
-      if (!state.enabled || state.bypass) { window.location.replace(state.bypass ? "/account" : "/"); return }
+      if (typeof state.enabled !== "boolean" || typeof state.bypass !== "boolean") throw new Error("unavailable")
+      if (!state.enabled || state.bypass) { window.location.replace(maintenanceDestination(returnTo, state.bypass)); return }
       setMessage("仍在维护中。恢复后，此页面会自动带你返回。")
     } catch { setMessage("暂时无法连接服务，请稍后再试。") }
     finally { setChecking(false) }
-  }, [checking])
+  }, [checking, returnTo])
 
   useEffect(() => {
     const timer = window.setInterval(() => { void check() }, 15000)

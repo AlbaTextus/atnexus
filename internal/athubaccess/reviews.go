@@ -78,11 +78,18 @@ func (a *Access) queueMutation(w http.ResponseWriter, r *http.Request, call stor
 	}
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	allowedQuery := map[string]bool{}
+	if r.Method == http.MethodPost && r.URL.Path == "/api/v2/illustrations" {
+		allowedQuery["novelId"] = true
+	}
 	if r.Method == http.MethodDelete || r.Method == http.MethodPut {
 		if r.URL.Path == "/api/v2/content" || r.URL.Path == "/api/v2/volumes" {
 			if r.Method == http.MethodDelete {
 				allowedQuery = map[string]bool{"novelId": true, "order": true}
 			}
+		} else if r.Method == http.MethodPut && r.URL.Path == "/api/v2/illustration-layout" {
+			allowedQuery["novelId"] = true
+		} else if r.Method == http.MethodDelete && r.URL.Path == "/api/v2/illustrations" {
+			allowedQuery = map[string]bool{"novelId": true, "id": true}
 		} else {
 			allowedQuery["id"] = true
 		}

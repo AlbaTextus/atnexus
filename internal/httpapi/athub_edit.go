@@ -15,6 +15,18 @@ func (a *API) SetATHubNovelEditor(edit func(http.ResponseWriter, *http.Request, 
 }
 
 func (a *API) athubEditNovel(w http.ResponseWriter, r *http.Request) {
+	a.editNovelContent(w, r, a.athubNovelEditor)
+}
+
+func (a *API) SetATHubIllustrationLayoutEditor(edit func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32)) {
+	a.athubIllustrationLayoutEditor = edit
+}
+
+func (a *API) editNovelIllustrationLayout(w http.ResponseWriter, r *http.Request) {
+	a.editNovelContent(w, r, a.athubIllustrationLayoutEditor)
+}
+
+func (a *API) editNovelContent(w http.ResponseWriter, r *http.Request, edit func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32)) {
 	user, _, ok := a.athubActor(w, r)
 	if !ok {
 		return
@@ -34,9 +46,9 @@ func (a *API) athubEditNovel(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 401, map[string]string{"error": "login_required"})
 		return
 	}
-	if a.athubNovelEditor == nil {
+	if edit == nil {
 		writeJSON(w, 503, map[string]string{"error": "editing_unavailable", "error_description": "编辑服务暂时不可用，请稍后重试。"})
 		return
 	}
-	a.athubNovelEditor(w, r, user.ID, session.ID, int32(id))
+	edit(w, r, user.ID, session.ID, int32(id))
 }

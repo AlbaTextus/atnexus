@@ -161,6 +161,13 @@ func TestPostgresIntegration(t *testing.T) {
 	if got, err := store.UpdateNovel(ctx, novel.ID, input); err != nil || got.Title != "Updated" || got.AuthorID != nil {
 		t.Fatalf("update: %+v %v", got, err)
 	}
+	input.Status = "ABANDONED"
+	if got, err := store.UpdateNovel(ctx, novel.ID, input); err != nil || got.Status != input.Status {
+		t.Fatalf("abandoned update: %+v %v", got, err)
+	}
+	if got, err := store.GetNovel(ctx, novel.ID); err != nil || got.Status != input.Status {
+		t.Fatalf("abandoned read: %+v %v", got, err)
+	}
 	var volumeID, unusedVolumeID int32
 	if err := pool.QueryRow(ctx, `INSERT INTO "Volume" ("novelId", "order", "title", "updatedAt")
 		VALUES ($1, 1, 'Part 1', now()) RETURNING "id"`, novel.ID).Scan(&volumeID); err != nil {
@@ -271,5 +278,10 @@ func TestPostgresIntegration(t *testing.T) {
 	}
 	t.Run("tags", func(t *testing.T) { testTagIntegration(t, ctx, store) })
 	t.Run("library pagination", func(t *testing.T) { testLibraryIntegration(t, ctx, store) })
+	t.Run("upload authors", func(t *testing.T) { testUploadAuthors(t, ctx, store) })
+	t.Run("illustration deletion", func(t *testing.T) { testIllustrationDeletion(t, ctx, store) })
+	t.Run("illustration layout", func(t *testing.T) { testIllustrationLayout(t, ctx, store) })
+	t.Run("word count", func(t *testing.T) { testWordCount(t, ctx, store) })
 	t.Run("history", func(t *testing.T) { testHistoryIntegration(t, ctx, store) })
+	t.Run("novel reference names", func(t *testing.T) { testNovelReferenceNames(t, ctx, store) })
 }

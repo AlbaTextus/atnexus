@@ -1,0 +1,118 @@
+/* One rounded, movable thumb along a continuous track, shared by page,
+   nested panels, textareas and body-mounted menus. */
+:root {
+  --scrollbar-size: 12px;
+  --scrollbar-track: #f0f1f3;
+  --scrollbar-track-border: transparent;
+  --scrollbar-thumb: #ffffff;
+  --scrollbar-thumb-border: #9ba3af;
+  --scrollbar-thumb-hover: #737e8e;
+  --scrollbar-thumb-active: #5289c7;
+  --scrollbar-shadow: 0 1px 2px rgb(31 41 55 / 12%);
+}
+
+.dark {
+  --scrollbar-track: #24262b;
+  --scrollbar-track-border: transparent;
+  --scrollbar-thumb: #555b66;
+  --scrollbar-thumb-border: #858e9d;
+  --scrollbar-thumb-hover: #a6b0bf;
+  --scrollbar-thumb-active: #8aafdc;
+  --scrollbar-shadow: 0 1px 2px rgb(0 0 0 / 22%);
+}
+
+/* Firefox uses the native single-thumb control with the same palette. */
+:root,
+:root * {
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--scrollbar-thumb-border) var(--scrollbar-track) !important;
+}
+
+:root[data-scrollbars-ready]:not([data-scroll-active]),
+:root[data-scrollbars-ready] :not([data-scroll-active]) {
+  scrollbar-color: transparent transparent !important;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  /* Chromium otherwise gives scrollbar-width/color precedence over the
+     rounded pseudo-elements, including inside existing compact panels. */
+  :root,
+  :root *,
+  :root[data-scrollbars-ready],
+  :root[data-scrollbars-ready] *,
+  :root[data-scrollbars-ready]:not([data-scroll-active]),
+  :root[data-scrollbars-ready] :not([data-scroll-active]) {
+    scrollbar-width: auto !important;
+    scrollbar-color: auto !important;
+  }
+
+  :root::-webkit-scrollbar,
+  :root *::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
+    background: transparent;
+  }
+
+  :root::-webkit-scrollbar-track,
+  :root *::-webkit-scrollbar-track {
+    border: 1px solid var(--scrollbar-track-border);
+    border-radius: 999px;
+    background: var(--scrollbar-track);
+  }
+
+  :root::-webkit-scrollbar-thumb,
+  :root *::-webkit-scrollbar-thumb {
+    min-width: 32px;
+    min-height: 32px;
+    border: 2px solid var(--scrollbar-track);
+    border-radius: 999px;
+    background: var(--scrollbar-thumb);
+    box-shadow: inset 0 0 0 1px var(--scrollbar-thumb-border), var(--scrollbar-shadow);
+  }
+
+  :root::-webkit-scrollbar-thumb:hover,
+  :root *::-webkit-scrollbar-thumb:hover {
+    box-shadow: inset 0 0 0 1px var(--scrollbar-thumb-hover), var(--scrollbar-shadow);
+  }
+
+  :root::-webkit-scrollbar-thumb:active,
+  :root *::-webkit-scrollbar-thumb:active {
+    box-shadow: inset 0 0 0 1px var(--scrollbar-thumb-active), var(--scrollbar-shadow);
+  }
+
+  :root::-webkit-scrollbar-button,
+  :root *::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  :root::-webkit-scrollbar-corner,
+  :root *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Keep the gutter's geometry while hiding its paint, so content never jumps. */
+  :root[data-scrollbars-ready]:not([data-scroll-active])::-webkit-scrollbar-track,
+  :root[data-scrollbars-ready] :not([data-scroll-active])::-webkit-scrollbar-track,
+  :root[data-scrollbars-ready]:not([data-scroll-active])::-webkit-scrollbar-thumb,
+  :root[data-scrollbars-ready] :not([data-scroll-active])::-webkit-scrollbar-thumb {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root,
+  :root *,
+  :root[data-scrollbars-ready]:not([data-scroll-active]),
+  :root[data-scrollbars-ready] :not([data-scroll-active]) {
+    scrollbar-width: auto !important;
+    scrollbar-color: auto !important;
+  }
+  :root::-webkit-scrollbar-track,
+  :root *::-webkit-scrollbar-track { background: Canvas !important; border-color: CanvasText !important; }
+  :root::-webkit-scrollbar-thumb,
+  :root *::-webkit-scrollbar-thumb { background: ButtonText !important; border-color: Canvas !important; box-shadow: none !important; }
+}

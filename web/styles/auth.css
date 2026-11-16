@@ -84,7 +84,6 @@
   line-height: 1.2;
   white-space: nowrap;
 }
-.auth-wordmark-part { display: inline-block; overflow: hidden; }
 .auth-wordmark:focus-visible, .auth-skip-link:focus-visible { outline: 3px solid var(--ring); outline-offset: 4px; }
 @media (max-width: 520px) {
   .auth-shell { --auth-card-shadow: none; }

@@ -3,11 +3,13 @@
   display: flex;
   min-height: 100svh;
   min-width: 0;
+  container-type: inline-size;
   flex-direction: column;
   background: var(--novel-chrome);
   color: var(--foreground);
 }
 
+.novel-workspace:has(.novel-detail-page) { --novel-chrome: rgb(243, 243, 243); }
 .dark .novel-workspace { --novel-chrome: #191a1c; }
 
 .novel-surface {
@@ -19,6 +21,22 @@
 }
 
 .novel-surface .page-shell { margin-inline: auto; }
+
+/* Let the detail cover continue behind the sticky navigation without moving
+   the book content. Use the shared header dimensions to keep both aligned. */
+.novel-workspace:has(.novel-cover-ambience) {
+  --novel-header-height: calc(var(--site-header-row-height) + 2 * var(--site-header-padding));
+}
+.novel-workspace:has(.novel-cover-ambience) > .novel-surface {
+  margin-top: calc(-1 * var(--novel-header-height));
+  padding-top: var(--novel-header-height);
+}
+.novel-workspace:has(.novel-cover-ambience) > .center-header:not([data-collapsed="true"])::before {
+  background: transparent;
+  backdrop-filter: none;
+  border-color: transparent;
+  box-shadow: none;
+}
 
 ::view-transition-group(novel-content) {
   animation-duration: 280ms;

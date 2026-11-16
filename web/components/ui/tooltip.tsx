@@ -41,7 +41,7 @@ function TooltipContent({
   return (
     <TooltipPrimitive.Portal
       className="pointer-events-none fixed inset-0 z-50"
-      style={{ zoom: "calc(1 / var(--site-scale, 1))" }}
+      style={{ zoom: "calc(1 / var(--site-root-scale, var(--site-scale, 1)))" }}
     >
       <TooltipPrimitive.Positioner
         align={align}

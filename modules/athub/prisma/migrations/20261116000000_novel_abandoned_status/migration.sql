@@ -1,0 +1,1 @@
+ALTER TYPE "NovelStatus" ADD VALUE 'ABANDONED';

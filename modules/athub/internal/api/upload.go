@@ -47,6 +47,15 @@ func validateUpload(input *storage.UploadInput) error {
 	if input.NovelID != nil && *input.NovelID <= 0 {
 		return badRequest("novelId must be a positive 32-bit integer")
 	}
+	if err := normalizeAuthorName(&input.AuthorName); err != nil {
+		return err
+	}
+	if input.AuthorName != nil && (input.Novel == nil || input.Novel.AuthorID != nil) {
+		return badRequest("authorName requires a new novel without authorId")
+	}
+	if input.AuthorName != nil && input.Novel.AuthorName != nil {
+		return badRequest("provide authorName at the upload or novel level, not both")
+	}
 	if input.Novel != nil {
 		if err := validateNovel(input.Novel); err != nil {
 			return badRequest("novel: " + err.Error())

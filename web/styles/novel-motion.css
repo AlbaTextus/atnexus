@@ -1,0 +1,71 @@
+.novel-workspace {
+  --novel-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.novel-motion-size { display: block; min-width: 0; overflow-anchor: none; }
+.novel-motion-size-content { display: flow-root; min-width: 0; }
+.novel-inline-field { display: inline-block; vertical-align: top; }
+.novel-inline-display { display: block; }
+.novel-inline-toolbar-motion { position: sticky; top: calc(var(--site-header-row-height, 48px) + 2 * var(--site-header-padding, 12px) + 12px); z-index: 10; }
+.novel-inline-toolbar-motion .novel-inline-toolbar { position: static; }
+.novel-chapter-tree.has-volumes > .novel-chapter-content > .novel-motion-size .novel-chapter-branches { margin-left: 0; padding-left: 0; border-left: 0; }
+.novel-chapter-tree.has-volumes > .novel-chapter-content > .novel-motion-size .novel-chapter-branches > li::before { content: none; }
+.novel-chapter-content[data-open=false] { border-left-color: transparent !important; pointer-events: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.novel-workspace) { scroll-behavior: smooth; }
+  .novel-workspace :is(.novel-chapter-content, .novel-chapter-volumes, .novel-upload-chapter-list) { scroll-behavior: smooth; }
+  .novel-motion-enter { animation: novel-interaction-in 280ms var(--novel-motion-ease, cubic-bezier(0.22, 1, 0.36, 1)) both; }
+  .novel-inline-toolbar { animation: novel-interaction-in 280ms var(--novel-motion-ease) both; }
+  .novel-inline-field { transition: background-color 180ms ease, outline-color 180ms ease; }
+  .novel-workspace :is([data-slot=button], [role=tab], .novel-chapter-volume, .novel-upload-chapter-list button, .contributors-more) {
+    transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 220ms ease, translate 220ms var(--novel-motion-ease), scale 180ms var(--novel-motion-ease);
+  }
+  .novel-workspace :is([data-slot=button], [role=tab], .contributors-more):not(:disabled):not([aria-disabled=true]):hover { translate: 0 -1px; }
+  .novel-workspace :is([data-slot=button], [role=tab], .contributors-more):not(:disabled):not([aria-disabled=true]):active { translate: 0 0; scale: .97; }
+  .novel-workspace .library-cover-link { transition: translate 300ms var(--novel-motion-ease), box-shadow 300ms ease; }
+  .novel-workspace .library-cover-link:hover { translate: 0 -4px; }
+  .novel-demo .novel-book-header .cover-button { transition: transform 350ms var(--novel-motion-ease), box-shadow 350ms ease; }
+  .novel-demo .novel-book-header .cover-button:hover { transform: translateY(-3px); }
+  .novel-chapter-volume, .novel-chapter-leaf { border-radius: 6px; transition: color 180ms ease, background-color 180ms ease; }
+  .novel-chapter-volume:hover, .novel-chapter-leaf:hover { background: color-mix(in srgb, #5289c7 6%, transparent); }
+  .novel-chapter-tree .novel-tree-chevron { transition: transform 280ms var(--novel-motion-ease); }
+  .novel-chapter-volume[aria-expanded=true] > .novel-tree-chevron { transform: rotate(90deg); }
+  .novel-chapter-content { transition: border-color 240ms ease; }
+  .novel-upload-volume > summary > svg:first-child { transition: transform 280ms var(--novel-motion-ease); }
+  .novel-upload-catalog-body { grid-template-columns: minmax(0, 100%) minmax(0, 0%); transition: grid-template-columns 320ms var(--novel-motion-ease); }
+  .novel-upload-catalog-body.has-selection { grid-template-columns: minmax(0, 240px) minmax(0, calc(100% - 240px)); }
+  .illustration-resource { transition: border-color 180ms ease, box-shadow 240ms ease, background-color 180ms ease; }
+  .illustration-resource:hover { border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); box-shadow: 0 5px 16px rgb(25 40 65 / 6%); }
+  .illustration-resource-preview, .illustration-block-remove, .illustration-resize-handle::after, .illustration-block::after { transition: opacity 180ms ease, border-color 180ms ease; }
+  .illustration-block { animation: novel-block-in 220ms var(--novel-motion-ease) both; }
+  /* Moving and resizing must always stay directly attached to the pointer. */
+  .illustration-canvas[data-dragging] .illustration-block { animation: none; }
+  .novel-inline-select-popup {
+    transform-origin: var(--transform-origin);
+    transition: opacity 160ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .novel-inline-select-popup[data-starting-style],
+  .novel-inline-select-popup[data-ending-style] { opacity: 0; transform: translateY(-4px) scale(.98); }
+  .novel-inline-select-item { transition: color 140ms ease, background-color 140ms ease; }
+  .novel-inline-select-indicator { animation: novel-interaction-in 180ms ease both; }
+  @supports (interpolate-size: allow-keywords) {
+    .novel-workspace details { interpolate-size: allow-keywords; }
+    .novel-workspace details::details-content {
+      height: 0;
+      overflow: clip;
+      opacity: 0;
+      transition: height 320ms var(--novel-motion-ease), opacity 220ms ease, content-visibility 320ms allow-discrete;
+    }
+    .novel-workspace details[open]::details-content { height: auto; opacity: 1; }
+  }
+}
+
+@keyframes novel-interaction-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes novel-block-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

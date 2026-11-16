@@ -22,7 +22,7 @@ export function AuthorSection({ novelId, authorId }: { novelId: string; authorId
     void readAllContent<Novel>(request, `/api/v2/novelinfo?authorId=${authorId}`, controller.signal)
       .then(items => {
         if (!controller.signal.aborted) {
-          setBooks(items.filter(book => book.authorId === authorId && String(book.id) !== novelId))
+          setBooks(items.filter(book => String(book.id) !== novelId))
         }
       })
       .catch(reason => {

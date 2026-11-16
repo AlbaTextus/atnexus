@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useRef } from "react"
+import { useRef } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,12 +9,16 @@ import type { ContentAuthor, ContentTag } from "@/lib/athub-client"
 export function NovelAuthorField({ value, authors, disabled, onChange }: {
   value: string; authors: ContentAuthor[]; disabled: boolean; onChange: (value: string) => void;
 }) {
-  const suggestions = useId()
+  const query = value.trim().toLocaleLowerCase()
   const names = [...new Set(authors.map(author => author.name?.trim()).filter((name): name is string => Boolean(name)))]
+  const matches = query ? names.filter(name => name.toLocaleLowerCase().includes(query)) : []
   return <span className="novel-inline-author">
     <Input aria-label="作者" placeholder="填写作者名字" value={value} disabled={disabled}
-      list={suggestions} autoComplete="off" onChange={event => onChange(event.target.value)} />
-    <datalist id={suggestions}>{names.map(name => <option key={name} value={name} />)}</datalist>
+      autoComplete="off" onChange={event => onChange(event.target.value)} />
+    {matches.length > 0 && <span className="novel-inline-author-matches" role="group" aria-label="匹配的已有作者">
+      {matches.map(name => <Button key={name} type="button" size="sm" variant="outline" disabled={disabled}
+        onClick={() => onChange(name)}>{name}</Button>)}
+    </span>}
   </span>
 }
 

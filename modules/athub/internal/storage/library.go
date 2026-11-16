@@ -21,7 +21,7 @@ type NovelPage struct {
 func (p *Postgres) ListNovelPage(ctx context.Context, f NovelPageFilter) (NovelPage, error) {
 	result := NovelPage{Items: make([]Novel, 0)}
 	const filter = ` FROM "Novel" n LEFT JOIN "Author" a ON a.id=n."authorId"
-		WHERE ($1::integer=0 OR n."platformId"=$1) AND ($2::integer=0 OR n."authorId"=$2)
+		WHERE ($1::integer=0 OR n."platformId"=$1) AND ` + novelAuthorFilter + `
 		AND ($3::integer=0 OR EXISTS(SELECT 1 FROM "NovelTag" WHERE "novelId"=n.id AND "tagId"=$3))
 		AND ($4::text='' OR strpos(lower(normalize(n.title,NFKC)),lower(normalize($4,NFKC)))>0
 			OR strpos(lower(normalize(COALESCE(a.name,''),NFKC)),lower(normalize($4,NFKC)))>0)`

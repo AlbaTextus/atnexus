@@ -66,6 +66,8 @@
 .novel-inline-select-indicator { display: flex; flex-shrink: 0; color: var(--primary); }
 .novel-inline-tags { display: flex; flex-wrap: wrap; gap: 8px; max-height: 240px; overflow-y: auto; }
 .novel-inline-author { display: block; min-width: 200px; }
+.novel-inline-author-matches { display: flex; flex-wrap: wrap; gap: 8px; max-height: 160px; margin-top: 8px; overflow-y: auto; }
+.novel-inline-author-matches button { max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; text-align: left; }
 .novel-inline-tag-editor { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .novel-inline-tag-values { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .novel-inline-tag-entry { display: inline-flex; align-items: center; max-width: 100%; padding: 0 3px 0 2px; border: 1px solid var(--border); border-radius: 10px; background: var(--background); }

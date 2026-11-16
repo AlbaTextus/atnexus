@@ -8,6 +8,15 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// Author records belong to source platforms, but author browsing spans all
+// records with the same nonblank name. Unnamed authors only match their own ID.
+// Both novel-list queries bind the requested author ID as their second argument.
+const novelAuthorFilter = `($2::integer = 0 OR "authorId" IN (
+	SELECT matching.id FROM "Author" selected JOIN "Author" matching
+	ON matching.id = selected.id OR (NULLIF(btrim(selected.name), '') IS NOT NULL
+		AND btrim(matching.name) = btrim(selected.name))
+	WHERE selected.id = $2))`
+
 // Resolve names inside the novel transaction. Shared catalog rows are never
 // renamed: only this novel's author and tag references are replaced.
 func resolveNovelReferences(ctx context.Context, tx pgx.Tx, n *NovelInput) error {

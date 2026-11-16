@@ -353,7 +353,7 @@ function FieldControl({ field, editor }: { field: NovelEditField; editor: Editor
       onValueChange={value => change(field, Number(value))} />
     case "authorId": return <NovelAuthorField disabled={busy}
       value={draft.authorName ?? catalog.authors.find(item => item.id === draft.authorId)?.name ?? ""}
-      authors={catalog.authors.filter(item => item.platformId === draft.platformId)}
+      authors={catalog.authors}
       onChange={value => change("authorName", value)} />
     case "status": return <NovelInlineSelect label={labels[field]} disabled={busy} value={draft.status}
       items={[{ value: "ONGOING", label: "连载中" }, { value: "COMPLETED", label: "已完结" }, { value: "ABANDONED", label: "太监" }]}

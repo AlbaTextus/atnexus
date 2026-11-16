@@ -60,7 +60,7 @@ func (p *Postgres) GetNovel(ctx context.Context, id int32) (Novel, error) {
 
 func (p *Postgres) ListNovels(ctx context.Context, f NovelFilter) ([]Novel, error) {
 	rows, err := p.db(ctx).Query(ctx, `SELECT `+novelReadColumns+` FROM "Novel"
-		WHERE ($1::integer = 0 OR "platformId" = $1) AND ($2::integer = 0 OR "authorId" = $2)
+		WHERE ($1::integer = 0 OR "platformId" = $1) AND `+novelAuthorFilter+`
 		AND ($5::integer = 0 OR EXISTS (SELECT 1 FROM "NovelTag" WHERE "novelId" = "Novel"."id" AND "tagId" = $5))
 		ORDER BY "id" DESC LIMIT $3 OFFSET $4`, f.PlatformID, f.AuthorID, f.Limit, f.Offset, f.TagID)
 	if err != nil {

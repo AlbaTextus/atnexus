@@ -25,3 +25,11 @@ func NewMutationReceipt(ctx context.Context) (context.Context, *MutationReceipt)
 	receipt := &MutationReceipt{ID: id}
 	return context.WithValue(ctx, receiptKey{}, receipt), receipt
 }
+
+// DeleteMutationReceipt forgets a replay record. The host calls it only after it
+// has durably recorded the outcome, when the same ID can never be applied again.
+// Deleting an absent receipt is not an error.
+func (p *Postgres) DeleteMutationReceipt(ctx context.Context, id string) error {
+	_, err := p.pool.Exec(ctx, `DELETE FROM "MutationReceipt" WHERE id=$1::uuid`, id)
+	return err
+}

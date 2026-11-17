@@ -40,6 +40,13 @@ type Base struct {
 	Config config.Config
 	Store  store.Store
 	Log    *slog.Logger
+	Images ImageSaver
+}
+
+// ImageSaver is the image module in this process. It stores bytes under an
+// upload category and entity, and returns the public file URL.
+type ImageSaver interface {
+	Save(ctx context.Context, category, entityID, fileName, contentType string, data []byte) (string, error)
 }
 
 func (a *Base) CurrentUser(r *http.Request) (store.User, bool) {

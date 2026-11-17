@@ -56,16 +56,12 @@ func (a *API) uploadNovelIllustration(w http.ResponseWriter, r *http.Request) {
 	st, ok := a.Store.(interface {
 		CheckATHubIllustrationUpload(context.Context, uuid.UUID) error
 	})
-	if !ok || a.athubIllustrationSubmitter == nil {
+	if !ok || a.athubIllustrationSubmitter == nil || a.Images == nil {
 		writeJSON(w, 503, map[string]string{"error": "illustrations_unavailable", "error_description": "插图上传暂时不可用，请稍后重试。"})
 		return
 	}
 	if err := st.CheckATHubIllustrationUpload(r.Context(), user.ID); err != nil {
 		a.PolicyError(w, err)
-		return
-	}
-	if a.Config.ImgbedURL == "" || a.Config.ImgbedAPIToken == "" {
-		writeJSON(w, 503, map[string]string{"error": "illustrations_unavailable", "error_description": "插图图床尚未配置，请联系管理员。"})
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxNovelCoverBytes+(64<<10))

@@ -184,7 +184,7 @@ func (m *Module) chunk(w http.ResponseWriter, r *http.Request, f *parsedForm) {
 		q.Set("uploadFolder", session.Folder)
 		q.Set("uploadNameType", session.NameType)
 		q.Set("autoRetry", "false")
-		result, err := m.saveUpload(context.WithValue(r.Context(), uploadReceiptKey{}, id), &parsedForm{Name: session.Name, Type: session.Type, File: merged, Size: size}, q, "")
+		result, err := m.saveUpload(context.WithValue(r.Context(), uploadReceiptKey{}, id), session.Name, session.Type, merged, size, q, "")
 		if err != nil {
 			m.failure(w, err)
 			return

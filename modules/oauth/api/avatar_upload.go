@@ -60,7 +60,7 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if a.Config.ImgbedURL == "" || a.Config.ImgbedAPIToken == "" {
+	if a.Images == nil {
 		writeJSON(w, 503, map[string]string{"error": "avatar_upload_unavailable", "error_description": "头像上传暂未启用，请稍后再试。"})
 		return
 	}
@@ -113,7 +113,7 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 	if bytes.HasPrefix(data, []byte("GIF")) {
 		filename, contentType = "avatar.gif", "image/gif"
 	}
-	avatarURL, err := a.uploadToImgbed(r.Context(), "avatars", user.ID, filename, contentType, data)
+	location, err := a.Images.Save(r.Context(), "user/avatars", user.ID.String(), filename, contentType, data)
 	if err != nil {
 		a.avatarUploadError(w)
 		return
@@ -123,7 +123,7 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 		a.avatarUploadError(w)
 		return
 	}
-	updated, err := st.UpdateCustomAvatar(r.Context(), user.ID, avatarURL, originalURL)
+	updated, err := st.UpdateCustomAvatar(r.Context(), user.ID, location, originalURL)
 	if err != nil {
 		a.ApplicationError(w, err)
 		return

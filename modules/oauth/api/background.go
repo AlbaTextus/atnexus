@@ -68,7 +68,7 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if a.Config.ImgbedURL == "" || a.Config.ImgbedAPIToken == "" {
+	if a.Images == nil {
 		writeJSON(w, 503, map[string]string{"error": "background_upload_unavailable", "error_description": "背投上传暂未启用，请稍后再试。"})
 		return
 	}
@@ -113,7 +113,7 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "invalid_background", "error_description": "请使用不超过 5 MB、1600 万像素的有效 PNG、JPEG 或 WebP 图片。"})
 		return
 	}
-	backgroundURL, err := a.uploadToImgbed(r.Context(), "backgrounds", user.ID, "background.png", "image/png", data)
+	location, err := a.Images.Save(r.Context(), "user/backgrounds", user.ID.String(), "background.png", "image/png", data)
 	if err != nil {
 		backgroundUploadError(w)
 		return
@@ -123,7 +123,7 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 		backgroundUploadError(w)
 		return
 	}
-	updated, err := st.UpdateBackground(r.Context(), user.ID, backgroundURL, originalURL)
+	updated, err := st.UpdateBackground(r.Context(), user.ID, location, originalURL)
 	if err != nil {
 		a.ApplicationError(w, err)
 		return

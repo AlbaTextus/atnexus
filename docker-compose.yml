@@ -61,8 +61,6 @@ services:
       IMAGE_LOCAL_ROOT: /data/images
       IMAGE_TEMP_ROOT: /var/lib/atnexus/image-temp
       IMAGE_PUBLIC_URL: ${IMAGE_PUBLIC_URL:?Set IMAGE_PUBLIC_URL to the public image origin}
-      IMGBED_URL: ${IMGBED_COMPOSE_URL:-http://127.0.0.1:8002}
-      IMGBED_API_TOKEN: ${IMGBED_API_TOKEN:-}
       DATABASE_URL: postgresql://oauth:oauth@postgres:5432/oauth?sslmode=disable
       ATHUB_DATABASE_URL: postgresql://athub:athub@athub-postgres:5432/athub?sslmode=disable
       CREATPLAT_DATABASE_URL: ${CREATPLAT_COMPOSE_DATABASE_URL:?Set CREATPLAT_COMPOSE_DATABASE_URL using the creatplat-postgres host}

@@ -52,8 +52,6 @@ type Config struct {
 	ClientSecretEncryptionKey      string
 	LoginProviders                 []LoginProvider
 	Turnstile                      Turnstile
-	ImgbedURL                      string
-	ImgbedAPIToken                 string
 	SMTP                           SMTP
 }
 
@@ -98,8 +96,6 @@ func Load() (Config, error) {
 		PasskeyChallengeTTL:            env.duration("PASSKEY_CHALLENGE_TTL", 5*time.Minute),
 		ClientSecretEncryptionKey:      strings.TrimSpace(os.Getenv("CLIENT_SECRET_ENCRYPTION_KEY")),
 		LoginProviders:                 loadLoginProviders(),
-		ImgbedURL:                      strings.TrimRight(strings.TrimSpace(os.Getenv("IMGBED_URL")), "/"),
-		ImgbedAPIToken:                 strings.TrimSpace(os.Getenv("IMGBED_API_TOKEN")),
 	}
 	var err error
 	if err = errors.Join(env.errs...); err != nil {
@@ -110,9 +106,6 @@ func Load() (Config, error) {
 	}
 	c.SMTP, err = loadSMTP()
 	if err != nil {
-		return Config{}, err
-	}
-	if err := validateImgbed(c); err != nil {
 		return Config{}, err
 	}
 	c.Turnstile, err = loadTurnstile(c.AuthUIURL)

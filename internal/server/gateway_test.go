@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,20 +9,8 @@ import (
 	"time"
 )
 
-func gatewayModule(name string, health int) http.Handler {
+func gatewayModule(name string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/healthz" {
-			if r.Header.Get("Origin") != "" || r.Header.Get("Authorization") != "" {
-				w.WriteHeader(http.StatusForbidden)
-				return
-			}
-			if health == 433 {
-				w.Header().Set("Retry-After", "15")
-			}
-			w.WriteHeader(health)
-			_, _ = w.Write([]byte(`{}`))
-			return
-		}
 		w.Header().Set("Module", name)
 		w.Header().Set("Path", r.URL.RequestURI())
 		w.Header().Set("Auth", r.Header.Get("Authorization"))
@@ -31,17 +18,13 @@ func gatewayModule(name string, health int) http.Handler {
 	})
 }
 
-func testGateway(oauthHealth, athubHealth int) http.Handler {
-	return NewGateway(
-		GatewayRoute{Name: "oauth", Prefixes: []string{"/api/v1", "/oauth", "/.well-known"}, Handler: gatewayModule("oauth", oauthHealth)},
-		GatewayRoute{Name: "image", Prefixes: []string{"/api/v2", "/file"}, Handler: gatewayModule("image", 200)},
-		GatewayRoute{Name: "creatplat", Prefixes: []string{"/api/v4"}, Handler: gatewayModule("creatplat", 200)},
-		GatewayRoute{Name: "athub", Prefixes: []string{"/api/v5"}, Handler: gatewayModule("athub", athubHealth)},
-	)
-}
-
 func TestGatewayDispatchesByPrefix(t *testing.T) {
-	handler := testGateway(200, 200)
+	handler := NewGateway(
+		GatewayRoute{Prefixes: []string{"/api/v1", "/oauth", "/.well-known"}, Handler: gatewayModule("oauth")},
+		GatewayRoute{Prefixes: []string{"/api/v2", "/file"}, Handler: gatewayModule("image")},
+		GatewayRoute{Prefixes: []string{"/api/v4"}, Handler: gatewayModule("creatplat")},
+		GatewayRoute{Prefixes: []string{"/api/v5"}, Handler: gatewayModule("athub")},
+	)
 	for _, tc := range []struct {
 		path   string
 		module string
@@ -51,6 +34,9 @@ func TestGatewayDispatchesByPrefix(t *testing.T) {
 		{"/api/v2/manage/list?dir=book%2Fcovers", "image"}, {"/file/book/covers/a.webp", "image"},
 		{"/api/v4/history?novelId=2", "creatplat"},
 		{"/api/v5/content?novelId=7&order=1", "athub"}, {"/api/v5/", "athub"},
+		{"/api/v1/healthz", "oauth"}, {"/api/v2/healthz", "image"},
+		{"/api/v4/healthz", "creatplat"}, {"/api/v5/healthz", "athub"},
+		{"/healthz", ""}, {"/api/healthz", ""}, {"/api/v3/healthz", ""},
 		{"/api/v3/history", ""}, {"/api/v10/user", ""}, {"/api/v50", ""},
 		{"/api", ""}, {"/", ""}, {"/files/a.webp", ""}, {"/oauthx", ""},
 	} {
@@ -75,68 +61,6 @@ func TestGatewayDispatchesByPrefix(t *testing.T) {
 	}
 }
 
-func TestGatewayHealthReportsEveryModule(t *testing.T) {
-	for _, tc := range []struct {
-		name         string
-		oauth, athub int
-		code         int
-		status       string
-		oauthState   string
-		athubState   string
-		retryAfter   string
-	}{
-		{"healthy", 200, 200, 200, "ok", "ok", "ok", ""},
-		{"one module down", 200, 503, 503, "unhealthy", "ok", "unhealthy", ""},
-		{"maintenance", 433, 200, 433, "maintenance", "maintenance", "ok", "15"},
-		{"outage outranks maintenance", 433, 500, 503, "unhealthy", "maintenance", "unhealthy", ""},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			r := httptest.NewRequest("GET", "/healthz", nil)
-			// Caller headers must not reach the module probes.
-			r.Header.Set("Origin", "https://attacker.example")
-			r.Header.Set("Authorization", "Bearer test")
-			w := httptest.NewRecorder()
-			testGateway(tc.oauth, tc.athub).ServeHTTP(w, r)
-			var body struct {
-				Status  string            `json:"status"`
-				Modules map[string]string `json:"modules"`
-			}
-			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-				t.Fatal(err)
-			}
-			if w.Code != tc.code || body.Status != tc.status || len(body.Modules) != 4 {
-				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
-			}
-			if body.Modules["oauth"] != tc.oauthState || body.Modules["athub"] != tc.athubState || body.Modules["image"] != "ok" {
-				t.Fatalf("modules=%v", body.Modules)
-			}
-			if w.Header().Get("Retry-After") != tc.retryAfter || w.Header().Get("Cache-Control") != "no-store" {
-				t.Fatalf("retry=%q cache=%q", w.Header().Get("Retry-After"), w.Header().Get("Cache-Control"))
-			}
-		})
-	}
-	w := httptest.NewRecorder()
-	testGateway(200, 200).ServeHTTP(w, httptest.NewRequest("POST", "/healthz", nil))
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("POST /healthz status=%d", w.Code)
-	}
-}
-
-// Probes share one deadline, so a stalled module cannot hold the check open.
-func TestGatewayHealthProbesCarryDeadline(t *testing.T) {
-	stalled := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, bounded := r.Context().Deadline(); !bounded {
-			t.Error("health probe has no deadline")
-		}
-		w.WriteHeader(http.StatusServiceUnavailable)
-	})
-	w := httptest.NewRecorder()
-	NewGateway(GatewayRoute{Name: "image", Handler: stalled}).ServeHTTP(w, httptest.NewRequest("GET", "/healthz", nil))
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status=%d", w.Code)
-	}
-}
-
 // Each module keeps its own listener deadline behind the shared port.
 func TestGatewayAppliesModuleDeadline(t *testing.T) {
 	slow := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -144,8 +68,8 @@ func TestGatewayAppliesModuleDeadline(t *testing.T) {
 		_, _ = w.Write([]byte("done"))
 	})
 	gateway := httptest.NewServer(NewGateway(
-		GatewayRoute{Name: "short", Prefixes: []string{"/api/v1"}, Handler: slow, Timeout: 50 * time.Millisecond},
-		GatewayRoute{Name: "long", Prefixes: []string{"/api/v2"}, Handler: slow, Timeout: time.Minute},
+		GatewayRoute{Prefixes: []string{"/api/v1"}, Handler: slow, Timeout: 50 * time.Millisecond},
+		GatewayRoute{Prefixes: []string{"/api/v2"}, Handler: slow, Timeout: time.Minute},
 	))
 	defer gateway.Close()
 	response, err := http.Get(gateway.URL + "/api/v2/upload")

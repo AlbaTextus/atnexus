@@ -35,7 +35,7 @@ func maintenanceReply(w http.ResponseWriter, unavailable bool) {
 func maintenancePublicRoute(r *http.Request) bool {
 	if r.Method == http.MethodGet {
 		switch r.URL.Path {
-		case "/healthz", "/api/v1/maintenance", "/api/v1/auth/verification", "/api/v1/auth/providers":
+		case "/api/v1/healthz", "/api/v1/maintenance", "/api/v1/auth/verification", "/api/v1/auth/providers":
 			return true
 		}
 	}

@@ -111,7 +111,7 @@ func (m *Module) Ping(ctx context.Context) error {
 }
 func (m *Module) Router() http.Handler {
 	r := chi.NewRouter()
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/api/v2/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if m.Ping(r.Context()) != nil {
 			respondError(w, 503, "image_storage_unavailable")
 			return

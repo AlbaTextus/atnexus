@@ -58,7 +58,7 @@ func healthcheck() error {
 		host = "127.0.0.1"
 	}
 	client := &http.Client{Timeout: 3 * time.Second}
-	response, err := client.Get("http://" + net.JoinHostPort(host, port) + "/healthz")
+	response, err := client.Get("http://" + net.JoinHostPort(host, port) + "/api/v1/healthz")
 	if err != nil {
 		return err
 	}
@@ -168,10 +168,10 @@ func run(logger *slog.Logger) error {
 	// One port for reverse proxies: each module keeps its own handler chain and
 	// deadline, so a request behaves the same here as on the module's port.
 	gateway := server.NewGateway(
-		server.GatewayRoute{Name: "oauth", Prefixes: []string{"/api/v1", "/oauth", "/.well-known"}, Handler: oauthServer.Handler, Timeout: oauthServer.ReadTimeout},
-		server.GatewayRoute{Name: "image", Prefixes: []string{"/api/v2", "/file"}, Handler: imageServer.Handler, Timeout: imageServer.ReadTimeout},
-		server.GatewayRoute{Name: "creatplat", Prefixes: []string{"/api/v4"}, Handler: creatorServer.Handler, Timeout: creatorServer.ReadTimeout},
-		server.GatewayRoute{Name: "athub", Prefixes: []string{"/api/v5"}, Handler: athubServer.Handler, Timeout: athubServer.ReadTimeout},
+		server.GatewayRoute{Prefixes: []string{"/api/v1", "/oauth", "/.well-known"}, Handler: oauthServer.Handler, Timeout: oauthServer.ReadTimeout},
+		server.GatewayRoute{Prefixes: []string{"/api/v2", "/file"}, Handler: imageServer.Handler, Timeout: imageServer.ReadTimeout},
+		server.GatewayRoute{Prefixes: []string{"/api/v4"}, Handler: creatorServer.Handler, Timeout: creatorServer.ReadTimeout},
+		server.GatewayRoute{Prefixes: []string{"/api/v5"}, Handler: athubServer.Handler, Timeout: athubServer.ReadTimeout},
 	)
 	gatewayTimeout := max(requestTimeout, cfg.ImageHTTPTimeout)
 	gatewayServer := &http.Server{Addr: cfg.GatewayHTTPAddr, Handler: gateway, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: gatewayTimeout, WriteTimeout: gatewayTimeout, IdleTimeout: 60 * time.Second}

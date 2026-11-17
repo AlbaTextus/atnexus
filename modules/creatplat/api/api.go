@@ -36,7 +36,7 @@ func New(cfg config.Config, st store.Store, logger *slog.Logger) *API {
 
 func (a *API) Router() http.Handler {
 	r := chi.NewRouter()
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/api/v4/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if a.creatorPing == nil {
 			writeJSON(w, 503, map[string]string{"status": "creator_database_unavailable"})
 			return

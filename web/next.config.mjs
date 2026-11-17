@@ -27,7 +27,6 @@ const nextConfig = {
   },
   async rewrites() {
     return [
-      { source: "/healthz", destination: `${backend}/healthz` },
       { source: "/api/v1/:path*", destination: `${backend}/api/v1/:path*` },
       { source: "/api/v4/:path*", destination: `${creatorBackend}/api/v4/:path*` },
       { source: "/oauth/:path*", destination: `${backend}/oauth/:path*` },

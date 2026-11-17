@@ -3,19 +3,13 @@ package httpapi
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
 	stddraw "image/draw"
 	"image/jpeg"
 	"io"
-	"mime/multipart"
 	"net/http"
-	"net/textproto"
-	"net/url"
-	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/image/draw"
@@ -77,16 +71,12 @@ func (a *API) uploadNovelCover(w http.ResponseWriter, r *http.Request) {
 	st, ok := a.Store.(interface {
 		CheckATHubCoverUpload(context.Context, uuid.UUID) error
 	})
-	if !ok {
+	if !ok || a.Images == nil {
 		writeJSON(w, 503, map[string]string{"error": "cover_upload_unavailable", "error_description": "封面上传暂时不可用，请稍后重试。"})
 		return
 	}
 	if err := st.CheckATHubCoverUpload(r.Context(), user.ID); err != nil {
 		a.PolicyError(w, err)
-		return
-	}
-	if a.Config.ImgbedURL == "" || a.Config.ImgbedAPIToken == "" {
-		writeJSON(w, 503, map[string]string{"error": "cover_upload_unavailable", "error_description": "封面图床尚未配置，请联系管理员。书籍预览已保留。"})
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxNovelCoverBytes+(64<<10))
@@ -129,46 +119,7 @@ func (a *API) uploadNovelCover(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) uploadNovelImage(ctx context.Context, data []byte, category, entityID string) (string, error) {
-	var body bytes.Buffer
-	form := multipart.NewWriter(&body)
-	part, err := form.CreatePart(textproto.MIMEHeader{
-		"Content-Disposition": {`form-data; name="file"; filename="cover.jpg"`},
-		"Content-Type":        {"image/jpeg"},
-	})
-	if err != nil {
-		return "", err
-	}
-	_, _ = part.Write(data)
-	_ = form.Close()
-	target := a.Config.ImgbedURL + "/api/v2/categories/book/" + category + "/upload?returnFormat=full&entityId=" + url.QueryEscape(entityID)
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, target, &body)
-	if err != nil {
-		return "", err
-	}
-	request.Header.Set("Authorization", "Bearer "+a.Config.ImgbedAPIToken)
-	request.Header.Set("Content-Type", form.FormDataContentType())
-	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := client.Do(request)
-	if err != nil {
-		return "", err
-	}
-	defer response.Body.Close()
-	var uploaded []struct {
-		Src string `json:"src"`
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 || json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&uploaded) != nil || len(uploaded) != 1 {
-		return "", fmt.Errorf("image host upload failed")
-	}
-	base, _ := url.Parse(a.Config.ImgbedURL)
-	ref, err := url.Parse(uploaded[0].Src)
-	if err != nil || uploaded[0].Src == "" {
-		return "", fmt.Errorf("invalid image host response")
-	}
-	resolved := base.ResolveReference(ref)
-	if resolved.Scheme != base.Scheme || resolved.Host != base.Host || resolved.User != nil || resolved.Fragment != "" || !strings.HasPrefix(resolved.Path, "/file/") || len(resolved.String()) > 2048 {
-		return "", fmt.Errorf("invalid image host URL")
-	}
-	return resolved.String(), nil
+	return a.Images.Save(ctx, "book/"+category, entityID, "cover.jpg", "image/jpeg", data)
 }
 
 func (a *API) novelCoverUploadError(w http.ResponseWriter) {

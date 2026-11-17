@@ -46,7 +46,7 @@
 | `IMAGE_UPLOAD_TTL` | 分块会话有效期，默认 24h |
 | `IMAGE_HTTP_TIMEOUT` | 大文件读写期限，默认 10m |
 
-OAuth 头像和创作者封面/插图的 Go 调用已改为 `/api/v2/categories/...`。`IMGBED_URL` 指向图床根地址，`IMGBED_API_TOKEN` 使用迁入 OAuth 的上传 Key。站点及原图床前端未在本轮修改。
+OAuth 头像、背投和创作者封面/插图在同一进程内调用 `Module.Save`，不经 HTTP 和上传 Key；调用方已校验登录会话与权限，保存结果与 `/api/v2/categories/...` 相同，返回以 `IMAGE_PUBLIC_URL` 为根的地址。`IMGBED_URL`、`IMGBED_API_TOKEN` 已取消。这条路径不记录上传 IP，也不应用 IP 黑名单。原图床前端未修改。
 
 ## 迁移与升级
 

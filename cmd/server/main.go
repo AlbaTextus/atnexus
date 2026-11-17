@@ -93,6 +93,7 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("http api initialization failed: %w", err)
 	}
 	api.SetImageKeys(imageKeys)
+	api.Images = images
 	hub, err := athub.New(context.Background(), hubConfig, logger)
 	if err != nil {
 		return fmt.Errorf("ATHub initialization failed: %w", err)
@@ -107,6 +108,7 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("creator migration check failed: %w", err)
 	}
 	creators := creatorapi.New(cfg, st, logger)
+	creators.Images = images
 	creators.SetStorage(creatorDB)
 	creators.SetATHubReviewExecutor(access.ApplyReview)
 	creators.SetATHubReceiptForgetter(hub.ForgetMutation)

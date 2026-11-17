@@ -379,9 +379,9 @@ pnpm web:dev
 
 选图后会弹出裁剪窗口，可拖动图片、缩放并查看圆形头像范围，支持触屏和方向键调整。确认裁剪后可重新裁剪；取消会保留已有预览，点击「保存头像」才会上传到图床。
 
-在「个人资料 → 我的头像」选择「自定义上传」，选图预览后点击「保存头像」。支持 PNG、JPEG、WebP、GIF，最大 5 MB、1600 万像素；静态图片生成最大 512 × 512 的 PNG，GIF 逐帧裁剪并保留动画、帧间隔和循环次数。GIF 最多 200 帧，各帧完整画面合计不超过 4000 万像素，裁剪结果也不超过 5 MB。裁剪预览接口只返回图片，点击保存才上传图床并更新账户。Go 通过 `POST /api/v2/categories/user/avatars/upload?entityId=<用户 UUID>&returnFormat=full` 上传，保存在图床的 `user/<用户 UUID>/avatars/` 分类下；`entityId` 使用账户 UUID，而非页面地址中的数字 ID。用户中心、授权确认页和 OAuth 用户资料同步使用保存后的地址，旧头像链接继续有效。切换到平台或默认头像会保留已上传的自定义头像，方便再次选择。
+在「个人资料 → 我的头像」选择「自定义上传」，选图预览后点击「保存头像」。支持 PNG、JPEG、WebP、GIF，最大 5 MB、1600 万像素；静态图片生成最大 512 × 512 的 PNG，GIF 逐帧裁剪并保留动画、帧间隔和循环次数。GIF 最多 200 帧，各帧完整画面合计不超过 4000 万像素，裁剪结果也不超过 5 MB。裁剪预览接口只返回图片，点击保存才上传图床并更新账户。Go 在同一进程内直接调用图床模块保存，位于图床的 `user/<用户 UUID>/avatars/` 分类下；`entityId` 使用账户 UUID，而非页面地址中的数字 ID。用户中心、授权确认页和 OAuth 用户资料同步使用保存后的地址，旧头像链接继续有效。切换到平台或默认头像会保留已上传的自定义头像，方便再次选择。
 
-Go 服务的 `.env` 配置 `IMGBED_URL`（本地 `http://localhost:8002`）和 `IMGBED_API_TOKEN`（OAuth 创建或迁入的上传 Key），配置后重启 API。令牌只供服务端使用，不放入 `NEXT_PUBLIC_*`。生产图床地址须为 HTTPS，本地开发允许回环 HTTP。图床后端迁移不要求修改原前端。
+图床已内置于同一 Go 进程，头像、背投、封面和插图不再经 HTTP 和上传 Key 转存，`IMGBED_URL`、`IMGBED_API_TOKEN` 已取消，旧 `.env` 中的这两项可以删除。保存后的地址以 `IMAGE_PUBLIC_URL` 为根，生产环境须设为浏览器可访问的 HTTPS 地址。外部 Key 仍用于进程外的调用方。
 
 ### Turnstile
 
@@ -753,8 +753,6 @@ release/              本地构建与发布产物
 | `pnpm db:studio` | 打开数据库管理界面 |
 
 Prisma schema 与迁移是数据库结构的来源；Go 服务没有 Prisma Client，也不会在启动时自动建表。首次检查前端或更换构建目录时，先完成一次前端构建，生成 Next.js 路由类型。
-
-相邻的 ALBATEXTUS 图床可通过 `go run ./cmd/register-imgbed` 联调注册。该工具会登记客户端并写入相邻图床的本地配置，运行前请核对 [工具源码](cmd/register-imgbed/main.go) 中的目录、端口与回调约定。
 
 相邻的 Status 后台可通过 `go run ./cmd/register-status` 接入当前 OAuth。工具创建独立机密应用 `albatextus-status`，最低角色为 `ADMIN`，仅申请 `profile`；默认回调为 `http://127.0.0.1:3100/api/auth/callback`，凭据写入 `../status/.dev.vars`。应用所有者使用 `SEED_ADMIN_EMAIL` 对应的现有管理员，也可在首次登记时用 `-admin-id <UUID>` 指定。Status 默认按服务端用户资料中的 `role` 允许 `ADMIN`、`SUPER_ADMIN`，符合条件的其他账号也能登录；OAuth 应用更严格的 `SUPER_ADMIN` 最低角色会保留。支持 `-app-url`、`-issuer-url`、`-output`；重复运行保留已有密钥、回调、Status 管理密钥和自定义允许名单。旧版仅允许所有者 UUID 的配置，可运行 `go run ./cmd/register-status -migrate-owner-allowlist` 切换到角色授权；该选项拒绝自动清理自定义账号名单。登记后在 Status 执行 `npm run db:migrate:local` 并重启开发服务。工具不会重置用户、运行 seed 或修改其他应用。
 

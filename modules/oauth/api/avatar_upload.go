@@ -3,18 +3,12 @@ package httpapi
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"image"
 	_ "image/jpeg"
 	"image/png"
 	"io"
-	"mime/multipart"
 	"net/http"
-	"net/textproto"
-	"net/url"
-	"strings"
-	"time"
 
 	"github.com/AlbaTextus/atnexus/internal/store"
 	"golang.org/x/image/draw"
@@ -60,7 +54,7 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if a.Config.ImgbedURL == "" || a.Config.ImgbedAPIToken == "" {
+	if a.Images == nil {
 		writeJSON(w, 503, map[string]string{"error": "avatar_upload_unavailable", "error_description": "头像上传暂未启用，请稍后再试。"})
 		return
 	}
@@ -105,49 +99,12 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "invalid_avatar", "error_description": "请使用不超过 5 MB 的有效图片；GIF 最多 200 帧，全部画面合计不超过 4000 万像素。"})
 		return
 	}
-	var body bytes.Buffer
-	form := multipart.NewWriter(&body)
 	filename, contentType := "avatar.png", "image/png"
 	if bytes.HasPrefix(data, []byte("GIF")) {
 		filename, contentType = "avatar.gif", "image/gif"
 	}
-	part, err := form.CreatePart(textproto.MIMEHeader{"Content-Disposition": {fmt.Sprintf(`form-data; name="file"; filename="%s"`, filename)}, "Content-Type": {contentType}})
+	location, err := a.Images.Save(r.Context(), "user/avatars", user.ID.String(), filename, contentType, data)
 	if err != nil {
-		a.ApplicationError(w, err)
-		return
-	}
-	_, _ = part.Write(data)
-	_ = form.Close()
-	target := a.Config.ImgbedURL + "/api/v2/categories/user/avatars/upload?returnFormat=full&entityId=" + user.ID.String()
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, target, &body)
-	if err != nil {
-		a.ApplicationError(w, err)
-		return
-	}
-	req.Header.Set("Authorization", "Bearer "+a.Config.ImgbedAPIToken)
-	req.Header.Set("Content-Type", form.FormDataContentType())
-	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := client.Do(req)
-	if err != nil {
-		a.avatarUploadError(w)
-		return
-	}
-	defer response.Body.Close()
-	var uploaded []struct {
-		Src string `json:"src"`
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 || json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&uploaded) != nil || len(uploaded) != 1 {
-		a.avatarUploadError(w)
-		return
-	}
-	base, _ := url.Parse(a.Config.ImgbedURL)
-	ref, err := url.Parse(uploaded[0].Src)
-	if err != nil {
-		a.avatarUploadError(w)
-		return
-	}
-	resolved := base.ResolveReference(ref)
-	if resolved.Scheme != base.Scheme || resolved.Host != base.Host || resolved.User != nil || resolved.Fragment != "" || !strings.HasPrefix(resolved.Path, "/file/") || len(resolved.String()) > 2048 {
 		a.avatarUploadError(w)
 		return
 	}
@@ -156,7 +113,7 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 		a.avatarUploadError(w)
 		return
 	}
-	updated, err := st.UpdateCustomAvatar(r.Context(), user.ID, resolved.String(), originalURL)
+	updated, err := st.UpdateCustomAvatar(r.Context(), user.ID, location, originalURL)
 	if err != nil {
 		a.ApplicationError(w, err)
 		return

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AlbaTextus/atnexus/internal/apibase"
 	"github.com/google/uuid"
 	"golang.org/x/image/draw"
 )
@@ -98,7 +99,7 @@ func (a *API) uploadNovelCover(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxNovelCoverBytes+1))
 	if err == nil {
-		data, err = normalizeNovelCover(data)
+		data, err = apibase.LimitImageWork(r, func() ([]byte, error) { return normalizeNovelCover(data) })
 	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "cover_invalid", "error_description": "EPUB 封面不是有效图片，或图片尺寸过大。请更换或移除封面后重试。"})

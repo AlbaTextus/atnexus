@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime"
 	"strings"
 
 	"github.com/AlbaTextus/atnexus/internal/config"
@@ -14,6 +15,23 @@ import (
 	"github.com/AlbaTextus/atnexus/modules/oauth"
 	"github.com/AlbaTextus/atnexus/pkg/auth"
 )
+
+// Decoding one upload can allocate tens of megabytes per megapixel budget, so
+// image work across every module shares one bound tied to the available CPUs.
+var imageWork = make(chan struct{}, max(2, runtime.GOMAXPROCS(0)))
+
+// LimitImageWork runs CPU- and memory-heavy image processing with bounded
+// concurrency. A request that is cancelled while queued never starts.
+func LimitImageWork[T any](r *http.Request, work func() (T, error)) (T, error) {
+	select {
+	case imageWork <- struct{}{}:
+	case <-r.Context().Done():
+		var zero T
+		return zero, r.Context().Err()
+	}
+	defer func() { <-imageWork }()
+	return work()
+}
 
 // Store remains a transitional adapter for the unchanged account schema.
 type Base struct {

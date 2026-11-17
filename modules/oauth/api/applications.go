@@ -143,7 +143,7 @@ func (a *API) createApplication(w http.ResponseWriter, r *http.Request) {
 			a.ApplicationError(w, err)
 			return
 		}
-		h, err := security.HashPassword(secret, a.Config.BCryptCost)
+		h, err := security.HashClientSecret(secret, a.Config.BCryptCost)
 		if err != nil {
 			a.ApplicationError(w, err)
 			return
@@ -258,7 +258,7 @@ func (a *API) rotateApplicationSecret(w http.ResponseWriter, r *http.Request) {
 		a.ApplicationError(w, err)
 		return
 	}
-	hash, err := security.HashPassword(secret, a.Config.BCryptCost)
+	hash, err := security.HashClientSecret(secret, a.Config.BCryptCost)
 	if err != nil {
 		a.ApplicationError(w, err)
 		return

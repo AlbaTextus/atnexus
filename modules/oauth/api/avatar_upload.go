@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/AlbaTextus/atnexus/internal/apibase"
 	"github.com/AlbaTextus/atnexus/internal/store"
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
@@ -75,7 +76,7 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "invalid_avatar", "error_description": "请选择一张头像图片。"})
 		return
 	}
-	original, err := readProfileOriginal(r, true)
+	original, err := apibase.LimitImageWork(r, func() ([]byte, error) { return readProfileOriginal(r, true) })
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid_avatar", "error_description": "头像原图无效，请选择不超过 5 MB、1600 万像素的图片。"})
 		return
@@ -88,7 +89,7 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxAvatarBytes+1))
 	if err == nil {
-		data, err = normalizeAvatar(data)
+		data, err = apibase.LimitImageWork(r, func() ([]byte, error) { return normalizeAvatar(data) })
 	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid_avatar", "error_description": "请使用不超过 5 MB 的有效图片；GIF 最多 200 帧，全部画面合计不超过 4000 万像素。"})

@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -270,19 +271,47 @@ func (m *Module) folderAction(w http.ResponseWriter, r *http.Request, folder, de
 	}
 	success := []string{}
 	failed := []string{}
-	for _, id := range ids {
-		if strings.Contains(r.URL.Path, "/move/") {
-			_, err = m.moveFile(r.Context(), id, path.Join(dest, strings.TrimPrefix(id, folder+"/")))
-		} else {
-			err = m.deleteFile(r.Context(), id)
+	// A move keeps its connection for the whole copy, so moves stay serial.
+	workers := 1
+	if !strings.Contains(r.URL.Path, "/move/") {
+		workers = deleteWorkers
+	}
+	errs := eachFile(ids, workers, func(id string) error {
+		if workers == 1 {
+			_, err := m.moveFile(r.Context(), id, path.Join(dest, strings.TrimPrefix(id, folder+"/")))
+			return err
 		}
-		if err != nil {
+		return m.deleteFile(r.Context(), id)
+	})
+	for i, id := range ids {
+		if errs[i] != nil {
 			failed = append(failed, id)
 		} else {
 			success = append(success, id)
 		}
 	}
 	respond(w, 200, map[string]any{"success": len(failed) == 0, "deleted": success, "failed": failed})
+}
+
+// Each delete is mostly a storage round trip and holds a database connection
+// only briefly, so a few run at once without crowding the metadata pool.
+const deleteWorkers = 4
+
+// eachFile runs fn for every id with bounded concurrency and returns the
+// results in input order.
+func eachFile(ids []string, workers int, fn func(string) error) []error {
+	errs := make([]error, len(ids))
+	slots := make(chan struct{}, workers)
+	var wg sync.WaitGroup
+	for i, id := range ids {
+		slots <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-slots }()
+			errs[i] = fn(id)
+		})
+	}
+	wg.Wait()
+	return errs
 }
 
 func (m *Module) batchDelete(w http.ResponseWriter, r *http.Request) {
@@ -298,8 +327,9 @@ func (m *Module) batchDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	deleted := []string{}
 	failed := []map[string]string{}
-	for _, id := range input.IDs {
-		if err := m.deleteFile(r.Context(), id); err != nil {
+	errs := eachFile(input.IDs, deleteWorkers, func(id string) error { return m.deleteFile(r.Context(), id) })
+	for i, id := range input.IDs {
+		if err := errs[i]; err != nil {
 			failed = append(failed, map[string]string{"fileId": id, "error": safeError(err)})
 		} else {
 			deleted = append(deleted, id)

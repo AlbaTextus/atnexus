@@ -228,7 +228,7 @@ SMTP_PASS=your-smtp-auth-code
 
 ## 快速开始
 
-以下命令在仓库根目录执行。需要 Go 1.26.1+、Node.js 24+、pnpm 和 PostgreSQL；Redis 为可选的会话缓存。仓库通过 `packageManager` 固定 pnpm 版本；Docker Compose 使用 PostgreSQL 16 和可选的 Redis 7。
+以下命令在仓库根目录执行。需要 Go 1.26.1+、Node.js 24+、pnpm 和 PostgreSQL。仓库通过 `packageManager` 固定 pnpm 版本；Docker Compose 使用 PostgreSQL 16。
 
 ### 1. 准备环境
 
@@ -277,12 +277,6 @@ WEBAUTHN_RP_ORIGINS=http://localhost:3288
 
 ```bash
 docker compose up -d postgres athub-postgres creatplat-postgres
-```
-
-如需启用 Redis 会话缓存，在 `.env` 设置 `REDIS_ENABLED=true`，再启动可选容器；不开启时 Go 服务不会连接 Redis：
-
-```bash
-docker compose --profile redis up -d redis
 ```
 
 创作者数据库先执行 `npm run db:creatplat:deploy`；已有安装须停止旧后端后执行 `npm run db:creatplat:import`，核对通过再启动新版本。完整步骤见 [DATABASE.md](modules/creatplat/DATABASE.md)。数据库就绪后执行：
@@ -511,10 +505,6 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL 连接地址，必填 |
 | `ATHUB_DATABASE_URL` | 内容库 PostgreSQL 连接地址，必填，与账户库分开 |
-| `REDIS_ENABLED` | 是否启用 Redis 会话缓存，默认 `false`；关闭时不建立 Redis 连接 |
-| `REDIS_URL` | Redis 连接地址，默认 `redis://localhost:6379/0`；支持 `redis://` 与 `rediss://` |
-| `REDIS_KEY_PREFIX` | Redis 键前缀，默认 `albatextus:connect` |
-| `REDIS_SESSION_TTL` | 会话缓存时长，默认 `30s`，且不会超过会话剩余有效期 |
 | `CLIENT_SECRET_ENCRYPTION_KEY` | 客户端密钥与 PKCE verifier 加密密钥，必填并保持稳定 |
 | `APP_ENV` | 本地为 `development`，生产为 `production` |
 | `HTTP_ADDR` | OAuth 监听地址，默认 `:8001` |
@@ -556,8 +546,6 @@ Compose 项目与后端服务均名为 `atnexus`。数据库名称、账号及�
 如果旧部署使用了自定义 Compose 项目名或卷名，启动前将 `ACCOUNT_POSTGRES_VOLUME`、
 `ATHUB_POSTGRES_VOLUME` 设为实际已有卷名。升级时先停止旧 Compose 服务，再启动新服务，
 避免端口冲突；停止旧服务时保留数据卷，不使用 `down -v`。
-
-Redis 服务位于 Compose 的 `redis` profile 中，默认不会启动。启用缓存时使用 `docker compose --profile redis up --build -d`；禁用时继续使用普通的 `docker compose up --build -d`。Compose 内部默认连接 `redis://redis:6379/0`，如需覆盖可设置 `REDIS_COMPOSE_URL`。
 
 ### 构建与运行
 

@@ -125,6 +125,13 @@ func invalidateApplication(ctx context.Context, tx pgx.Tx, id string) error {
 	return err
 }
 
+// UpgradeClientSecretHash replaces a verified hash with an equivalent one for
+// the same secret. A concurrent rotation changes the stored hash and wins.
+func (p *Postgres) UpgradeClientSecretHash(ctx context.Context, id, current, next string) error {
+	_, err := p.pool.Exec(ctx, `UPDATE oauth_clients SET secret_hash=$3 WHERE id=$1 AND secret_hash=$2`, id, current, next)
+	return err
+}
+
 func (p *Postgres) RotateApplicationSecret(ctx context.Context, id string, actor uuid.UUID, admin bool, hash, encryptedSecret string) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

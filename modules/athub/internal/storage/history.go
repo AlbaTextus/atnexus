@@ -97,6 +97,7 @@ func (p *Postgres) Mutate(ctx context.Context, fn func(context.Context) error) e
 		ids = append(ids, int(id))
 	}
 	sort.Ints(ids)
+	diffDeadline := time.Now().Add(mutationDiffBudget)
 	for _, value := range ids {
 		id := int32(value)
 		after, err := snapshot(ctx, tx, id)
@@ -104,21 +105,37 @@ func (p *Postgres) Mutate(ctx context.Context, fn func(context.Context) error) e
 			return err
 		}
 		changes := diffSnapshot(m.before[id], after)
+		// One query fetches every rewritten body instead of one per chapter.
+		rewritten := make(map[int32]*Change)
+		chapterIDs := make([]int32, 0)
 		for i := range changes {
 			change := &changes[i]
 			if change.Entity != "Chapter" || change.Action != "UPDATE" || reflect.DeepEqual(change.Before["contentHash"], change.After["contentHash"]) {
 				continue
 			}
 			chapterID := int32(change.Before["id"].(float64))
-			oldBody, tracked := m.chapterBodies[chapterID]
-			if !tracked {
-				continue
+			if _, tracked := m.chapterBodies[chapterID]; tracked {
+				rewritten[chapterID] = change
+				chapterIDs = append(chapterIDs, chapterID)
 			}
-			var nextBody string
-			if err := tx.QueryRow(ctx, `SELECT content FROM "Chapter" WHERE id=$1`, chapterID).Scan(&nextBody); err != nil {
+		}
+		if len(chapterIDs) > 0 {
+			rows, err := tx.Query(ctx, `SELECT id,content FROM "Chapter" WHERE id=ANY($1::integer[])`, chapterIDs)
+			if err != nil {
 				return err
 			}
-			change.BodyDiff = chapterBodyDiff(oldBody, nextBody)
+			var chapterID int32
+			var nextBody string
+			_, err = pgx.ForEachRow(rows, []any{&chapterID, &nextBody}, func() error {
+				// The novel stays locked while diffing, so the whole request
+				// shares one budget; chapters past it get a coarser diff.
+				budget := max(time.Millisecond, min(chapterDiffTimeout, time.Until(diffDeadline)))
+				rewritten[chapterID].BodyDiff = chapterBodyDiff(m.chapterBodies[chapterID], nextBody, budget)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
 		}
 		if len(changes) > 0 {
 			drafts = append(drafts, RevisionDraft{NovelID: id, Contributor: actor, Changes: changes})

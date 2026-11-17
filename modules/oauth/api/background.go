@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/AlbaTextus/atnexus/internal/apibase"
 	"github.com/AlbaTextus/atnexus/internal/store"
 	"golang.org/x/image/draw"
 )
@@ -79,7 +80,7 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "invalid_background", "error_description": "请选择一张不超过 5 MB 的 PNG、JPEG 或 WebP 图片。"})
 		return
 	}
-	original, err := readProfileOriginal(r, false)
+	original, err := apibase.LimitImageWork(r, func() ([]byte, error) { return readProfileOriginal(r, false) })
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid_background", "error_description": "背投原图无效，请选择不超过 5 MB、1600 万像素的 PNG、JPEG 或 WebP 图片。"})
 		return
@@ -92,7 +93,7 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxAvatarBytes+1))
 	if err == nil {
-		data, err = normalizeBackground(data)
+		data, err = apibase.LimitImageWork(r, func() ([]byte, error) { return normalizeBackground(data) })
 	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid_background", "error_description": "请使用不超过 5 MB、1600 万像素的有效 PNG、JPEG 或 WebP 图片。"})

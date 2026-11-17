@@ -185,7 +185,7 @@ func (m *Module) upload(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	blocked, err := m.setting(r.Context(), "manage@blockipList")
+	blocked, err := m.cachedSetting(r.Context(), "manage@blockipList")
 	if err != nil {
 		m.failure(w, err)
 		return
@@ -370,7 +370,7 @@ func (m *Module) saveUpload(ctx context.Context, form *parsedForm, q url.Values,
 		metadata["Channel"] = "CloudflareR2"
 		metadata["ChannelName"] = channel.Name
 		if channel.Endpoint != "" {
-			store, err = newS3Store(channel, m.deps.StorageHTTPClient)
+			store, err = m.s3Store(channel)
 			metadata["Channel"] = "S3"
 		}
 		if err != nil {

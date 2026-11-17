@@ -319,8 +319,18 @@ func (s *Service) authenticateClient(ctx context.Context, id, secret string, req
 	if requireSecret && c.IsPublic() {
 		return store.Client{}, oauthError("invalid_client", "this grant requires a confidential client", 401)
 	}
-	if !c.IsPublic() && !security.CheckSecret(valueOrDefault(c.SecretHash, ""), secret) {
+	hash := valueOrDefault(c.SecretHash, "")
+	if !c.IsPublic() && !security.CheckSecret(hash, secret) {
 		return store.Client{}, oauthError("invalid_client", "client authentication failed", 401)
+	}
+	// Clients created before fast hashes move over on their first successful
+	// authentication. Failure only means the next request pays for bcrypt again.
+	if next := security.UpgradedSecretHash(hash, secret); next != "" && !c.IsPublic() {
+		if upgrader, ok := s.store.(interface {
+			UpgradeClientSecretHash(context.Context, string, string, string) error
+		}); ok {
+			_ = upgrader.UpgradeClientSecretHash(ctx, c.ID, hash, next)
+		}
 	}
 	return c, nil
 }

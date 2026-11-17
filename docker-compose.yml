@@ -1,18 +1,6 @@
 name: atnexus
 
 services:
-  redis:
-    image: redis:7-alpine
-    profiles: ["redis"]
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   postgres:
     image: postgres:16-alpine
     environment:
@@ -79,10 +67,6 @@ services:
       ATHUB_DATABASE_URL: postgresql://athub:athub@athub-postgres:5432/athub?sslmode=disable
       CREATPLAT_DATABASE_URL: ${CREATPLAT_COMPOSE_DATABASE_URL:?Set CREATPLAT_COMPOSE_DATABASE_URL using the creatplat-postgres host}
       CREATPLAT_MIGRATION_CHECK_TIMEOUT: ${CREATPLAT_MIGRATION_CHECK_TIMEOUT:-10m}
-      REDIS_ENABLED: ${REDIS_ENABLED:-false}
-      REDIS_URL: ${REDIS_COMPOSE_URL:-redis://redis:6379/0}
-      REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-albatextus:connect}
-      REDIS_SESSION_TTL: ${REDIS_SESSION_TTL:-30s}
       ISSUER_URL: http://localhost:3288
       AUTH_UI_URL: http://localhost:3288
       WEBAUTHN_RP_ORIGINS: http://localhost:3288

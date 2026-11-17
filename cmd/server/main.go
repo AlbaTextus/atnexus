@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -85,7 +87,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer imageKeys.Close()
-	images, err := imagebackend.New(ctx, imagebackend.Config{DatabaseURL: cfg.ImageDatabaseURL, LocalRoot: cfg.ImageLocalRoot, TempRoot: cfg.ImageTempRoot, PublicURL: cfg.ImagePublicURL, MaxUploadBytes: cfg.ImageMaxUploadBytes, MaxChunkBytes: cfg.ImageMaxChunkBytes, MaxChunks: cfg.ImageMaxChunks, UploadTTL: cfg.ImageUploadTTL}, imagebackend.Dependencies{Sessions: sessions, Keys: imageKeys, Logger: logger})
+	images, err := imagebackend.New(ctx, imagebackend.Config{DatabaseURL: cfg.ImageDatabaseURL, LocalRoot: cfg.ImageLocalRoot, TempRoot: cfg.ImageTempRoot, PublicURL: cfg.ImagePublicURL, MaxUploadBytes: cfg.ImageMaxUploadBytes, MaxChunkBytes: cfg.ImageMaxChunkBytes, MaxChunks: cfg.ImageMaxChunks, UploadTTL: cfg.ImageUploadTTL}, imagebackend.Dependencies{Sessions: sessions, Keys: imageKeys, Logger: logger, StorageHTTPClient: &http.Client{Timeout: cfg.ImageHTTPTimeout}})
 	if err != nil {
 		return fmt.Errorf("image initialization failed: %w", err)
 	}
@@ -116,12 +118,6 @@ func run(logger *slog.Logger) error {
 	access.EnableAPIKeys(oauth.NewAPIKeys(st))
 	access.EnableCreatorStorage(creatorDB)
 	hubConfig := athub.Config{DatabaseURL: cfg.ATHubDatabaseURL, WrapHandler: access.Wrap, RecordChanges: access.RecordChanges}
-	if cfg.Redis.Enabled {
-		if err := st.EnableRedisSessionCache(ctx, cfg.Redis.URL, cfg.Redis.KeyPrefix, cfg.Redis.SessionTTL); err != nil {
-			return fmt.Errorf("redis cache initialization failed: %w", err)
-		}
-		logger.Info("redis session cache enabled", "ttl", cfg.Redis.SessionTTL)
-	}
 	api, err := httpapi.New(cfg, st, logger)
 	if err != nil {
 		return fmt.Errorf("http api initialization failed: %w", err)
@@ -132,12 +128,9 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("ATHub initialization failed: %w", err)
 	}
 	defer hub.Close()
-	// Full legacy-history verification can outlast the connection setup deadline.
-	logger.Info("checking legacy creator data", "timeout", cfg.CreatplatMigrationCheckTimeout)
-	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), cfg.CreatplatMigrationCheckTimeout)
-	err = creatorDB.CheckLegacyMigration(migrationCtx, cfg.DatabaseURL)
-	migrationCancel()
-	if err != nil {
+	// Startup compares only row counts; the full row-by-row digest runs in the
+	// background once the listeners are up.
+	if err = creatorDB.CheckLegacyMigrationCounts(ctx, cfg.DatabaseURL); err != nil {
 		return fmt.Errorf("creator migration check failed: %w", err)
 	}
 	creators := creatorapi.New(cfg, st, logger)
@@ -149,10 +142,11 @@ func run(logger *slog.Logger) error {
 	creators.SetATHubIllustrationDeleter(access.DeleteIllustration)
 	creators.SetATHubIllustrationLayoutEditor(access.SubmitIllustrationLayout)
 	creators.SetHistoryHandler(http.HandlerFunc(access.ServeHistory))
+	// The OAuth router applies its own request timeout, so its listener adds none.
 	// ATHub owns its 15s database deadline and accepts uploads up to 8 MiB.
 	requestTimeout := max(cfg.HTTPRequestTimeout, 30*time.Second)
 	contentOrigins := append([]string{cfg.AuthUIURL}, cfg.WebAuthnRPOrigins...)
-	oauthServer := &http.Server{Addr: cfg.HTTPAddr, Handler: server.ModuleHTTP(api.Router(), cfg.HTTPRequestTimeout, logger, contentOrigins...), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.HTTPRequestTimeout, WriteTimeout: cfg.HTTPRequestTimeout, IdleTimeout: 60 * time.Second}
+	oauthServer := &http.Server{Addr: cfg.HTTPAddr, Handler: server.ModuleHTTP(api.Router(), 0, logger, contentOrigins...), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.HTTPRequestTimeout, WriteTimeout: cfg.HTTPRequestTimeout, IdleTimeout: 60 * time.Second}
 	athubServer := &http.Server{Addr: cfg.ATHubHTTPAddr, Handler: server.ModuleHTTP(server.NewATHubHandler(hub.Handler(), hub.Ping), requestTimeout, logger, contentOrigins...), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: requestTimeout, WriteTimeout: requestTimeout, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	creatorServer := &http.Server{Addr: cfg.CreatplatHTTPAddr, Handler: server.ModuleHTTP(creators.Router(), requestTimeout, logger, contentOrigins...), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: requestTimeout, WriteTimeout: requestTimeout, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	// File responses and multipart requests must stream without TimeoutHandler's
@@ -175,8 +169,57 @@ func run(logger *slog.Logger) error {
 	}
 	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	// Background work stops with the listeners and finishes before the deferred
+	// pool closes run.
+	var background sync.WaitGroup
+	defer background.Wait()
+	defer stop()
+	background.Go(func() {
+		server.Every(signalCtx, time.Hour, 5*time.Minute, logger, "purge expired credentials", func(ctx context.Context) error {
+			removed, err := st.PurgeExpired(ctx)
+			for kind, count := range removed {
+				if count > 0 {
+					logger.Info("purged expired credentials", "kind", kind, "rows", count)
+				}
+			}
+			return err
+		})
+	})
+	background.Go(func() {
+		server.Every(signalCtx, time.Hour, 5*time.Minute, logger, "purge expired image uploads", func(ctx context.Context) error {
+			removed, err := images.PurgeExpiredUploads(ctx)
+			if removed > 0 {
+				logger.Info("purged expired image uploads", "sessions", removed)
+			}
+			return err
+		})
+	})
+	// Edited legacy rows mean the old service is still writing: stop serving,
+	// exactly as the startup check used to refuse to start.
+	var legacyMismatch error
+	background.Go(func() {
+		logger.Info("verifying legacy creator data", "timeout", cfg.CreatplatMigrationCheckTimeout)
+		checkCtx, cancel := context.WithTimeout(signalCtx, cfg.CreatplatMigrationCheckTimeout)
+		defer cancel()
+		err := creatorDB.CheckLegacyMigration(checkCtx, cfg.DatabaseURL)
+		switch {
+		case err == nil:
+			logger.Info("legacy creator data verified")
+		case errors.Is(err, creatorstorage.ErrLegacyDataMismatch):
+			legacyMismatch = fmt.Errorf("creator migration check failed: %w", err)
+			logger.Error("legacy creator data mismatch; stopping", "error", err)
+			stop()
+		case signalCtx.Err() == nil:
+			// Could not finish (timeout, connectivity): not evidence of a mismatch.
+			logger.Error("legacy creator data verification did not complete", "error", err)
+		}
+	})
 	if err := server.Run(signalCtx, cfg.HTTPShutdownTimeout, logger, servers...); err != nil {
 		return err
+	}
+	background.Wait()
+	if legacyMismatch != nil {
+		return legacyMismatch
 	}
 	logger.Info("server stopped")
 	return nil

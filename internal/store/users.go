@@ -186,9 +186,6 @@ func (p *Postgres) UpdateManagedUser(ctx context.Context, actorID, id uuid.UUID,
 	if err := tx.Commit(ctx); err != nil {
 		return ManagedUser{}, err
 	}
-	if previous.Role != input.Role || previous.IsActive != input.IsActive {
-		p.invalidateUserSessionCache(ctx, id)
-	}
 	return u, nil
 }
 
@@ -221,6 +218,5 @@ func (p *Postgres) updateManagedUserAccess(ctx context.Context, actorID, id uuid
 	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
-	p.invalidateUserSessionCache(ctx, id)
 	return nil
 }

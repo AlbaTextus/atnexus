@@ -70,14 +70,29 @@ func (m *Module) serveFile(w http.ResponseWriter, r *http.Request) {
 	if key == "" {
 		key = id
 	}
-	info, err := store.Open(r.Context(), key, r.Header.Get("Range"), r.Method == http.MethodHead)
+	ctx := r.Context()
+	if !preview {
+		ctx = withValidators(ctx, r)
+	}
+	info, err := store.Open(ctx, key, r.Header.Get("Range"), r.Method == http.MethodHead)
 	if err != nil {
 		var remote *smithyhttp.ResponseError
+		errors.As(err, &remote)
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 			respondError(w, 404, "image_bytes_not_found")
-		case errors.As(err, &remote) && remote.HTTPStatusCode() == 404:
+		case remote != nil && remote.HTTPStatusCode() == 404:
 			respondError(w, 404, "image_bytes_not_found")
+		case remote != nil && remote.HTTPStatusCode() == http.StatusNotModified:
+			// Only public requests send validators, so the cached copy stays valid.
+			for _, name := range []string{"ETag", "Last-Modified"} {
+				if value := remote.Response.Header.Get(name); value != "" {
+					w.Header().Set(name, value)
+				}
+			}
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Cache-Control", "public, max-age=2592000")
+			w.WriteHeader(http.StatusNotModified)
 		case remote != nil && remote.HTTPStatusCode() == 416:
 			w.Header().Set("Accept-Ranges", "bytes")
 			respondError(w, 416, "invalid_byte_range")
@@ -114,6 +129,9 @@ func (m *Module) serveFile(w http.ResponseWriter, r *http.Request) {
 	}
 	if info.ETag != "" {
 		w.Header().Set("ETag", info.ETag)
+	}
+	if !info.Modified.IsZero() {
+		w.Header().Set("Last-Modified", info.Modified.UTC().Format(http.TimeFormat))
 	}
 	w.Header().Set("Content-Length", strconv.FormatInt(info.Size, 10))
 	if info.Range != "" {

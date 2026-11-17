@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/AlbaTextus/atnexus/pkg/auth"
 	"github.com/aws/smithy-go"
@@ -36,6 +37,8 @@ type Module struct {
 	scratch    *os.Root
 	deps       Dependencies
 	chunkSlots chan struct{}
+	s3Stores   sync.Map
+	settings   settingCache
 }
 
 func New(ctx context.Context, cfg Config, deps Dependencies) (*Module, error) {

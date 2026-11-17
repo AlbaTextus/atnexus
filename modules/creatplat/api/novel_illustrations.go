@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/AlbaTextus/atnexus/internal/apibase"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -89,7 +90,7 @@ func (a *API) uploadNovelIllustration(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxNovelCoverBytes+1))
 	if err == nil {
-		data, err = normalizeNovelImage(data, 4096)
+		data, err = apibase.LimitImageWork(r, func() ([]byte, error) { return normalizeNovelImage(data, 4096) })
 	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "illustration_invalid", "error_description": "图片无效或尺寸过大，请使用 JPG、PNG、WebP 或 GIF 图片（最长边不超过 8192 像素，总像素不超过 1600 万）。"})

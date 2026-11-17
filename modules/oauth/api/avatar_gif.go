@@ -14,6 +14,8 @@ import (
 	"net/http"
 
 	"golang.org/x/image/draw"
+
+	"github.com/AlbaTextus/atnexus/internal/apibase"
 )
 
 type avatarCrop struct {
@@ -217,7 +219,7 @@ func (a *API) previewAvatarGIF(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
-	output, err := normalizeGIF(data, &crop)
+	output, err := apibase.LimitImageWork(r, func() ([]byte, error) { return normalizeGIF(data, &crop) })
 	if err != nil {
 		fail()
 		return

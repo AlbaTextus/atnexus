@@ -190,8 +190,5 @@ func (p *Postgres) CompleteEmailVerification(ctx context.Context, in EmailComple
 	if err := tx.Commit(ctx); err != nil {
 		return User{}, err
 	}
-	if in.Purpose == "account" && previousEmail != in.Email {
-		p.invalidateUserSessionCache(ctx, in.UserID)
-	}
 	return user, nil
 }

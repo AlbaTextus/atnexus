@@ -139,6 +139,10 @@ type s3Store struct {
 	bucket string
 }
 
+// One client for every channel when the host injects none, so connections are
+// reused instead of being dialed per request.
+var defaultStorageClient = &http.Client{Timeout: 2 * time.Minute}
+
 func newS3Store(c Channel, transport *http.Client) (*s3Store, error) {
 	if c.Endpoint == "" || c.Bucket == "" || c.AccessKey == "" || c.Secret == "" {
 		return nil, errors.New("S3 channel credentials missing")
@@ -148,24 +152,72 @@ func newS3Store(c Channel, transport *http.Client) (*s3Store, error) {
 		region = "auto"
 	}
 	if transport == nil {
-		transport = &http.Client{Timeout: 2 * time.Minute}
+		transport = defaultStorageClient
 	}
 	client := s3.NewFromConfig(aws.Config{Region: region, Credentials: credentials.NewStaticCredentialsProvider(c.AccessKey, c.Secret, ""), HTTPClient: transport}, func(o *s3.Options) { o.BaseEndpoint = aws.String(c.Endpoint); o.UsePathStyle = c.PathStyle })
 	return &s3Store{client, c.Bucket}, nil
 }
+
+// s3Channel is every field a client depends on; an edited channel gets a new client.
+type s3Channel struct {
+	endpoint, bucket, region, accessKey, secret string
+	pathStyle                                   bool
+}
+
+func (m *Module) s3Store(c Channel) (*s3Store, error) {
+	key := s3Channel{c.Endpoint, c.Bucket, c.Region, c.AccessKey, c.Secret, c.PathStyle}
+	if cached, ok := m.s3Stores.Load(key); ok {
+		return cached.(*s3Store), nil
+	}
+	st, err := newS3Store(c, m.deps.StorageHTTPClient)
+	if err != nil {
+		return nil, err
+	}
+	cached, _ := m.s3Stores.LoadOrStore(key, st)
+	return cached.(*s3Store), nil
+}
+
+type notModifiedContext struct{}
+
+// withValidators forwards a client's cache validators to remote storage, which
+// then answers 304 without sending the body. Local files ignore them:
+// http.ServeContent evaluates the same headers itself.
+func withValidators(ctx context.Context, r *http.Request) context.Context {
+	v := validators{etag: r.Header.Get("If-None-Match")}
+	if v.etag == "" {
+		if t, err := http.ParseTime(r.Header.Get("If-Modified-Since")); err == nil {
+			v.since = &t
+		}
+	}
+	if v.etag == "" && v.since == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, notModifiedContext{}, v)
+}
+
+type validators struct {
+	etag  string
+	since *time.Time
+}
+
 func (s *s3Store) Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error {
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key), Body: r, ContentLength: aws.Int64(size), ContentType: aws.String(contentType), IfNoneMatch: aws.String("*")})
 	return err
 }
 func (s *s3Store) Open(ctx context.Context, key, byteRange string, head bool) (objectInfo, error) {
+	cond, _ := ctx.Value(notModifiedContext{}).(validators)
+	var etag *string
+	if cond.etag != "" {
+		etag = aws.String(cond.etag)
+	}
 	if head {
-		v, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
+		v, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key), IfNoneMatch: etag, IfModifiedSince: cond.since})
 		if err != nil {
 			return objectInfo{}, err
 		}
 		return objectInfo{Size: aws.ToInt64(v.ContentLength), ETag: aws.ToString(v.ETag), Modified: aws.ToTime(v.LastModified)}, nil
 	}
-	input := &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)}
+	input := &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key), IfNoneMatch: etag, IfModifiedSince: cond.since}
 	if byteRange != "" {
 		input.Range = aws.String(byteRange)
 	}
@@ -180,8 +232,16 @@ func (s *s3Store) Delete(ctx context.Context, key string) error {
 	return err
 }
 
+const uploadConfigKey = "manage@sysConfig@upload"
+
+// channels serves the briefly cached configuration; callers that decide inside
+// a transaction use channelsWith and always read the stored value.
 func (m *Module) channels(ctx context.Context) (uploadConfig, error) {
-	return m.channelsWith(ctx, m.pool)
+	raw, err := m.cachedSetting(ctx, uploadConfigKey)
+	if err != nil {
+		return uploadConfig{}, err
+	}
+	return parseChannels(raw)
 }
 
 type rowQuerier interface {
@@ -190,13 +250,18 @@ type rowQuerier interface {
 
 func (m *Module) channelsWith(ctx context.Context, q rowQuerier) (uploadConfig, error) {
 	var raw string
-	err := q.QueryRow(ctx, `SELECT value FROM image_settings WHERE key='manage@sysConfig@upload'`).Scan(&raw)
+	err := q.QueryRow(ctx, `SELECT value FROM image_settings WHERE key=$1`, uploadConfigKey).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = nil
 	}
 	if err != nil {
 		return uploadConfig{}, err
 	}
+	return parseChannels(raw)
+}
+
+// parseChannels decodes a fresh value per call: handlers edit the result.
+func parseChannels(raw string) (uploadConfig, error) {
 	var cfg uploadConfig
 	if raw != "" {
 		if err := decodeJSON([]byte(raw), &cfg); err != nil {
@@ -219,15 +284,18 @@ func (m *Module) channelsWith(ctx context.Context, q rowQuerier) (uploadConfig, 
 }
 
 func (m *Module) storeFor(ctx context.Context, meta map[string]any) (objectStore, string, error) {
-	return m.storeForWith(ctx, meta, m.pool)
+	return m.resolveStore(meta, func() (uploadConfig, error) { return m.channels(ctx) })
 }
 func (m *Module) storeForWith(ctx context.Context, meta map[string]any, q rowQuerier) (objectStore, string, error) {
+	return m.resolveStore(meta, func() (uploadConfig, error) { return m.channelsWith(ctx, q) })
+}
+func (m *Module) resolveStore(meta map[string]any, load func() (uploadConfig, error)) (objectStore, string, error) {
 	key := text(meta, "S3FileKey")
 	switch text(meta, "Channel") {
 	case "CloudflareR2":
 		return m.local, "", nil
 	case "S3":
-		cfg, err := m.channelsWith(ctx, q)
+		cfg, err := load()
 		if err != nil {
 			return nil, "", err
 		}
@@ -247,8 +315,11 @@ func (m *Module) storeForWith(ctx context.Context, meta map[string]any, q rowQue
 		if len(matches) != 1 || key == "" {
 			return nil, "", errors.New("S3 channel cannot be resolved unambiguously")
 		}
-		st, err := newS3Store(matches[0], m.deps.StorageHTTPClient)
-		return st, key, err
+		st, err := m.s3Store(matches[0])
+		if err != nil {
+			return nil, "", err
+		}
+		return st, key, nil
 	default:
 		return nil, "", errors.New("unsupported historical storage channel")
 	}

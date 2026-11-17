@@ -87,7 +87,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer imageKeys.Close()
-	images, err := imagebackend.New(ctx, imagebackend.Config{DatabaseURL: cfg.ImageDatabaseURL, LocalRoot: cfg.ImageLocalRoot, TempRoot: cfg.ImageTempRoot, PublicURL: cfg.ImagePublicURL, MaxUploadBytes: cfg.ImageMaxUploadBytes, MaxChunkBytes: cfg.ImageMaxChunkBytes, MaxChunks: cfg.ImageMaxChunks, UploadTTL: cfg.ImageUploadTTL}, imagebackend.Dependencies{Sessions: sessions, Keys: imageKeys, Logger: logger, StorageHTTPClient: &http.Client{Timeout: cfg.ImageHTTPTimeout}})
+	images, err := imagebackend.New(ctx, imagebackend.Config{DatabaseURL: cfg.ImageDatabaseURL, LocalRoot: cfg.ImageLocalRoot, TempRoot: cfg.ImageTempRoot, PublicURL: cfg.ImagePublicURL, MaxUploadBytes: cfg.ImageMaxUploadBytes, MaxChunkBytes: cfg.ImageMaxChunkBytes, MaxChunks: cfg.ImageMaxChunks, UploadTTL: cfg.ImageUploadTTL, MaxSessionsPerOwner: cfg.ImageMaxUploadSessions, MaxConns: int32(cfg.ImageDatabaseMaxConns)}, imagebackend.Dependencies{Sessions: sessions, Keys: imageKeys, Logger: logger})
 	if err != nil {
 		return fmt.Errorf("image initialization failed: %w", err)
 	}
@@ -136,17 +136,17 @@ func run(logger *slog.Logger) error {
 	creators := creatorapi.New(cfg, st, logger)
 	creators.SetStorage(creatorDB)
 	creators.SetATHubReviewExecutor(access.ApplyReview)
+	creators.SetATHubReceiptForgetter(hub.ForgetMutation)
 	creators.SetATHubSubmitter(access.SubmitUpload)
 	creators.SetATHubNovelEditor(access.SubmitNovelEdit)
 	creators.SetATHubIllustrationSubmitter(access.SubmitIllustration)
 	creators.SetATHubIllustrationDeleter(access.DeleteIllustration)
 	creators.SetATHubIllustrationLayoutEditor(access.SubmitIllustrationLayout)
 	creators.SetHistoryHandler(http.HandlerFunc(access.ServeHistory))
-	// The OAuth router applies its own request timeout, so its listener adds none.
 	// ATHub owns its 15s database deadline and accepts uploads up to 8 MiB.
 	requestTimeout := max(cfg.HTTPRequestTimeout, 30*time.Second)
 	contentOrigins := append([]string{cfg.AuthUIURL}, cfg.WebAuthnRPOrigins...)
-	oauthServer := &http.Server{Addr: cfg.HTTPAddr, Handler: server.ModuleHTTP(api.Router(), 0, logger, contentOrigins...), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.HTTPRequestTimeout, WriteTimeout: cfg.HTTPRequestTimeout, IdleTimeout: 60 * time.Second}
+	oauthServer := &http.Server{Addr: cfg.HTTPAddr, Handler: server.ModuleHTTP(api.Router(), cfg.HTTPRequestTimeout, logger, contentOrigins...), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.HTTPRequestTimeout, WriteTimeout: cfg.HTTPRequestTimeout, IdleTimeout: 60 * time.Second}
 	athubServer := &http.Server{Addr: cfg.ATHubHTTPAddr, Handler: server.ModuleHTTP(server.NewATHubHandler(hub.Handler(), hub.Ping), requestTimeout, logger, contentOrigins...), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: requestTimeout, WriteTimeout: requestTimeout, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	creatorServer := &http.Server{Addr: cfg.CreatplatHTTPAddr, Handler: server.ModuleHTTP(creators.Router(), requestTimeout, logger, contentOrigins...), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: requestTimeout, WriteTimeout: requestTimeout, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	// File responses and multipart requests must stream without TimeoutHandler's
@@ -168,32 +168,13 @@ func run(logger *slog.Logger) error {
 		servers = append(servers, &http.Server{Addr: cfg.ImageLegacyHTTPAddr, Handler: images.Files(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.ImageHTTPTimeout, WriteTimeout: cfg.ImageHTTPTimeout, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10})
 	}
 	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 	// Background work stops with the listeners and finishes before the deferred
-	// pool closes run.
+	// pool closes run: on every return path the context is cancelled first,
+	// then the work is awaited.
 	var background sync.WaitGroup
 	defer background.Wait()
 	defer stop()
-	background.Go(func() {
-		server.Every(signalCtx, time.Hour, 5*time.Minute, logger, "purge expired credentials", func(ctx context.Context) error {
-			removed, err := st.PurgeExpired(ctx)
-			for kind, count := range removed {
-				if count > 0 {
-					logger.Info("purged expired credentials", "kind", kind, "rows", count)
-				}
-			}
-			return err
-		})
-	})
-	background.Go(func() {
-		server.Every(signalCtx, time.Hour, 5*time.Minute, logger, "purge expired image uploads", func(ctx context.Context) error {
-			removed, err := images.PurgeExpiredUploads(ctx)
-			if removed > 0 {
-				logger.Info("purged expired image uploads", "sessions", removed)
-			}
-			return err
-		})
-	})
+	background.Go(func() { st.RunExpiryPurge(signalCtx, logger) })
 	// Edited legacy rows mean the old service is still writing: stop serving,
 	// exactly as the startup check used to refuse to start.
 	var legacyMismatch error

@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { ConsentScreen } from "@/components/consent-screen"
+import { ConsentScreen } from "@/components/auth/consent-screen"
 
 export const metadata: Metadata = { title: "ALBATEXTUS", robots: { index: false, follow: false }, referrer: "no-referrer" }
 

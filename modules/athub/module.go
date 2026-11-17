@@ -50,6 +50,7 @@ func (c Config) Validate() error {
 
 type Module struct {
 	pool    *pgxpool.Pool
+	store   *storage.Postgres
 	handler http.Handler
 }
 
@@ -90,9 +91,15 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Module, error) 
 		return nil, err
 	}
 	ready = true
-	return &Module{pool: pool, handler: handler}, nil
+	return &Module{pool: pool, store: st, handler: handler}, nil
 }
 
 func (m *Module) Handler() http.Handler          { return m.handler }
 func (m *Module) Ping(ctx context.Context) error { return m.pool.Ping(ctx) }
 func (m *Module) Close()                         { m.pool.Close() }
+
+// ForgetMutation drops the replay receipt of a WithMutationID call. Call it only
+// once the host has committed that mutation's final outcome.
+func (m *Module) ForgetMutation(ctx context.Context, id string) error {
+	return m.store.DeleteMutationReceipt(ctx, id)
+}

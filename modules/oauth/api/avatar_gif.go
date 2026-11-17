@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -101,10 +102,16 @@ func checkGIFBudget(data []byte) error {
 	return bad
 }
 
-func normalizeGIF(data []byte, crop *avatarCrop) ([]byte, error) {
+func normalizeGIF(ctx context.Context, data []byte, crop *avatarCrop) ([]byte, error) {
+	// The block scan is cheap, so GIFs that will be refused never queue.
 	if err := checkGIFBudget(data); err != nil {
 		return nil, err
 	}
+	release, err := apibase.AcquireImageWork(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	animation, err := gif.DecodeAll(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -219,7 +226,11 @@ func (a *API) previewAvatarGIF(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
-	output, err := apibase.LimitImageWork(r, func() ([]byte, error) { return normalizeGIF(data, &crop) })
+	output, err := normalizeGIF(r.Context(), data, &crop)
+	if r.Context().Err() != nil {
+		// The reply was already taken over by the timeout, or nobody is waiting.
+		return
+	}
 	if err != nil {
 		fail()
 		return

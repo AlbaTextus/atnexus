@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -139,10 +140,6 @@ type s3Store struct {
 	bucket string
 }
 
-// One client for every channel when the host injects none, so connections are
-// reused instead of being dialed per request.
-var defaultStorageClient = &http.Client{Timeout: 2 * time.Minute}
-
 func newS3Store(c Channel, transport *http.Client) (*s3Store, error) {
 	if c.Endpoint == "" || c.Bucket == "" || c.AccessKey == "" || c.Secret == "" {
 		return nil, errors.New("S3 channel credentials missing")
@@ -152,28 +149,43 @@ func newS3Store(c Channel, transport *http.Client) (*s3Store, error) {
 		region = "auto"
 	}
 	if transport == nil {
-		transport = defaultStorageClient
+		transport = defaultS3HTTPClient
 	}
 	client := s3.NewFromConfig(aws.Config{Region: region, Credentials: credentials.NewStaticCredentialsProvider(c.AccessKey, c.Secret, ""), HTTPClient: transport}, func(o *s3.Options) { o.BaseEndpoint = aws.String(c.Endpoint); o.UsePathStyle = c.PathStyle })
 	return &s3Store{client, c.Bucket}, nil
 }
 
-// s3Channel is every field a client depends on; an edited channel gets a new client.
-type s3Channel struct {
-	endpoint, bucket, region, accessKey, secret string
-	pathStyle                                   bool
+// A whole-request client timeout would cut large transfers on slow links, so
+// only connection setup and time-to-first-header are bounded; the request
+// context bounds the transfer itself.
+var defaultS3HTTPClient = &http.Client{Transport: &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ResponseHeaderTimeout: 2 * time.Minute,
+	ExpectContinueTimeout: time.Second,
+	IdleConnTimeout:       90 * time.Second,
+	MaxIdleConnsPerHost:   16,
+	ForceAttemptHTTP2:     true,
+}}
+
+type s3Identity struct {
+	Endpoint, Bucket, Region, AccessKey, Secret string
+	PathStyle                                   bool
 }
 
-func (m *Module) s3Store(c Channel) (*s3Store, error) {
-	key := s3Channel{c.Endpoint, c.Bucket, c.Region, c.AccessKey, c.Secret, c.PathStyle}
-	if cached, ok := m.s3Stores.Load(key); ok {
+// s3For reuses one client per distinct channel configuration, so edited
+// credentials or endpoints naturally select a new client.
+func (m *Module) s3For(c Channel) (*s3Store, error) {
+	key := s3Identity{c.Endpoint, c.Bucket, c.Region, c.AccessKey, c.Secret, c.PathStyle}
+	if cached, ok := m.s3Clients.Load(key); ok {
 		return cached.(*s3Store), nil
 	}
 	st, err := newS3Store(c, m.deps.StorageHTTPClient)
 	if err != nil {
 		return nil, err
 	}
-	cached, _ := m.s3Stores.LoadOrStore(key, st)
+	cached, _ := m.s3Clients.LoadOrStore(key, st)
 	return cached.(*s3Store), nil
 }
 
@@ -315,7 +327,7 @@ func (m *Module) resolveStore(meta map[string]any, load func() (uploadConfig, er
 		if len(matches) != 1 || key == "" {
 			return nil, "", errors.New("S3 channel cannot be resolved unambiguously")
 		}
-		st, err := m.s3Store(matches[0])
+		st, err := m.s3For(matches[0])
 		if err != nil {
 			return nil, "", err
 		}

@@ -1,7 +1,7 @@
 "use client"
 
 import type { ElementType } from "react"
-import { BrandCard } from "@/components/brand-card"
+import { BrandCard } from "@/components/layout/brand-card"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export type SiteFooterProps = {

@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { NovelLibrary } from "@/components/novel-library"
+import { NovelLibrary } from "@/components/novel/novel-library"
 
 export const metadata: Metadata = {
   title: "小说库 · atnexus",

@@ -25,18 +25,24 @@ import (
 const maxNovelCoverBytes = 5 << 20
 
 // Preserve the entire cover's aspect ratio, with bounded decoding and no metadata.
-func normalizeNovelCover(data []byte) ([]byte, error) {
-	return normalizeNovelImage(data, 1600)
+func normalizeNovelCover(ctx context.Context, data []byte) ([]byte, error) {
+	return normalizeNovelImage(ctx, data, 1600)
 }
 
-func normalizeNovelImage(data []byte, maxSide int) ([]byte, error) {
+func normalizeNovelImage(ctx context.Context, data []byte, maxSide int) ([]byte, error) {
 	if len(data) == 0 || len(data) > maxNovelCoverBytes {
 		return nil, fmt.Errorf("invalid image size")
 	}
+	// Reading the header is cheap, so images that will be refused never queue.
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > 8192 || cfg.Height > 8192 || int64(cfg.Width)*int64(cfg.Height) > 16_000_000 {
 		return nil, fmt.Errorf("invalid image dimensions")
 	}
+	release, err := apibase.AcquireImageWork(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -99,7 +105,11 @@ func (a *API) uploadNovelCover(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxNovelCoverBytes+1))
 	if err == nil {
-		data, err = apibase.LimitImageWork(r, func() ([]byte, error) { return normalizeNovelCover(data) })
+		data, err = normalizeNovelCover(r.Context(), data)
+	}
+	if r.Context().Err() != nil {
+		// The reply was already taken over by the timeout, or nobody is waiting.
+		return
 	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "cover_invalid", "error_description": "EPUB 封面不是有效图片，或图片尺寸过大。请更换或移除封面后重试。"})

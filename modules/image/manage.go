@@ -3,6 +3,7 @@ package image
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func readBody(w http.ResponseWriter, r *http.Request, value any) error {
@@ -53,11 +56,32 @@ func (m *Module) deleteFile(ctx context.Context, id string) error {
 	if err = tx.Commit(ctx); err != nil {
 		return err
 	}
-	if err = store.Delete(ctx, key); err != nil {
+	// The row is committed as deleting: finish even if the client went away,
+	// otherwise it would stay invisible while its bytes remain.
+	finish, cancel := m.detached(ctx, time.Minute)
+	defer cancel()
+	if err = store.Delete(finish, key); err != nil {
 		return err
 	}
-	_, err = m.pool.Exec(ctx, `DELETE FROM image_files WHERE id=$1 AND state='deleting'`, id)
+	_, err = m.pool.Exec(finish, `DELETE FROM image_files WHERE id=$1 AND state='deleting'`, id)
 	return err
+}
+
+// moveSettled reports whether a move whose commit returned an error took
+// effect anyway, which happens when the reply is lost after the server has
+// committed. Locking the source row waits out a transaction that is still in
+// doubt, so the answer is final.
+func (m *Module) moveSettled(ctx context.Context, id, target string) (bool, error) {
+	var state string
+	err := m.pool.QueryRow(ctx, `SELECT state FROM image_files WHERE id=$1 FOR UPDATE`, id).Scan(&state)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return false, err
+	}
+	// The target row is inserted by the same transaction and by nothing else:
+	// the name was free when the move reserved it.
+	var committed bool
+	err = m.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM image_files WHERE id=$1)`, target).Scan(&committed)
+	return committed, err
 }
 
 func (m *Module) moveFile(ctx context.Context, id, target string) (File, error) {
@@ -114,17 +138,42 @@ func (m *Module) moveFile(ctx context.Context, id, target string) (File, error) 
 	if err = store.Put(ctx, target, object.Body, object.Size, text(f.Metadata, "FileType")); err != nil {
 		return next, err
 	}
-	if _, err = tx.Exec(ctx, `UPDATE image_files SET state='deleting',updated_at=now() WHERE id=$1`, id); err != nil {
+	finish, cancel := m.detached(ctx, time.Minute)
+	defer cancel()
+	committed := false
+	_, err = tx.Exec(ctx, `UPDATE image_files SET state='deleting',updated_at=now() WHERE id=$1`, id)
+	if err == nil {
+		if err = tx.Commit(ctx); err == nil {
+			committed = true
+		} else {
+			// A failed commit is not proof of a rollback: the reply can be lost
+			// after the server committed. Removing the copy then would destroy
+			// the only bytes of a row that is already live.
+			var settleErr error
+			if committed, settleErr = m.moveSettled(finish, id, target); settleErr != nil {
+				m.deps.Logger.Error("image move outcome is unknown; its copy was kept", "error", safeError(settleErr))
+				return next, err
+			}
+		}
+	}
+	if !committed {
+		// The target row rolled back, so remove the copy that would otherwise
+		// be orphaned and block that name for later uploads.
+		if cleanupErr := store.Delete(finish, target); cleanupErr != nil {
+			m.deps.Logger.Error("image move left an orphaned copy", "error", safeError(cleanupErr))
+		}
 		return next, err
 	}
-	if err = tx.Commit(ctx); err != nil {
-		return next, err
+	// The move is committed. Removing the source is cleanup: report success and
+	// leave a failed removal to the janitor, which retries deleting rows.
+	if err = store.Delete(finish, key); err != nil {
+		m.deps.Logger.Error("image move could not remove its source", "error", safeError(err))
+		return next, nil
 	}
-	if err = store.Delete(ctx, key); err != nil {
-		return next, err
+	if _, err = m.pool.Exec(finish, `DELETE FROM image_files WHERE id=$1 AND state='deleting'`, id); err != nil {
+		m.deps.Logger.Error("image move could not clear its source row", "error", safeError(err))
 	}
-	_, err = m.pool.Exec(ctx, `DELETE FROM image_files WHERE id=$1 AND state='deleting'`, id)
-	return next, err
+	return next, nil
 }
 
 func (m *Module) fileAction(w http.ResponseWriter, r *http.Request, op, id string) {

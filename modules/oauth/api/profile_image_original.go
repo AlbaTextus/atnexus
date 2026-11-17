@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AlbaTextus/atnexus/internal/apibase"
 	"github.com/google/uuid"
 )
 
@@ -40,13 +41,13 @@ func readProfileOriginal(r *http.Request, allowGIF bool) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := validateProfileOriginal(data, allowGIF); err != nil {
+	if err := validateProfileOriginal(r.Context(), data, allowGIF); err != nil {
 		return nil, err
 	}
 	return data, nil
 }
 
-func validateProfileOriginal(data []byte, allowGIF bool) error {
+func validateProfileOriginal(ctx context.Context, data []byte, allowGIF bool) error {
 	if len(data) == 0 || len(data) > maxAvatarBytes {
 		return fmt.Errorf("invalid image size")
 	}
@@ -61,13 +62,21 @@ func validateProfileOriginal(data []byte, allowGIF bool) error {
 		if err := checkGIFBudget(data); err != nil {
 			return err
 		}
-		_, err = gif.DecodeAll(bytes.NewReader(data))
-		return err
-	}
-	if format != "png" && format != "jpeg" && format != "webp" {
+	} else if format != "png" && format != "jpeg" && format != "webp" {
 		return fmt.Errorf("unsupported image format")
 	}
-	_, _, err = image.Decode(bytes.NewReader(data))
+	// Only a full decode proves the bytes are a usable image. It costs as much
+	// as normalizing one, so it takes a turn as well.
+	release, err := apibase.AcquireImageWork(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if format == "gif" {
+		_, err = gif.DecodeAll(bytes.NewReader(data))
+	} else {
+		_, _, err = image.Decode(bytes.NewReader(data))
+	}
 	return err
 }
 

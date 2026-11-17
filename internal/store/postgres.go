@@ -73,9 +73,14 @@ const userAvatarColumn = `CASE WHEN users.avatar_source='custom' THEN users.cust
 const userColumns = `users.id,users.email,users.password_hash,users.display_name,users.role,users.is_active,users.created_at,
  users.avatar_source,` + userAvatarColumn + `,users.custom_avatar_url,users.numeric_id,users.bio,users.email_verified,users.profile_setup_required,users.background_url,users.avatar_original_url,users.background_original_url`
 
+// userScanDestinations follows userColumns; managed reads append their extra fields.
+func userScanDestinations(u *User) []any {
+	return []any{&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role, &u.IsActive, &u.CreatedAt, &u.AvatarSource, &u.AvatarURL, &u.CustomAvatarURL, &u.NumericID, &u.Bio, &u.EmailVerified, &u.ProfileSetupRequired, &u.BackgroundURL, &u.AvatarOriginalURL, &u.BackgroundOriginalURL}
+}
+
 func scanUser(row pgx.Row) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role, &u.IsActive, &u.CreatedAt, &u.AvatarSource, &u.AvatarURL, &u.CustomAvatarURL, &u.NumericID, &u.Bio, &u.EmailVerified, &u.ProfileSetupRequired, &u.BackgroundURL, &u.AvatarOriginalURL, &u.BackgroundOriginalURL)
+	err := row.Scan(userScanDestinations(&u)...)
 	return u, err
 }
 

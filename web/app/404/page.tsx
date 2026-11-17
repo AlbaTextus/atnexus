@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { AccountEntryLink } from "@/components/account-entry-link"
-import { HomeHeader } from "@/components/home-header"
-import { NotFoundScreen } from "@/components/not-found-screen"
-import { SiteFooter } from "@/components/site-footer"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
+import { AccountEntryLink } from "@/components/account/account-entry-link"
+import { HomeHeader } from "@/components/home/home-header"
+import { NotFoundScreen } from "@/components/layout/not-found-screen"
+import { SiteFooter } from "@/components/layout/site-footer"
 
 export const metadata: Metadata = {
   title: "ALBATEXTUS",

@@ -1,9 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -33,6 +36,23 @@ func TestModuleCORSPreflightAndOrigin(t *testing.T) {
 		}
 		if scenario.want < 400 && (w.Header().Get("Access-Control-Allow-Origin") != scenario.origin || w.Header().Get("Access-Control-Allow-Credentials") != "true") {
 			t.Fatal("missing credential CORS headers")
+		}
+	}
+}
+
+func panicInTheHandler() { panic("handler broke") }
+
+func TestModulePanicIsLoggedWithTheHandlerStack(t *testing.T) {
+	for _, timeout := range []time.Duration{0, time.Second} {
+		var logged bytes.Buffer
+		handler := ModuleHTTP(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panicInTheHandler() }), timeout, slog.New(slog.NewTextHandler(&logged, nil)))
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/users", nil))
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("timeout %s: status = %d, want 500", timeout, w.Code)
+		}
+		if !strings.Contains(logged.String(), "handler broke") || !strings.Contains(logged.String(), "panicInTheHandler") {
+			t.Fatalf("timeout %s: log does not point at the failing handler: %s", timeout, logged.String())
 		}
 	}
 }

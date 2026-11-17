@@ -370,7 +370,7 @@ func (m *Module) saveUpload(ctx context.Context, form *parsedForm, q url.Values,
 		metadata["Channel"] = "CloudflareR2"
 		metadata["ChannelName"] = channel.Name
 		if channel.Endpoint != "" {
-			store, err = m.s3Store(channel)
+			store, err = m.s3For(channel)
 			metadata["Channel"] = "S3"
 		}
 		if err != nil {
@@ -436,7 +436,10 @@ func (m *Module) saveUpload(ctx context.Context, form *parsedForm, q url.Values,
 		}
 		// After bytes exist, preserve a pending row if finalization fails, so an
 		// operator can reconcile it. Never retry another channel after this point.
-		_, err = m.pool.Exec(ctx, `UPDATE image_files SET state='ready',updated_at=now() WHERE id=$1 AND state='pending'`, id)
+		// The bytes are stored: a client disconnect must not strand the row.
+		finalize, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		_, err = m.pool.Exec(finalize, `UPDATE image_files SET state='ready',updated_at=now() WHERE id=$1 AND state='pending'`, id)
+		cancel()
 		if err != nil {
 			return nil, err
 		}

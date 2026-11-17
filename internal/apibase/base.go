@@ -2,6 +2,7 @@
 package apibase
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -16,21 +17,22 @@ import (
 	"github.com/AlbaTextus/atnexus/pkg/auth"
 )
 
-// Decoding one upload can allocate tens of megabytes per megapixel budget, so
-// image work across every module shares one bound tied to the available CPUs.
-var imageWork = make(chan struct{}, max(2, runtime.GOMAXPROCS(0)))
+// Decoding and rescaling one image can hold well over 100 MiB of pixels, so
+// every module shares one small bound however many CPUs there are; further
+// uploads wait holding just their encoded bytes.
+var imageWork = make(chan struct{}, min(4, max(2, runtime.GOMAXPROCS(0))))
 
-// LimitImageWork runs CPU- and memory-heavy image processing with bounded
-// concurrency. A request that is cancelled while queued never starts.
-func LimitImageWork[T any](r *http.Request, work func() (T, error)) (T, error) {
+// AcquireImageWork waits for a turn to decode an image and returns the function
+// that ends it. Callers validate cheaply first, so images that will be refused
+// never queue, and never wait for a second turn while holding one. A request
+// that timed out or was abandoned stops waiting.
+func AcquireImageWork(ctx context.Context) (release func(), err error) {
 	select {
 	case imageWork <- struct{}{}:
-	case <-r.Context().Done():
-		var zero T
-		return zero, r.Context().Err()
+		return func() { <-imageWork }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
-	defer func() { <-imageWork }()
-	return work()
 }
 
 // Store remains a transitional adapter for the unchanged account schema.

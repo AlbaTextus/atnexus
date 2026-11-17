@@ -268,7 +268,9 @@ func (s *Service) Revoke(ctx context.Context, clientID, secret, tokenValue strin
 }
 
 func (s *Service) Introspect(ctx context.Context, clientID, secret, tokenValue string) (map[string]any, *Error) {
-	if _, authErr := s.authenticateClient(ctx, clientID, secret, false); authErr != nil {
+	// Introspection discloses token subjects and scopes, so a client_id alone
+	// (all a public client has) must not be enough to call it.
+	if _, authErr := s.authenticateClient(ctx, clientID, secret, true); authErr != nil {
 		return nil, authErr
 	}
 	result := map[string]any{"active": false}
@@ -313,7 +315,11 @@ func (s *Service) authenticateClient(ctx context.Context, id, secret string, req
 		return store.Client{}, oauthError("invalid_client", "client authentication is required", 401)
 	}
 	c, err := s.store.ClientByID(ctx, id)
-	if errors.Is(err, store.ErrNotFound) || err != nil || !c.IsActive {
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		// An outage is not a rejected credential; callers must be able to tell.
+		return store.Client{}, oauthError("server_error", "could not load client", 500)
+	}
+	if err != nil || !c.IsActive {
 		return store.Client{}, oauthError("invalid_client", "client authentication failed", 401)
 	}
 	if requireSecret && c.IsPublic() {
@@ -337,6 +343,9 @@ func (s *Service) authenticateClient(ctx context.Context, id, secret string, req
 
 func (s *Service) checkMinimumRole(ctx context.Context, client store.Client, userID uuid.UUID) *Error {
 	user, err := s.store.UserByID(ctx, userID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return oauthError("server_error", "could not load user", 500)
+	}
 	if err != nil || !user.IsActive || !store.MeetsMinimumRole(user.Role, client.MinimumRole) {
 		return oauthError("access_denied", "your account does not meet this application's minimum role", 403)
 	}

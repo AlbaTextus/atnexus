@@ -52,9 +52,31 @@ func (m *Module) initChunks(w http.ResponseWriter, r *http.Request, f *parsedFor
 	}
 	expires := time.Now().Add(m.cfg.UploadTTL)
 	who := r.Context().Value(actorKey{}).(actor)
-	_, err = m.pool.Exec(r.Context(), `INSERT INTO image_uploads(id,owner,data,expires_at) VALUES($1,$2,$3,$4)`, id, who.ID, raw, expires)
+	// Each unfinished session may stage one maximum-sized file, so bound how
+	// many an owner can hold open. Merged sessions keep only their receipt.
+	tx, err := m.pool.Begin(r.Context())
 	if err != nil {
 		m.failure(w, err)
+		return
+	}
+	defer tx.Rollback(context.WithoutCancel(r.Context()))
+	// Sessions started together would each count the others as absent. The
+	// owner lock makes them take turns; the count below is a later statement,
+	// so it sees what the previous holder committed.
+	if _, err = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "image_uploads:"+who.ID); err != nil {
+		m.failure(w, err)
+		return
+	}
+	tag, err := tx.Exec(r.Context(), `INSERT INTO image_uploads(id,owner,data,expires_at) SELECT $1,$2,$3,$4 WHERE (SELECT count(*) FROM image_uploads WHERE owner=$2 AND expires_at>now() AND NOT data ? 'result')<$5`, id, who.ID, raw, expires, m.cfg.MaxSessionsPerOwner)
+	if err == nil {
+		err = tx.Commit(r.Context())
+	}
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		respondError(w, 429, "too_many_upload_sessions")
 		return
 	}
 	respond(w, 200, map[string]any{"success": true, "uploadId": id, "session": map[string]any{"uploadId": id, "totalChunks": total, "uploadChannel": channel, "channelName": session.ChannelName, "expiresAt": expires.UnixMilli()}})
@@ -211,16 +233,25 @@ func (m *Module) chunk(w http.ResponseWriter, r *http.Request, f *parsedForm) {
 		m.failure(w, err)
 		return
 	}
-	target := chunkPartName(id, n)
-	if _, err = m.scratch.Stat(target); err == nil {
-		m.failure(w, ErrConflict)
+	// Reject oversized uploads while parts arrive, not only at merge time, so a
+	// session can never stage more than one maximum-sized file on disk.
+	var staged int64
+	if err = tx.QueryRow(r.Context(), `SELECT COALESCE(sum(size),0) FROM image_upload_parts WHERE upload_id=$1`, id).Scan(&staged); err != nil {
+		m.failure(w, err)
 		return
 	}
+	if staged+f.Size > m.cfg.MaxUploadBytes {
+		respondError(w, 413, "upload_too_large")
+		return
+	}
+	target := chunkPartName(id, n)
 	if _, err = f.File.Seek(0, 0); err != nil {
 		m.failure(w, err)
 		return
 	}
-	part, err := m.scratch.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	// The session row lock is held and no part row exists, so a file left here
+	// by an interrupted request is unreferenced and safe to replace.
+	part, err := m.scratch.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
 	if err != nil {
 		m.failure(w, err)
 		return
@@ -239,6 +270,9 @@ func (m *Module) chunk(w http.ResponseWriter, r *http.Request, f *parsedForm) {
 		return
 	}
 	if err = tx.Commit(r.Context()); err != nil {
+		// The part may be committed even though the reply was lost, so its file
+		// stays. If it was not, a retry replaces it and the janitor removes it
+		// with the session.
 		m.failure(w, err)
 		return
 	}

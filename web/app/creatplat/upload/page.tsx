@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { NovelSubmit } from "@/components/novel-submit"
+import { NovelSubmit } from "@/components/creatplat/novel-submit"
 
 export const metadata: Metadata = { title: "提交小说" }
 

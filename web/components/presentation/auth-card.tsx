@@ -1,6 +1,6 @@
 import type { ElementType, ReactNode } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { BrandWordmark } from "@/components/brand-wordmark"
+import { BrandWordmark } from "@/components/layout/brand-wordmark"
 
 export type AuthCardProps = {
   title: string

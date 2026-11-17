@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { AccountShell } from "@/components/account-shell"
+import { AccountShell } from "@/components/account/account-shell"
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return <AccountShell area="admin">{children}</AccountShell>

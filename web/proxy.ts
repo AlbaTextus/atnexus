@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { readMaintenance } from "@/lib/maintenance"
-import { maintenanceDestination } from "@/lib/maintenance-navigation"
+import { readMaintenance } from "@/lib/maintenance/maintenance"
+import { maintenanceDestination } from "@/lib/maintenance/maintenance-navigation"
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname

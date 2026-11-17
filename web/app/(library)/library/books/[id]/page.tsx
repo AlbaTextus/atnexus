@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { NovelDetail } from "@/components/novel-detail"
+import { NovelDetail } from "@/components/novel/novel-detail"
 
 export const metadata: Metadata = { title: "作品详情 · atnexus" }
 

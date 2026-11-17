@@ -1,5 +1,5 @@
-@import "../styles/oauth.css";
-@import "../styles/scrollbars.css";
+@import "../styles/index.css";
+@import "../styles/base/scrollbars.css";
 
 /* Keep text spacing consistent across route styles, utilities, and portals. */
 *,

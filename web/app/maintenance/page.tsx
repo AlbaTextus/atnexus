@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
-import { readMaintenance } from "@/lib/maintenance"
-import { MaintenanceScreen } from "@/components/maintenance-screen"
-import { maintenanceDestination } from "@/lib/maintenance-navigation"
+import { readMaintenance } from "@/lib/maintenance/maintenance"
+import { MaintenanceScreen } from "@/components/maintenance/maintenance-screen"
+import { maintenanceDestination } from "@/lib/maintenance/maintenance-navigation"
 
 export const metadata: Metadata = { title: "ALBATEXTUS", robots: { index: false, follow: false } }
 export const dynamic = "force-dynamic"

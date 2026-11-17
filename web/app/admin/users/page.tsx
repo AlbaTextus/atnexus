@@ -1,3 +1,3 @@
-import { UsersList } from "@/components/users-list"
+import { UsersList } from "@/components/admin/users-list"
 
 export default function UsersPage() { return <UsersList /> }

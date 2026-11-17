@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { notFound, redirect } from "next/navigation"
-import { findNovelSection } from "@/lib/novel-sections"
-import { NovelResources } from "@/components/novel-resources"
+import { findNovelSection } from "@/lib/novel/novel-sections"
+import { NovelResources } from "@/components/novel/novel-resources"
 
 type Props = { params: Promise<{ section: string }> }
 

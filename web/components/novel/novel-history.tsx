@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useId, useMemo, useRef, useState } from "react"
-import { diffChars } from "diff"
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react"
+import { diffArrays, diffChars } from "diff"
 import { Link } from "next-view-transitions"
-import { ArrowLeft, Check, Code, Copy, GitCommitHorizontal, History, MoreHorizontal } from "lucide-react"
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Code, Copy, GitCommitHorizontal, History, MoreHorizontal } from "lucide-react"
 import { ContentFailure, NovelAccessGate, useNovelAccess } from "@/components/novel/novel-access"
 import { ContributorAvatar } from "@/components/novel/contributors-card"
 import { NovelAutoHeight } from "@/components/novel/novel-motion"
@@ -31,6 +31,11 @@ const novelFieldGroups: [string[], string][] = [
   [["platformId", "platformName"], "平台"],
   [["tagIds", "tagNames"], "标签"],
 ]
+const redundantIdPairs: [string, string][] = [
+  ["authorId", "authorName"],
+  ["platformId", "platformName"],
+  ["tagIds", "tagNames"],
+]
 
 function valueText(value: unknown): string {
   if (value === null || value === undefined || value === "") return "未设置"
@@ -39,6 +44,19 @@ function valueText(value: unknown): string {
   if (value === "COMPLETED") return "已完结"
   if (value === "ABANDONED") return "太监"
   return typeof value === "object" ? JSON.stringify(value) : String(value)
+}
+
+function diffFieldText(value: unknown): string {
+  if (value === null || value === undefined || value === "") return ""
+  if (Array.isArray(value)) {
+    if (value.length === 0) return ""
+    if (value.every(item => item === null || typeof item !== "object")) return value.map(valueText).join("、")
+    return JSON.stringify(value, null, 2)
+  }
+  if (value === "ONGOING") return "连载中"
+  if (value === "COMPLETED") return "已完结"
+  if (value === "ABANDONED") return "太监"
+  return typeof value === "object" ? JSON.stringify(value, null, 2) : String(value)
 }
 
 function titleOf(record?: Record<string, unknown> | null, fallback?: Record<string, unknown> | null): string {
@@ -208,50 +226,389 @@ function groupRevisionsByDate(revisions: NovelRevision[]): RevisionGroup[] {
   return groups
 }
 
-function TextChange({ before, after }: { before: string; after: string }) {
-  const parts = useMemo(() => diffChars(before, after, { timeout: 50 }), [before, after])
-  return <>
-    <del className="novel-history-text-before" aria-label="修改前"><span className="novel-history-diff-sign" aria-hidden="true">−</span><span>{parts
-      ? parts.filter(part => !part.added).map((part, index) => part.removed ? <mark key={index}>{part.value}</mark> : <span key={index}>{part.value}</span>)
-      : <mark>{before}</mark>}</span></del>
-    <ins className="novel-history-text-after" aria-label="修改后"><span className="novel-history-diff-sign" aria-hidden="true">+</span><span>{parts
-      ? parts.filter(part => !part.removed).map((part, index) => part.added ? <mark key={index}>{part.value}</mark> : <span key={index}>{part.value}</span>)
-      : <mark>{after}</mark>}</span></ins>
-  </>
+/* Unified line-by-line diff model & builder */
+
+type InlineToken = { text: string; highlight?: boolean }
+
+type DiffLine = {
+  kind: "context" | "del" | "add"
+  oldLine: number | null
+  newLine: number | null
+  text: string
+  tokens?: InlineToken[]
 }
 
-function BodyChange({ hunks }: { hunks: ChapterBodyHunk[] }) {
-  return <div className="novel-history-body-diff">{hunks.map((hunk, index) => <div className="novel-history-body-hunk" key={index}>
-    <div className="novel-history-hunk-location">@@ 原文第 {hunk.beforeLine} 行 → 修改后第 {hunk.afterLine} 行 @@</div>
-    <del className="novel-history-text-before" aria-label="正文修改前"><span className="novel-history-diff-sign" aria-hidden="true">−</span><span>{hunk.parts.filter(part => part.kind !== "insert").map((part, i) =>
-      part.kind === "delete" ? <mark key={i}>{part.text}</mark> : <span key={i}>{part.text}</span>)}</span></del>
-    <ins className="novel-history-text-after" aria-label="正文修改后"><span className="novel-history-diff-sign" aria-hidden="true">+</span><span>{hunk.parts.filter(part => part.kind !== "delete").map((part, i) =>
-      part.kind === "insert" ? <mark key={i}>{part.text}</mark> : <span key={i}>{part.text}</span>)}</span></ins>
-  </div>)}</div>
+type DiffBlock =
+  | { type: "lines"; key: string; lines: DiffLine[] }
+  | { type: "fold"; key: string; lines: DiffLine[] }
+  | { type: "gap"; key: string; label: string }
+
+type UnifiedDiffModel = {
+  blocks: DiffBlock[]
+  added: number
+  removed: number
+  note?: string
 }
 
-function ChangeDetail({ change }: { change: NovelChange }) {
+function splitTextLines(text: string): string[] {
+  return text === "" ? [] : text.replace(/\r\n/g, "\n").split("\n")
+}
+
+const delimiterPattern = /[，。！？；：、（）【】「」『』《》\[\]()\s]/
+const asciiFragmentPattern = /^[^\u4e00-\u9fff\s\[\]()]+$/
+
+function computeInlinePair(oldLine: string, newLine: string): { oldTokens: InlineToken[]; newTokens: InlineToken[] } | null {
+  if (!oldLine || !newLine || oldLine.length > 2000 || newLine.length > 2000) return null
+  const parts = diffChars(oldLine, newLine, { timeout: 30 })
+  if (!parts) return null
+
+  let shared = 0
+  for (const part of parts) {
+    if (!part.added && !part.removed) shared += part.value.length
+  }
+  const minLen = Math.min(oldLine.length, newLine.length)
+  if (minLen === 0 || (shared / minLen < 0.2 && shared < 4)) return null
+
+  type Segment = { kind: "equal"; text: string } | { kind: "edit"; del: string; add: string }
+  const raw: Segment[] = []
+  for (const part of parts) {
+    if (!part.added && !part.removed) {
+      const prev = raw[raw.length - 1]
+      if (prev?.kind === "equal") prev.text += part.value
+      else raw.push({ kind: "equal", text: part.value })
+    } else {
+      let prev = raw[raw.length - 1]
+      if (!prev || prev.kind !== "edit") {
+        prev = { kind: "edit", del: "", add: "" }
+        raw.push(prev)
+      }
+      if (part.removed) prev.del += part.value
+      if (part.added) prev.add += part.value
+    }
+  }
+
+  // Merge tiny unchanged islands sandwiched between edits so URLs and phrases highlight cleanly.
+  const merged: Segment[] = []
+  for (let i = 0; i < raw.length; i++) {
+    const seg = raw[i]
+    const prev = merged[merged.length - 1]
+    const next = raw[i + 1]
+    if (
+      seg.kind === "equal" &&
+      prev?.kind === "edit" &&
+      next?.kind === "edit" &&
+      (seg.text.length === 1 || (!delimiterPattern.test(seg.text) && asciiFragmentPattern.test(seg.text) && seg.text.length <= 8))
+    ) {
+      prev.del += seg.text + next.del
+      prev.add += seg.text + next.add
+      i++
+      continue
+    }
+    merged.push(seg)
+  }
+
+  if (!merged.some(seg => seg.kind === "equal")) return null
+
+  const oldTokens: InlineToken[] = []
+  const newTokens: InlineToken[] = []
+  for (const seg of merged) {
+    if (seg.kind === "equal") {
+      oldTokens.push({ text: seg.text })
+      newTokens.push({ text: seg.text })
+    } else {
+      if (seg.del) oldTokens.push({ text: seg.del, highlight: true })
+      if (seg.add) newTokens.push({ text: seg.add, highlight: true })
+    }
+  }
+  return { oldTokens, newTokens }
+}
+
+function buildDiffLines(oldLines: string[], newLines: string[], startOld = 1, startNew = 1): { lines: DiffLine[]; added: number; removed: number } {
+  const chunks = diffArrays(oldLines, newLines)
+  const lines: DiffLine[] = []
+  let oldNo = startOld
+  let newNo = startNew
+  let added = 0
+  let removed = 0
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i]
+    if (!chunk.added && !chunk.removed) {
+      for (const text of chunk.value) {
+        lines.push({ kind: "context", oldLine: oldNo++, newLine: newNo++, text })
+      }
+      continue
+    }
+    const delTexts: string[] = []
+    const addTexts: string[] = []
+    while (i < chunks.length && (chunks[i].added || chunks[i].removed)) {
+      if (chunks[i].removed) delTexts.push(...chunks[i].value)
+      if (chunks[i].added) addTexts.push(...chunks[i].value)
+      i++
+    }
+    i--
+
+    const pairLimit = Math.min(delTexts.length, addTexts.length, 24)
+    const delTokens: (InlineToken[] | undefined)[] = new Array(delTexts.length)
+    const addTokens: (InlineToken[] | undefined)[] = new Array(addTexts.length)
+    for (let k = 0; k < pairLimit; k++) {
+      const paired = computeInlinePair(delTexts[k], addTexts[k])
+      if (paired) {
+        delTokens[k] = paired.oldTokens
+        addTokens[k] = paired.newTokens
+      }
+    }
+
+    for (let k = 0; k < delTexts.length; k++) {
+      lines.push({ kind: "del", oldLine: oldNo++, newLine: null, text: delTexts[k], tokens: delTokens[k] })
+      removed++
+    }
+    for (let k = 0; k < addTexts.length; k++) {
+      lines.push({ kind: "add", oldLine: null, newLine: newNo++, text: addTexts[k], tokens: addTokens[k] })
+      added++
+    }
+  }
+
+  return { lines, added, removed }
+}
+
+const CONTEXT_KEEP = 3
+
+function foldContextRuns(lines: DiffLine[], prefix = "b"): DiffBlock[] {
+  const blocks: DiffBlock[] = []
+  let index = 0
+  let seq = 0
+
+  while (index < lines.length) {
+    if (lines[index].kind !== "context") {
+      const start = index
+      while (index < lines.length && lines[index].kind !== "context") index++
+      blocks.push({ type: "lines", key: `${prefix}-${seq++}`, lines: lines.slice(start, index) })
+      continue
+    }
+
+    const start = index
+    while (index < lines.length && lines[index].kind === "context") index++
+    const run = lines.slice(start, index)
+    const isStart = start === 0
+    const isEnd = index === lines.length
+
+    if (isStart && isEnd) {
+      if (run.length > CONTEXT_KEEP + 1) {
+        blocks.push({ type: "lines", key: `${prefix}-${seq++}`, lines: run.slice(0, CONTEXT_KEEP) })
+        blocks.push({ type: "fold", key: `${prefix}-fold-${seq++}`, lines: run.slice(CONTEXT_KEEP) })
+      } else {
+        blocks.push({ type: "lines", key: `${prefix}-${seq++}`, lines: run })
+      }
+    } else if (isStart) {
+      const hidden = run.length - CONTEXT_KEEP
+      if (hidden >= 2) {
+        blocks.push({ type: "fold", key: `${prefix}-fold-${seq++}`, lines: run.slice(0, hidden) })
+        blocks.push({ type: "lines", key: `${prefix}-${seq++}`, lines: run.slice(hidden) })
+      } else {
+        blocks.push({ type: "lines", key: `${prefix}-${seq++}`, lines: run })
+      }
+    } else if (isEnd) {
+      const hidden = run.length - CONTEXT_KEEP
+      if (hidden >= 2) {
+        blocks.push({ type: "lines", key: `${prefix}-${seq++}`, lines: run.slice(0, CONTEXT_KEEP) })
+        blocks.push({ type: "fold", key: `${prefix}-fold-${seq++}`, lines: run.slice(CONTEXT_KEEP) })
+      } else {
+        blocks.push({ type: "lines", key: `${prefix}-${seq++}`, lines: run })
+      }
+    } else {
+      const hidden = run.length - CONTEXT_KEEP * 2
+      if (hidden >= 2) {
+        blocks.push({ type: "lines", key: `${prefix}-${seq++}`, lines: run.slice(0, CONTEXT_KEEP) })
+        blocks.push({ type: "fold", key: `${prefix}-fold-${seq++}`, lines: run.slice(CONTEXT_KEEP, run.length - CONTEXT_KEEP) })
+        blocks.push({ type: "lines", key: `${prefix}-${seq++}`, lines: run.slice(run.length - CONTEXT_KEEP) })
+      } else {
+        blocks.push({ type: "lines", key: `${prefix}-${seq++}`, lines: run })
+      }
+    }
+  }
+
+  return blocks
+}
+
+function buildTextDiffModel(beforeText: string, afterText: string): UnifiedDiffModel {
+  const { lines, added, removed } = buildDiffLines(splitTextLines(beforeText), splitTextLines(afterText), 1, 1)
+  return { blocks: foldContextRuns(lines), added, removed }
+}
+
+function buildBodyHunksModel(hunks: ChapterBodyHunk[]): UnifiedDiffModel {
+  const blocks: DiffBlock[] = []
+  let totalAdded = 0
+  let totalRemoved = 0
+  let prevOldEnd = 0
+
+  hunks.forEach((hunk, hunkIndex) => {
+    const beforeText = hunk.parts.filter(part => part.kind !== "insert").map(part => part.text).join("")
+    const afterText = hunk.parts.filter(part => part.kind !== "delete").map(part => part.text).join("")
+    const skipped = hunk.beforeLine - prevOldEnd - 1
+    if (skipped > 0) {
+      blocks.push({
+        type: "gap",
+        key: `gap-${hunkIndex}`,
+        label: hunkIndex === 0 ? `${skipped} 行未修改内容` : `省略中间 ${skipped} 行未修改内容`,
+      })
+    }
+    const { lines, added, removed } = buildDiffLines(
+      splitTextLines(beforeText),
+      splitTextLines(afterText),
+      Math.max(1, hunk.beforeLine),
+      Math.max(1, hunk.afterLine),
+    )
+    totalAdded += added
+    totalRemoved += removed
+    const lastOld = [...lines].reverse().find(line => line.oldLine !== null)?.oldLine
+    prevOldEnd = lastOld ?? hunk.beforeLine
+    blocks.push(...foldContextRuns(lines, `h${hunkIndex}`))
+  })
+
+  return { blocks, added: totalAdded, removed: totalRemoved }
+}
+
+type DiffCardSpec = {
+  key: string
+  title: string
+  subtitle: string
+  action?: string
+  build: () => UnifiedDiffModel
+}
+
+function buildChangeCards(change: NovelChange, changeIndex: number): DiffCardSpec[] {
   const before = change.before || {}, after = change.after || {}
-  const changed = Object.keys({ ...before, ...after }).filter(key =>
+  const rawChanged = Object.keys({ ...before, ...after }).filter(key =>
     key !== "id" && key !== "novelId" && key !== "contentHash" &&
     JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+  const changedSet = new Set(rawChanged)
+  const changed = rawChanged.filter(key =>
+    !redundantIdPairs.some(([idKey, nameKey]) => key === idKey && changedSet.has(nameKey)))
+
+  const entityName = entities[change.entity] || change.entity
+  const itemTitle = (change.entity === "Volume" || change.entity === "Chapter") ? titleOf(after, before) : ""
+  const contextPath = itemTitle ? `${entityName} · ${itemTitle}` : entityName
   const bodyChanged = before.contentHash !== after.contentHash
-  return <div className="novel-history-change">
-    <div className="novel-history-change-header">
-      <span className="novel-history-action-badge" data-action={change.action}>{actions[change.action] || change.action}</span>
-      <strong>{entities[change.entity] || change.entity}{(change.entity === "Volume" || change.entity === "Chapter") && ` · ${valueText(after.title ?? before.title)}`}</strong>
-    </div>
-    <dl>{changed.map(key => <div key={key}>
-      <dt>{fields[key] || key}</dt>
-      <dd>{change.action === "UPDATE" && typeof before[key] === "string" && typeof after[key] === "string"
-        ? <TextChange before={valueText(before[key])} after={valueText(after[key])}/>
-        : <>{change.action !== "INSERT" && <del>{valueText(before[key])}</del>}{change.action !== "DELETE" && <ins>{valueText(after[key])}</ins>}</>}</dd>
-    </div>)}
-    {bodyChanged && <div><dt>章节正文</dt><dd>{change.bodyDiff?.length
-      ? <BodyChange hunks={change.bodyDiff}/>
-      : change.action === "INSERT" ? "已添加" : change.action === "DELETE" ? "已删除" : "已修改（此记录未保存正文差异）"}</dd></div>}
-    </dl>
+  const cards: DiffCardSpec[] = []
+
+  if (change.action === "INSERT" || change.action === "DELETE") {
+    const isInsert = change.action === "INSERT"
+    const source = isInsert ? after : before
+    const scalarKeys = changed.filter(key => key !== "summary" && key !== "blocks")
+    if (scalarKeys.length > 0 || (bodyChanged && !change.bodyDiff?.length)) {
+      cards.push({
+        key: `${changeIndex}-entity`,
+        title: itemTitle || entityName,
+        subtitle: itemTitle ? entityName : (actions[change.action] || change.action),
+        action: change.action,
+        build: () => {
+          const rows = scalarKeys.map(key => `${fields[key] || key}: ${valueText(source[key])}`)
+          if (bodyChanged && !change.bodyDiff?.length) {
+            rows.push(`章节正文: ${isInsert ? "已添加正文内容" : "已删除正文内容"}`)
+          }
+          const text = rows.join("\n")
+          return buildTextDiffModel(isInsert ? "" : text, isInsert ? text : "")
+        },
+      })
+    }
+    for (const richKey of ["summary", "blocks"] as const) {
+      if (changedSet.has(richKey)) {
+        const text = diffFieldText(source[richKey])
+        if (text) {
+          cards.push({
+            key: `${changeIndex}-${richKey}`,
+            title: fields[richKey] || richKey,
+            subtitle: contextPath,
+            action: change.action,
+            build: () => buildTextDiffModel(isInsert ? "" : text, isInsert ? text : ""),
+          })
+        }
+      }
+    }
+    return cards
+  }
+
+  for (const key of changed) {
+    cards.push({
+      key: `${changeIndex}-${key}`,
+      title: fields[key] || key,
+      subtitle: contextPath,
+      build: () => buildTextDiffModel(diffFieldText(before[key]), diffFieldText(after[key])),
+    })
+  }
+
+  if (bodyChanged) {
+    cards.push({
+      key: `${changeIndex}-body`,
+      title: "章节正文",
+      subtitle: contextPath,
+      build: () => change.bodyDiff?.length
+        ? buildBodyHunksModel(change.bodyDiff)
+        : { blocks: [], added: 0, removed: 0, note: "已修改章节正文（此记录未保存行级差异）" },
+    })
+  }
+
+  return cards
+}
+
+function DiffLineRow({ line }: { line: DiffLine }) {
+  const lineNumber = line.kind === "del" ? line.oldLine : (line.newLine ?? line.oldLine)
+  return <div className="novel-diff-line" data-kind={line.kind}>
+    <span className="novel-diff-bar" aria-hidden="true"/>
+    <span className="novel-diff-num" aria-hidden="true">{lineNumber ?? ""}</span>
+    <span className="novel-diff-code">
+      {line.tokens
+        ? line.tokens.map((token, i) => token.highlight ? <mark key={i}>{token.text}</mark> : <Fragment key={i}>{token.text}</Fragment>)
+        : (line.text || "\u00A0")}
+    </span>
   </div>
+}
+
+function UnifiedDiffCard({ spec, defaultOpen }: { spec: DiffCardSpec; defaultOpen: boolean }) {
+  const bodyId = useId()
+  const [open, setOpen] = useState(defaultOpen)
+  const [expandedFolds, setExpandedFolds] = useState<Record<string, boolean>>({})
+  const model = useMemo(() => spec.build(), [spec])
+
+  function toggleFold(key: string) {
+    setExpandedFolds(current => ({ ...current, [key]: !current[key] }))
+  }
+
+  return <section className="novel-diff-card" data-collapsed={!open || undefined}>
+    <button type="button" className="novel-diff-header" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(value => !value)}>
+      <span className="novel-diff-header-main">
+        <ChevronDown className="novel-diff-chevron" aria-hidden="true"/>
+        <Code className="novel-diff-file-icon" aria-hidden="true"/>
+        <strong className="novel-diff-title">{spec.title}</strong>
+        <span className="novel-diff-subtitle">{spec.subtitle}</span>
+        {spec.action && spec.action !== "UPDATE" && <span className="novel-history-action-badge" data-action={spec.action}>{actions[spec.action] || spec.action}</span>}
+      </span>
+      {(model.added > 0 || model.removed > 0) && <span className="novel-diff-stats" aria-label={`新增 ${model.added} 行，删除 ${model.removed} 行`}>
+        {model.added > 0 && <span className="novel-diff-stat-add">+{model.added}</span>}
+        {model.removed > 0 && <span className="novel-diff-stat-del">−{model.removed}</span>}
+      </span>}
+    </button>
+
+    {open && <div id={bodyId} className="novel-diff-body">
+      {model.note ? <div className="novel-diff-note">{model.note}</div> : model.blocks.map(block => {
+        if (block.type === "gap") {
+          return <div className="novel-diff-gap" key={block.key}><span>{block.label}</span></div>
+        }
+        if (block.type === "lines") {
+          return block.lines.map((line, i) => <DiffLineRow key={`${block.key}-${i}`} line={line}/>)
+        }
+        const unfolded = Boolean(expandedFolds[block.key])
+        return <Fragment key={block.key}>
+          <button type="button" className="novel-diff-fold" data-expanded={unfolded || undefined} onClick={() => toggleFold(block.key)}>
+            {unfolded ? <ChevronUp aria-hidden="true"/> : <ChevronDown aria-hidden="true"/>}
+            <span>{unfolded ? `收起 ${block.lines.length} 行未修改内容` : `${block.lines.length} 行未修改内容`}</span>
+          </button>
+          {unfolded && block.lines.map((line, i) => <DiffLineRow key={`${block.key}-${i}`} line={line}/>)}
+        </Fragment>
+      })}
+    </div>}
+  </section>
 }
 
 export function NovelHistoryPage({ id }: { id: number }) {
@@ -268,6 +625,7 @@ function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
   useEffect(() => () => clearTimeout(copyTimer.current), [])
 
   const summary = useMemo(() => summarizeRevision(item), [item])
+  const cards = useMemo(() => rendered ? item.changes.flatMap((change, index) => buildChangeCards(change, index)) : [], [item.changes, rendered])
   const hasChanges = item.changes.length > 0
   const shortId = item.id.slice(0, 7)
   const fullTimestamp = item.startedAt && item.startedAt !== item.createdAt
@@ -358,7 +716,7 @@ function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
     {hasChanges && <NovelAutoHeight open={opened}>
       <div id={detailId} className="novel-history-details">
         {rendered && <div className="novel-history-details-body">
-          {item.changes.map((change, index) => <ChangeDetail key={index} change={change}/>)}
+          {cards.map((spec, index) => <UnifiedDiffCard key={spec.key} spec={spec} defaultOpen={index < 6}/>)}
         </div>}
       </div>
     </NovelAutoHeight>}

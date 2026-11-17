@@ -79,4 +79,14 @@ func testReviewReceipts(t *testing.T, pool *pgxpool.Pool) {
 	if err := pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM "Novel" WHERE title='receipt-novel'`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("post-commit duplicated content=%d err=%v", count, err)
 	}
+	// Once the host has recorded the outcome it releases the receipt; forgetting
+	// an already released receipt stays harmless.
+	for range 2 {
+		if err := st.DeleteMutationReceipt(context.Background(), id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM "MutationReceipt" WHERE id=$1::uuid`, id).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("released receipts=%d err=%v", count, err)
+	}
 }

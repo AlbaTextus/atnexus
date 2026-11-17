@@ -19,6 +19,7 @@ type API struct {
 	reviews                       store.ATHubReviewStore
 	creatorPing                   func(context.Context) error
 	athubReviewExecutor           store.ATHubReviewExecutor
+	athubReceiptForgetter         func(context.Context, string) error
 	athubSubmitter                func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID)
 	athubNovelEditor              func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32)
 	athubIllustrationSubmitter    func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32)

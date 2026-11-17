@@ -109,6 +109,7 @@ func run(logger *slog.Logger) error {
 	creators := creatorapi.New(cfg, st, logger)
 	creators.SetStorage(creatorDB)
 	creators.SetATHubReviewExecutor(access.ApplyReview)
+	creators.SetATHubReceiptForgetter(hub.ForgetMutation)
 	creators.SetATHubSubmitter(access.SubmitUpload)
 	creators.SetATHubNovelEditor(access.SubmitNovelEdit)
 	creators.SetATHubIllustrationSubmitter(access.SubmitIllustration)

@@ -34,6 +34,8 @@ model Author {
   platform   Platform @relation(fields: [platformId], references: [id], onDelete: Restrict)
   novels     Novel[]
 
+  // Expression indexes on btrim(name) live only in migration SQL:
+  // Author_platformId_trimmedName_idx and Author_trimmedName_idx.
   @@index([platformId])
 }
 
@@ -118,6 +120,8 @@ model Chapter {
   order     Int
   title     String
   content   String   @db.Text
+  // Stored generated column (non-whitespace characters of content); never written directly.
+  wordCount Int      @default(dbgenerated())
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   novel     Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
   volume    Volume?  @relation(fields: [volumeId, novelId], references: [id, novelId], onDelete: NoAction)

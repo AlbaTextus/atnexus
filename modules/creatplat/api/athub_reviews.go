@@ -21,6 +21,11 @@ func (a *API) SetATHubReviewExecutor(execute store.ATHubReviewExecutor) {
 	a.athubReviewExecutor = execute
 }
 
+// SetATHubReceiptForgetter releases the content replay receipt of a decided review.
+func (a *API) SetATHubReceiptForgetter(forget func(context.Context, string) error) {
+	a.athubReceiptForgetter = forget
+}
+
 func (a *API) athubReviews(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.AccountActor(w, r)
 	if !ok {
@@ -89,6 +94,17 @@ func (a *API) athubReviews(w http.ResponseWriter, r *http.Request) {
 			}
 			a.PolicyError(audit, err)
 			return
+		}
+		// The decision is committed, so this review can never be applied again and
+		// its replay receipt is no longer needed. A failed cleanup only leaves the
+		// receipt behind; it never affects the decision. A rejected review was
+		// never applied, so it has no receipt to release.
+		if a.athubReceiptForgetter != nil && input.Decision == "approve" {
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
+			if err := a.athubReceiptForgetter(ctx, id.String()); err != nil {
+				a.Log.Warn("review receipt cleanup failed", "review", id, "error", err)
+			}
+			cancel()
 		}
 		a.populateReviewAvatars(r.Context(), &item)
 		writeJSON(audit, 200, item)

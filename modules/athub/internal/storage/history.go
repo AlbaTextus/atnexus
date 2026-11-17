@@ -196,7 +196,7 @@ func snapshot(ctx context.Context, q database, id int32) (map[string]map[string]
 		UNION ALL SELECT 'Volume',v."id"::text,to_jsonb(v)-'updatedAt'-'createdAt'
 		FROM "Volume" v WHERE "novelId"=$1
 		UNION ALL SELECT 'Chapter',c."id"::text,
-			(to_jsonb(c)-'content'-'updatedAt') || jsonb_build_object(
+			(to_jsonb(c)-'content'-'updatedAt'-'wordCount') || jsonb_build_object(
 				'contentHash',md5(c.content),'contentLength',length(c.content))
 		FROM "Chapter" c WHERE "novelId"=$1
 		UNION ALL SELECT 'Illustration',i.id::text,to_jsonb(i)-'createdAt'

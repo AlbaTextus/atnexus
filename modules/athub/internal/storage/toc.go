@@ -6,15 +6,15 @@ import (
 )
 
 func (p *Postgres) GetTOC(ctx context.Context, novelID int32) (TOC, error) {
-	// Count non-whitespace Unicode characters in PostgreSQL; the browser receives
-	// only chapter summaries. The same snapshot keeps the count and TOC consistent.
+	// "wordCount" is a stored generated column of non-whitespace Unicode characters,
+	// so chapter bodies are never read here. The browser receives only chapter
+	// summaries, and the same snapshot keeps the count and TOC consistent.
 	rows, err := p.db(ctx).Query(ctx, `SELECT t.kind, t."id", t."volumeId", t."order", t."title", t."createdAt", t."updatedAt", t.words
 		FROM "Novel" n LEFT JOIN LATERAL (
 			SELECT 0 AS kind, "id", NULL::integer AS "volumeId", "order", "title", "createdAt", "updatedAt", 0 AS words
 			FROM "Volume" WHERE "novelId" = n."id"
 			UNION ALL
-			SELECT 1 AS kind, "id", "volumeId", "order", "title", NULL::timestamptz AS "createdAt", "updatedAt",
-				char_length(regexp_replace("content", '[\u0009-\u000D\u0020\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+', '', 'g')) AS words
+			SELECT 1 AS kind, "id", "volumeId", "order", "title", NULL::timestamptz AS "createdAt", "updatedAt", "wordCount" AS words
 			FROM "Chapter" WHERE "novelId" = n."id"
 		) t ON true WHERE n."id" = $1 ORDER BY t.kind, t."order"`, novelID)
 	if err != nil {

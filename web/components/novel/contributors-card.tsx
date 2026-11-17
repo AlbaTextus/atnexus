@@ -31,10 +31,10 @@ export function ContributorAvatar({
       {contributor && safeContentURL(contributor.avatar) && <Avatar.Image
         className="size-full object-cover"
         src={contributor.avatar}
-        alt={`${contributor.name}的头像`}
+        alt={`${contributor.name || "用户"}的头像`}
       />}
       <Avatar.Fallback className={`flex size-full items-center justify-center bg-secondary font-medium text-secondary-foreground ${size === "tiny" ? "text-[10px]" : "text-xs"}`}>
-        {contributor?.name.slice(0, 1).toUpperCase() || "—"}
+        {contributor?.name?.slice(0, 1).toUpperCase() || "—"}
       </Avatar.Fallback>
     </Avatar.Root>
   );

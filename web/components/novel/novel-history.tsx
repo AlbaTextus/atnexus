@@ -324,7 +324,10 @@ function computeInlinePair(oldLine: string, newLine: string): { oldTokens: Inlin
 }
 
 function buildDiffLines(oldLines: string[], newLines: string[], startOld = 1, startNew = 1): { lines: DiffLine[]; added: number; removed: number } {
-  const chunks = diffArrays(oldLines, newLines)
+  const chunks = diffArrays(oldLines, newLines, { timeout: 60 }) ?? [
+    ...(oldLines.length > 0 ? [{ count: oldLines.length, added: false, removed: true, value: oldLines }] : []),
+    ...(newLines.length > 0 ? [{ count: newLines.length, added: true, removed: false, value: newLines }] : []),
+  ]
   const lines: DiffLine[] = []
   let oldNo = startOld
   let newNo = startNew
@@ -441,16 +444,24 @@ function buildBodyHunksModel(hunks: ChapterBodyHunk[]): UnifiedDiffModel {
   let totalAdded = 0
   let totalRemoved = 0
   let prevOldEnd = 0
+  let prevOldRuneEnd = 0
 
   hunks.forEach((hunk, hunkIndex) => {
     const beforeText = hunk.parts.filter(part => part.kind !== "insert").map(part => part.text).join("")
     const afterText = hunk.parts.filter(part => part.kind !== "delete").map(part => part.text).join("")
     const skipped = hunk.beforeLine - prevOldEnd - 1
+    const skippedRunes = hunk.beforeStart - prevOldRuneEnd
     if (skipped > 0) {
       blocks.push({
         type: "gap",
         key: `gap-${hunkIndex}`,
         label: hunkIndex === 0 ? `${skipped} 行未修改内容` : `省略中间 ${skipped} 行未修改内容`,
+      })
+    } else if (hunkIndex > 0 && skippedRunes > 0) {
+      blocks.push({
+        type: "gap",
+        key: `gap-${hunkIndex}`,
+        label: `省略同段 ${skippedRunes} 字未修改内容`,
       })
     }
     const { lines, added, removed } = buildDiffLines(
@@ -462,7 +473,8 @@ function buildBodyHunksModel(hunks: ChapterBodyHunk[]): UnifiedDiffModel {
     totalAdded += added
     totalRemoved += removed
     const lastOld = [...lines].reverse().find(line => line.oldLine !== null)?.oldLine
-    prevOldEnd = lastOld ?? hunk.beforeLine
+    prevOldEnd = lastOld ?? Math.max(prevOldEnd, hunk.beforeLine - 1)
+    prevOldRuneEnd = Math.max(prevOldRuneEnd, hunk.beforeStart + Array.from(beforeText).length)
     blocks.push(...foldContextRuns(lines, `h${hunkIndex}`))
   })
 
@@ -525,6 +537,16 @@ function buildChangeCards(change: NovelChange, changeIndex: number): DiffCardSpe
           })
         }
       }
+    }
+    if (bodyChanged && change.bodyDiff?.length) {
+      const bodyDiff = change.bodyDiff
+      cards.push({
+        key: `${changeIndex}-body`,
+        title: "章节正文",
+        subtitle: contextPath,
+        action: change.action,
+        build: () => buildBodyHunksModel(bodyDiff),
+      })
     }
     return cards
   }
@@ -671,7 +693,7 @@ function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
         </div>
         <div className="novel-history-meta">
           <ContributorAvatar contributor={item.contributor} size="tiny"/>
-          <span className="novel-history-author">{item.contributor.name || "未记录账号"}</span>
+          <span className="novel-history-author">{item.contributor?.name || "未记录账号"}</span>
           <Tooltip>
             <TooltipTrigger render={<time className="novel-history-time" dateTime={item.createdAt} tabIndex={0} />}>
               {formatRelativeCommitTime(item.createdAt, now)}
@@ -716,7 +738,9 @@ function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
     {hasChanges && <NovelAutoHeight open={opened}>
       <div id={detailId} className="novel-history-details">
         {rendered && <div className="novel-history-details-body">
-          {cards.map((spec, index) => <UnifiedDiffCard key={spec.key} spec={spec} defaultOpen={index < 6}/>)}
+          {cards.length > 0
+            ? cards.map((spec, index) => <UnifiedDiffCard key={spec.key} spec={spec} defaultOpen={index < 6}/>)
+            : <div className="novel-diff-card"><div className="novel-diff-note">此记录未包含可展示的字段差异</div></div>}
         </div>}
       </div>
     </NovelAutoHeight>}

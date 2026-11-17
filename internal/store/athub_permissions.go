@@ -37,7 +37,10 @@ func ATHubUploadEdits(path string, payload json.RawMessage) []ATHubEndpoint {
 var ErrATHubPermissionDenied = errors.New("ATHub operation forbidden")
 
 func (p *Postgres) RejectATHubAdmission(ctx context.Context, id uuid.UUID) error {
-	_, err := p.pool.Exec(ctx, `UPDATE athub_api_calls SET authenticated=false WHERE id=$1`, id)
+	// A rejected call returns its admission to the key's quota counter.
+	_, err := p.pool.Exec(ctx, `WITH rejected AS (
+			UPDATE athub_api_calls SET authenticated=false WHERE id=$1 AND authenticated RETURNING key_id)
+		UPDATE athub_api_keys k SET authenticated_calls=k.authenticated_calls-1 FROM rejected WHERE k.id=rejected.key_id`, id)
 	return err
 }
 
@@ -47,19 +50,63 @@ type ATHubEndpoint struct {
 	Operation string `json:"operation"`
 }
 
+// athubRoutes is the single description of the content API surface. Permission
+// rules, audit labels, creator submissions and review queueing all derive from
+// it, so a new endpoint is declared here once.
+var athubRoutes = []struct {
+	ATHubEndpoint
+	// submission: the creator platform may call it on behalf of a signed-in user.
+	submission bool
+	// reviewQuery: query parameters accepted when the call is queued for review.
+	reviewQuery []string
+}{
+	{ATHubEndpoint{"GET", "/api/v2/platforms", "read"}, false, nil},
+	{ATHubEndpoint{"GET", "/api/v2/authors", "read"}, false, nil},
+	{ATHubEndpoint{"GET", "/api/v2/tags", "read"}, false, nil},
+	{ATHubEndpoint{"GET", "/api/v2/novelinfo", "read"}, false, nil},
+	{ATHubEndpoint{"GET", "/api/v2/content", "read"}, false, nil},
+	{ATHubEndpoint{"GET", "/api/v2/toc", "read"}, false, nil},
+	{ATHubEndpoint{"GET", "/api/v2/volumes", "read"}, false, nil},
+	{ATHubEndpoint{"GET", "/api/v2/illustrations", "read"}, false, nil},
+	{ATHubEndpoint{"GET", "/api/v2/illustration-layout", "read"}, false, nil},
+	{ATHubEndpoint{"GET", "/api/v3/history", "read"}, false, nil},
+	{ATHubEndpoint{"GET", "/api/v3/contributors", "read"}, false, nil},
+
+	{ATHubEndpoint{"POST", "/api/v2/platforms", "upload"}, false, nil},
+	{ATHubEndpoint{"POST", "/api/v2/authors", "upload"}, false, nil},
+	{ATHubEndpoint{"POST", "/api/v2/tags", "upload"}, false, nil},
+	{ATHubEndpoint{"POST", "/api/v2/novelinfo", "upload"}, false, nil},
+	{ATHubEndpoint{"POST", "/api/v2/upload", "upload"}, true, nil},
+	{ATHubEndpoint{"POST", "/api/v2/illustrations", "upload"}, true, []string{"novelId"}},
+
+	{ATHubEndpoint{"PUT", "/api/v2/authors", "edit"}, false, []string{"id"}},
+	{ATHubEndpoint{"PUT", "/api/v2/tags", "edit"}, false, []string{"id"}},
+	{ATHubEndpoint{"PUT", "/api/v2/novelinfo", "edit"}, true, []string{"id"}},
+	{ATHubEndpoint{"PUT", "/api/v2/content", "edit"}, false, nil},
+	{ATHubEndpoint{"PUT", "/api/v2/volumes", "edit"}, false, nil},
+	{ATHubEndpoint{"PUT", "/api/v2/illustration-layout", "edit"}, true, []string{"novelId"}},
+
+	{ATHubEndpoint{"DELETE", "/api/v2/tags", "delete"}, false, []string{"id"}},
+	{ATHubEndpoint{"DELETE", "/api/v2/novelinfo", "delete"}, false, []string{"id"}},
+	{ATHubEndpoint{"DELETE", "/api/v2/content", "delete"}, false, []string{"novelId", "order"}},
+	{ATHubEndpoint{"DELETE", "/api/v2/volumes", "delete"}, false, []string{"novelId", "order"}},
+	{ATHubEndpoint{"DELETE", "/api/v2/illustrations", "delete"}, true, []string{"novelId", "id"}},
+}
+
+// Built once: every ATHub request resolves its route.
+var athubRouteIndex, athubPaths = func() (map[[2]string]int, map[string]bool) {
+	index, paths := make(map[[2]string]int, len(athubRoutes)), make(map[string]bool)
+	for i, route := range athubRoutes {
+		index[[2]string{route.Method, route.Path}] = i
+		paths[route.Path] = true
+	}
+	return index, paths
+}()
+
 func ATHubEndpoints() []ATHubEndpoint {
-	var endpoints []ATHubEndpoint
-	for _, path := range []string{"/api/v2/platforms", "/api/v2/authors", "/api/v2/tags", "/api/v2/novelinfo", "/api/v2/content", "/api/v2/toc", "/api/v2/volumes", "/api/v2/illustrations", "/api/v2/illustration-layout", "/api/v3/history", "/api/v3/contributors"} {
-		endpoints = append(endpoints, ATHubEndpoint{"GET", path, "read"})
-	}
-	for _, path := range []string{"/api/v2/platforms", "/api/v2/authors", "/api/v2/tags", "/api/v2/novelinfo", "/api/v2/upload", "/api/v2/illustrations"} {
-		endpoints = append(endpoints, ATHubEndpoint{"POST", path, "upload"})
-	}
-	for _, path := range []string{"/api/v2/authors", "/api/v2/tags", "/api/v2/novelinfo", "/api/v2/content", "/api/v2/volumes", "/api/v2/illustration-layout"} {
-		endpoints = append(endpoints, ATHubEndpoint{"PUT", path, "edit"})
-	}
-	for _, path := range []string{"/api/v2/tags", "/api/v2/novelinfo", "/api/v2/content", "/api/v2/volumes", "/api/v2/illustrations"} {
-		endpoints = append(endpoints, ATHubEndpoint{"DELETE", path, "delete"})
+	endpoints := make([]ATHubEndpoint, len(athubRoutes))
+	for i, route := range athubRoutes {
+		endpoints[i] = route.ATHubEndpoint
 	}
 	return endpoints
 }
@@ -68,12 +115,33 @@ func ATHubOperation(method, path string) string {
 	if path == "/api/v3/reviews" {
 		return "review"
 	}
-	for _, endpoint := range ATHubEndpoints() {
-		if endpoint.Method == method && endpoint.Path == path {
-			return endpoint.Operation
-		}
+	if i, ok := athubRouteIndex[[2]string{method, path}]; ok {
+		return athubRoutes[i].Operation
 	}
 	return ""
+}
+
+// ATHubKnownPath reports whether a path belongs to the content API.
+func ATHubKnownPath(path string) bool { return athubPaths[path] }
+
+// ATHubSubmissionEndpoint reports whether the creator platform may forward
+// this call with a submitter's identity.
+func ATHubSubmissionEndpoint(method, path string) bool {
+	i, ok := athubRouteIndex[[2]string{method, path}]
+	return ok && athubRoutes[i].submission
+}
+
+// ATHubReviewQuery lists the query parameters a queued call may carry.
+func ATHubReviewQuery(method, path string) []string {
+	if i, ok := athubRouteIndex[[2]string{method, path}]; ok {
+		return athubRoutes[i].reviewQuery
+	}
+	return nil
+}
+
+// ATHubMutation reports whether an operation changes content and can be reviewed.
+func ATHubMutation(operation string) bool {
+	return operation == "upload" || operation == "edit" || operation == "delete"
 }
 
 type ATHubAccessRule struct {
@@ -231,21 +299,4 @@ func (p *Postgres) SetATHubPolicy(ctx context.Context, actor uuid.UUID, policy A
 		return policy, err
 	}
 	return policy, tx.Commit(ctx)
-}
-
-// Run under the user's admission lock and the policy's shared lock.
-func checkATHubRule(ctx context.Context, tx pgx.Tx, call ATHubCall, role string) error {
-	operation := ATHubOperation(call.Method, call.Path)
-	if operation == "" {
-		return nil
-	}
-	policy, err := policyWith(ctx, tx, role, true)
-	if err != nil {
-		return err
-	}
-	rule := policy.Rule(operation, call.Method, call.Path)
-	if !rule.Allowed {
-		return ErrATHubPermissionDenied
-	}
-	return nil
 }

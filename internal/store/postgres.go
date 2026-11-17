@@ -42,6 +42,30 @@ func (p *Postgres) EnableRedisSessionCache(ctx context.Context, rawURL, prefix s
 	return nil
 }
 
+// Pool lets account-owned modules share this pool instead of opening another
+// one against the same database.
+func (p *Postgres) Pool() *pgxpool.Pool { return p.pool }
+
+// UserAvatars resolves the selected avatar of many accounts in one query.
+// Unknown IDs are absent from the result.
+func (p *Postgres) UserAvatars(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]string, error) {
+	rows, err := p.pool.Query(ctx, `SELECT users.id,`+userAvatarColumn+` FROM users WHERE users.id=ANY($1)`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	avatars := make(map[uuid.UUID]string, len(ids))
+	for rows.Next() {
+		var id uuid.UUID
+		var avatar string
+		if err := rows.Scan(&id, &avatar); err != nil {
+			return nil, err
+		}
+		avatars[id] = avatar
+	}
+	return avatars, rows.Err()
+}
+
 func (p *Postgres) Close() {
 	if p.sessionCache != nil {
 		p.sessionCache.close()
@@ -57,10 +81,12 @@ func isUniqueViolation(err error) bool {
 
 // Resolve the selected avatar at read time so refreshed provider images and
 // unlinked identities are reflected in every login and profile response.
-const userColumns = `users.id,users.email,users.password_hash,users.display_name,users.role,users.is_active,users.created_at,
- users.avatar_source,CASE WHEN users.avatar_source='custom' THEN users.custom_avatar_url ELSE COALESCE((SELECT avatar_url FROM external_identities
+const userAvatarColumn = `CASE WHEN users.avatar_source='custom' THEN users.custom_avatar_url ELSE COALESCE((SELECT avatar_url FROM external_identities
  WHERE user_id=users.id AND avatar_url<>'' AND (users.avatar_source='auto' OR provider=users.avatar_source)
- ORDER BY created_at,id LIMIT 1),'') END,users.custom_avatar_url,users.numeric_id,users.bio,users.email_verified,users.profile_setup_required,users.background_url,users.avatar_original_url,users.background_original_url`
+ ORDER BY created_at,id LIMIT 1),'') END`
+
+const userColumns = `users.id,users.email,users.password_hash,users.display_name,users.role,users.is_active,users.created_at,
+ users.avatar_source,` + userAvatarColumn + `,users.custom_avatar_url,users.numeric_id,users.bio,users.email_verified,users.profile_setup_required,users.background_url,users.avatar_original_url,users.background_original_url`
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User

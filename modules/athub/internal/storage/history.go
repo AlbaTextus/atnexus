@@ -175,7 +175,7 @@ func (p *Postgres) trackNovel(ctx context.Context, id int32, created bool) error
 }
 
 func snapshot(ctx context.Context, q database, id int32) (map[string]map[string]any, error) {
-	// Only metadata and chapter hashes/lengths; never copy chapter bodies.
+	// Only metadata and stored chapter hashes/lengths; chapter bodies are never read.
 	rows, err := q.Query(ctx, `SELECT 'Novel',n."id"::text,
 		(to_jsonb(n)-'updatedAt'-'createdAt') || jsonb_build_object('tagIds',
 			ARRAY(SELECT "tagId" FROM "NovelTag" WHERE "novelId"=n."id" ORDER BY "tagId"),
@@ -187,8 +187,8 @@ func snapshot(ctx context.Context, q database, id int32) (map[string]map[string]
 		UNION ALL SELECT 'Volume',v."id"::text,to_jsonb(v)-'updatedAt'-'createdAt'
 		FROM "Volume" v WHERE "novelId"=$1
 		UNION ALL SELECT 'Chapter',c."id"::text,
-			(to_jsonb(c)-'content'-'updatedAt') || jsonb_build_object(
-				'contentHash',md5(c.content),'contentLength',length(c.content))
+			jsonb_build_object('id',c."id",'novelId',c."novelId",'volumeId',c."volumeId",'order',c."order",
+				'title',c."title",'contentHash',c."contentHash",'contentLength',c."contentLength")
 		FROM "Chapter" c WHERE "novelId"=$1
 		UNION ALL SELECT 'Illustration',i.id::text,to_jsonb(i)-'createdAt'
 		FROM "Illustration" i WHERE "novelId"=$1

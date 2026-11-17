@@ -281,7 +281,7 @@ func (m *Module) saveUpload(ctx context.Context, form *parsedForm, q url.Values,
 	receipt, _ := ctx.Value(uploadReceiptKey{}).(string)
 	if receipt != "" {
 		var id, state string
-		err := m.pool.QueryRow(ctx, `SELECT id,state FROM image_files WHERE metadata->>'UploadSession'=$1`, receipt).Scan(&id, &state)
+		err := m.pool.QueryRow(ctx, `SELECT id,state FROM image_files WHERE metadata ? 'UploadSession' AND metadata->>'UploadSession'=$1`, receipt).Scan(&id, &state)
 		if err == nil {
 			if state != "ready" {
 				return nil, ErrConflict

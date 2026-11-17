@@ -11,7 +11,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/AlbaTextus/atnexus/internal/security"
 	"github.com/AlbaTextus/atnexus/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -22,7 +21,7 @@ func (a *API) SetATHubReviewExecutor(execute store.ATHubReviewExecutor) {
 }
 
 func (a *API) athubReviews(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.AccountActor(w, r)
+	user, session, ok := a.SessionActor(w, r)
 	if !ok {
 		return
 	}
@@ -67,7 +66,7 @@ func (a *API) athubReviews(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 400, map[string]string{"error": "invalid_decision", "error_description": "请选择通过或驳回；驳回时请填写原因，最多 1000 字。"})
 			return
 		}
-		audit, ok := a.beginReviewAudit(w, r, user.ID)
+		audit, ok := a.beginReviewAudit(w, r, user.ID, session.ID)
 		if !ok {
 			return
 		}
@@ -130,9 +129,14 @@ func (a *API) athubReviews(w http.ResponseWriter, r *http.Request) {
 
 // Resolve avatars on read so historical reviews also follow the account's selected image.
 func (a *API) populateReviewAvatars(ctx context.Context, items ...*store.ATHubReview) {
-	// Repeated contributors/reviewers share one lookup within a list response.
-	avatars := make(map[uuid.UUID]*string)
-	populate := func(identity *json.RawMessage, accountID *uuid.UUID) {
+	type slot struct {
+		identity *json.RawMessage
+		person   map[string]json.RawMessage
+		id       uuid.UUID
+	}
+	slots := make([]slot, 0, 2*len(items))
+	ids, seen := make([]uuid.UUID, 0), make(map[uuid.UUID]bool)
+	collect := func(identity *json.RawMessage, accountID *uuid.UUID) {
 		var person map[string]json.RawMessage
 		if json.Unmarshal(*identity, &person) != nil || person == nil {
 			return
@@ -146,24 +150,46 @@ func (a *API) populateReviewAvatars(ctx context.Context, items ...*store.ATHubRe
 		if id == uuid.Nil {
 			return
 		}
-		avatar, cached := avatars[id]
-		if !cached {
-			user, err := a.Store.UserByID(ctx, id)
-			if err == nil {
-				avatar = &user.AvatarURL
-			} else if !errors.Is(err, store.ErrNotFound) {
-				a.Log.Warn("review identity avatar lookup failed", "user", id, "error", err)
-			}
-			avatars[id] = avatar
-		}
-		if avatar != nil {
-			person["avatar"], _ = json.Marshal(*avatar)
-			*identity, _ = json.Marshal(person)
+		slots = append(slots, slot{identity, person, id})
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
 		}
 	}
 	for _, item := range items {
-		populate(&item.Contributor, item.UserID)
-		populate(&item.Reviewer, nil)
+		collect(&item.Contributor, item.UserID)
+		collect(&item.Reviewer, nil)
+	}
+	if len(ids) == 0 {
+		return
+	}
+	// Repeated contributors/reviewers share one lookup, and a store that can
+	// batch resolves the whole response in a single query.
+	avatars := make(map[uuid.UUID]string, len(ids))
+	if batch, ok := a.Store.(interface {
+		UserAvatars(context.Context, []uuid.UUID) (map[uuid.UUID]string, error)
+	}); ok {
+		found, err := batch.UserAvatars(ctx, ids)
+		if err != nil {
+			a.Log.Warn("review identity avatar lookup failed", "error", err)
+			return
+		}
+		avatars = found
+	} else {
+		for _, id := range ids {
+			user, err := a.Store.UserByID(ctx, id)
+			if err == nil {
+				avatars[id] = user.AvatarURL
+			} else if !errors.Is(err, store.ErrNotFound) {
+				a.Log.Warn("review identity avatar lookup failed", "user", id, "error", err)
+			}
+		}
+	}
+	for _, s := range slots {
+		if avatar, ok := avatars[s.id]; ok {
+			s.person["avatar"], _ = json.Marshal(avatar)
+			*s.identity, _ = json.Marshal(s.person)
+		}
 	}
 }
 
@@ -184,20 +210,10 @@ func (w *reviewAuditWriter) Write(body []byte) (int, error) {
 	w.bytes += int64(n)
 	return n, err
 }
-func (a *API) beginReviewAudit(w http.ResponseWriter, r *http.Request, user uuid.UUID) (*reviewAuditWriter, bool) {
+func (a *API) beginReviewAudit(w http.ResponseWriter, r *http.Request, user, session uuid.UUID) (*reviewAuditWriter, bool) {
 	st, ok := a.Store.(store.ATHubStore)
 	if !ok {
 		a.PolicyError(w, errors.New("audit store unavailable"))
-		return nil, false
-	}
-	cookie, err := r.Cookie(a.Config.SessionCookieName)
-	if err != nil {
-		writeJSON(w, 401, map[string]string{"error": "login_required"})
-		return nil, false
-	}
-	session, err := a.Store.SessionByHash(r.Context(), security.HashToken(cookie.Value))
-	if err != nil || session.UserID != user {
-		writeJSON(w, 401, map[string]string{"error": "login_required"})
 		return nil, false
 	}
 	_, portText, err := net.SplitHostPort(a.Config.CreatplatHTTPAddr)
@@ -211,7 +227,7 @@ func (a *API) beginReviewAudit(w http.ResponseWriter, r *http.Request, user uuid
 		return nil, false
 	}
 	// The existing admission adapter still uses its persisted review operation label.
-	call := store.ATHubCall{ID: uuid.New(), RequestID: uuid.New(), UserID: &user, SessionID: &session.ID, Method: "POST", Path: "/api/v3/reviews", Port: port, Authenticated: true}
+	call := store.ATHubCall{ID: uuid.New(), RequestID: uuid.New(), UserID: &user, SessionID: &session, Method: "POST", Path: "/api/v3/reviews", Port: port, Authenticated: true}
 	err = st.BeginATHubCall(r.Context(), call)
 	if err != nil {
 		status, code := 503, "accounting_unavailable"

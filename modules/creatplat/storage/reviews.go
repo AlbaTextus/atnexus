@@ -23,7 +23,7 @@ func scanReview(row interface{ Scan(...any) error }) (store.ATHubReview, error) 
 }
 
 func (p *Postgres) QueueATHubReview(ctx context.Context, r store.ATHubReview) (store.ATHubReview, error) {
-	if r.UserID == nil || (r.Operation != "upload" && r.Operation != "edit" && r.Operation != "delete") || store.ATHubOperation(r.Method, r.Path) != r.Operation || !json.Valid(r.Payload) {
+	if r.UserID == nil || !store.ATHubMutation(r.Operation) || store.ATHubOperation(r.Method, r.Path) != r.Operation || !json.Valid(r.Payload) {
 		return r, store.ErrATHubPermissionDenied
 	}
 	var result store.ATHubReview

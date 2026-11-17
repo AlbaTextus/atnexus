@@ -2,17 +2,11 @@ package httpapi
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"image"
 	"image/png"
 	"io"
-	"mime/multipart"
 	"net/http"
-	"net/textproto"
-	"net/url"
-	"strings"
-	"time"
 
 	"github.com/AlbaTextus/atnexus/internal/store"
 	"golang.org/x/image/draw"
@@ -104,49 +98,8 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "invalid_background", "error_description": "请使用不超过 5 MB、1600 万像素的有效 PNG、JPEG 或 WebP 图片。"})
 		return
 	}
-	var body bytes.Buffer
-	form := multipart.NewWriter(&body)
-	part, err := form.CreatePart(textproto.MIMEHeader{"Content-Disposition": {`form-data; name="file"; filename="background.png"`}, "Content-Type": {"image/png"}})
+	backgroundURL, err := a.uploadToImgbed(r.Context(), "backgrounds", user.ID, "background.png", "image/png", data)
 	if err != nil {
-		a.ApplicationError(w, err)
-		return
-	}
-	_, _ = part.Write(data)
-	_ = form.Close()
-	target := a.Config.ImgbedURL + "/api/v2/categories/user/backgrounds/upload?returnFormat=full&entityId=" + user.ID.String()
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, target, &body)
-	if err != nil {
-		a.ApplicationError(w, err)
-		return
-	}
-	req.Header.Set("Authorization", "Bearer "+a.Config.ImgbedAPIToken)
-	req.Header.Set("Content-Type", form.FormDataContentType())
-	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := client.Do(req)
-	if err != nil {
-		backgroundUploadError(w)
-		return
-	}
-	defer response.Body.Close()
-	var uploaded []struct {
-		Src string `json:"src"`
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 || json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&uploaded) != nil || len(uploaded) != 1 {
-		backgroundUploadError(w)
-		return
-	}
-	base, err := url.Parse(a.Config.ImgbedURL)
-	if err != nil {
-		backgroundUploadError(w)
-		return
-	}
-	ref, err := url.Parse(uploaded[0].Src)
-	if err != nil {
-		backgroundUploadError(w)
-		return
-	}
-	resolved := base.ResolveReference(ref)
-	if resolved.Scheme != base.Scheme || resolved.Host != base.Host || resolved.User != nil || resolved.Fragment != "" || !strings.HasPrefix(resolved.Path, "/file/") || len(resolved.String()) > 2048 {
 		backgroundUploadError(w)
 		return
 	}
@@ -155,7 +108,7 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 		backgroundUploadError(w)
 		return
 	}
-	updated, err := st.UpdateBackground(r.Context(), user.ID, resolved.String(), originalURL)
+	updated, err := st.UpdateBackground(r.Context(), user.ID, backgroundURL, originalURL)
 	if err != nil {
 		a.ApplicationError(w, err)
 		return

@@ -34,6 +34,7 @@ model Author {
   platform   Platform @relation(fields: [platformId], references: [id], onDelete: Restrict)
   novels     Novel[]
 
+  // The migrations also index btrim(name), alone and after platformId.
   @@index([platformId])
 }
 
@@ -57,6 +58,7 @@ model Novel {
 
   @@index([platformId])
   @@index([authorId])
+  @@index([updatedAt(sort: Desc), id(sort: Desc)])
 }
 
 model Illustration {
@@ -117,6 +119,10 @@ model Chapter {
   order     Int
   title     String
   content   String   @db.Text
+  // Stored generated columns; the migration defines them as GENERATED ALWAYS.
+  contentHash   String?  @default(dbgenerated("md5(content)"))
+  contentLength Int?     @default(dbgenerated("length(content)"))
+  wordCount     Int?     @default(dbgenerated("char_length(regexp_replace(content, '[\\u0009-\\u000D\\u0020\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]+'::text, ''::text, 'g'::text))"))
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   novel     Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
   volume    Volume?  @relation(fields: [volumeId, novelId], references: [id, novelId], onDelete: NoAction)

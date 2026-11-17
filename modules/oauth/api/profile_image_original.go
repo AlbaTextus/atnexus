@@ -79,9 +79,19 @@ func (a *API) uploadProfileOriginal(ctx context.Context, userID uuid.UUID, categ
 	if err != nil {
 		return "", err
 	}
+	return a.uploadToImgbed(ctx, category, userID, "original."+format, http.DetectContentType(data), data)
+}
+
+// Shared by every profile image upload: connections to the image service are
+// reused, and redirects are never followed with the service token attached.
+var imgbedClient = &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+
+// uploadToImgbed stores one image in a user category and returns its file URL,
+// accepted only when it stays on the configured image origin.
+func (a *API) uploadToImgbed(ctx context.Context, category string, userID uuid.UUID, filename, contentType string, data []byte) (string, error) {
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
-	part, err := form.CreatePart(textproto.MIMEHeader{"Content-Disposition": {fmt.Sprintf(`form-data; name="file"; filename="original.%s"`, format)}, "Content-Type": {http.DetectContentType(data)}})
+	part, err := form.CreatePart(textproto.MIMEHeader{"Content-Disposition": {fmt.Sprintf(`form-data; name="file"; filename="%s"`, filename)}, "Content-Type": {contentType}})
 	if err != nil {
 		return "", err
 	}
@@ -94,8 +104,7 @@ func (a *API) uploadProfileOriginal(ctx context.Context, userID uuid.UUID, categ
 	}
 	req.Header.Set("Authorization", "Bearer "+a.Config.ImgbedAPIToken)
 	req.Header.Set("Content-Type", form.FormDataContentType())
-	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := client.Do(req)
+	response, err := imgbedClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +113,7 @@ func (a *API) uploadProfileOriginal(ctx context.Context, userID uuid.UUID, categ
 		Src string `json:"src"`
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 || json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&uploaded) != nil || len(uploaded) != 1 {
-		return "", fmt.Errorf("original image upload failed")
+		return "", fmt.Errorf("image upload failed")
 	}
 	base, err := url.Parse(a.Config.ImgbedURL)
 	if err != nil {

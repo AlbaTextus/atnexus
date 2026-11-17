@@ -10,9 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
-	"github.com/AlbaTextus/atnexus/internal/security"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -26,7 +24,7 @@ func (a *API) SetATHubIllustrationDeleter(remove func(http.ResponseWriter, *http
 }
 
 func (a *API) deleteNovelIllustration(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := a.ATHubActor(w, r)
+	user, session, ok := a.ATHubSessionActor(w, r)
 	if !ok {
 		return
 	}
@@ -34,16 +32,6 @@ func (a *API) deleteNovelIllustration(w http.ResponseWriter, r *http.Request) {
 	imageID, imageErr := strconv.ParseInt(chi.URLParam(r, "illustrationId"), 10, 32)
 	if novelErr != nil || imageErr != nil || novelID <= 0 || imageID <= 0 || r.URL.RawQuery != "" {
 		writeJSON(w, 400, map[string]string{"error": "invalid_illustration", "error_description": "请选择有效的作品插图。"})
-		return
-	}
-	cookie, err := r.Cookie(a.Config.SessionCookieName)
-	if err != nil {
-		writeJSON(w, 401, map[string]string{"error": "login_required"})
-		return
-	}
-	session, err := a.Store.SessionByHash(r.Context(), security.HashToken(cookie.Value))
-	if err != nil || session.UserID != user.ID || session.RevokedAt != nil || !session.ExpiresAt.After(time.Now()) {
-		writeJSON(w, 401, map[string]string{"error": "login_required"})
 		return
 	}
 	if a.athubIllustrationDeleter == nil {
@@ -56,23 +44,13 @@ func (a *API) deleteNovelIllustration(w http.ResponseWriter, r *http.Request) {
 func (a *API) uploadNovelIllustration(w http.ResponseWriter, r *http.Request) {
 	originalBody := r.Body
 	defer func() { _, _ = io.Copy(io.Discard, io.LimitReader(originalBody, maxNovelCoverBytes+(64<<10)+1)) }()
-	user, ok := a.AccountActor(w, r)
+	user, session, ok := a.SessionActor(w, r)
 	if !ok {
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
 	if err != nil || id <= 0 || r.URL.RawQuery != "" {
 		writeJSON(w, 400, map[string]string{"error": "invalid_novel_id", "error_description": "请选择有效的作品。"})
-		return
-	}
-	cookie, err := r.Cookie(a.Config.SessionCookieName)
-	if err != nil {
-		writeJSON(w, 401, map[string]string{"error": "login_required"})
-		return
-	}
-	session, err := a.Store.SessionByHash(r.Context(), security.HashToken(cookie.Value))
-	if err != nil || session.UserID != user.ID || session.RevokedAt != nil || !session.ExpiresAt.After(time.Now()) {
-		writeJSON(w, 401, map[string]string{"error": "login_required"})
 		return
 	}
 	st, ok := a.Store.(interface {

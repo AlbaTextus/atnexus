@@ -73,7 +73,7 @@ func reviewPermission(ctx context.Context, tx pgx.Tx, user uuid.UUID) (string, e
 	return role, nil
 }
 func (p *Postgres) QueueATHubReview(ctx context.Context, r ATHubReview) (ATHubReview, error) {
-	if r.UserID == nil || (r.Operation != "upload" && r.Operation != "edit" && r.Operation != "delete") || ATHubOperation(r.Method, r.Path) != r.Operation || !json.Valid(r.Payload) {
+	if r.UserID == nil || !ATHubMutation(r.Operation) || ATHubOperation(r.Method, r.Path) != r.Operation || !json.Valid(r.Payload) {
 		return r, ErrATHubPermissionDenied
 	}
 	tx, err := p.pool.Begin(ctx)

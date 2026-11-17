@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -26,11 +27,44 @@ import (
 
 func main() {
 	_ = godotenv.Load()
+	// The runtime image has no shell or HTTP client, so the binary probes itself.
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		if err := healthcheck(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	if err := run(logger); err != nil {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+// All listeners start together, so the account API answering means startup finished.
+func healthcheck() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("invalid configuration: %w", err)
+	}
+	host, port, err := net.SplitHostPort(cfg.HTTPAddr)
+	if err != nil {
+		return fmt.Errorf("invalid HTTP_ADDR: %w", err)
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	response, err := client.Get("http://" + net.JoinHostPort(host, port) + "/healthz")
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("unhealthy: status %d", response.StatusCode)
+	}
+	return nil
 }
 
 func run(logger *slog.Logger) error {
@@ -46,7 +80,7 @@ func run(logger *slog.Logger) error {
 	}
 	defer st.Close()
 	sessions := oauth.NewSessions(st, cfg.SessionCookieName)
-	imageKeys, err := oauth.NewImageKeys(ctx, cfg.DatabaseURL, sessions)
+	imageKeys, err := oauth.NewImageKeysWithPool(ctx, st.Pool(), sessions)
 	if err != nil {
 		return err
 	}

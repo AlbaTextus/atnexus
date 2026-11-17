@@ -136,7 +136,17 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("IMAGE_HTTP_TIMEOUT must be positive")
 	}
 	imageServer := &http.Server{Addr: cfg.ImageHTTPAddr, Handler: imageHandler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.ImageHTTPTimeout, WriteTimeout: cfg.ImageHTTPTimeout, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
-	servers := []*http.Server{oauthServer, imageServer, creatorServer, athubServer}
+	// One port for reverse proxies: each module keeps its own handler chain and
+	// deadline, so a request behaves the same here as on the module's port.
+	gateway := server.NewGateway(
+		server.GatewayRoute{Name: "oauth", Prefixes: []string{"/api/v1", "/oauth", "/.well-known"}, Handler: oauthServer.Handler, Timeout: oauthServer.ReadTimeout},
+		server.GatewayRoute{Name: "image", Prefixes: []string{"/api/v2", "/file"}, Handler: imageServer.Handler, Timeout: imageServer.ReadTimeout},
+		server.GatewayRoute{Name: "creatplat", Prefixes: []string{"/api/v4"}, Handler: creatorServer.Handler, Timeout: creatorServer.ReadTimeout},
+		server.GatewayRoute{Name: "athub", Prefixes: []string{"/api/v5"}, Handler: athubServer.Handler, Timeout: athubServer.ReadTimeout},
+	)
+	gatewayTimeout := max(requestTimeout, cfg.ImageHTTPTimeout)
+	gatewayServer := &http.Server{Addr: cfg.GatewayHTTPAddr, Handler: gateway, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: gatewayTimeout, WriteTimeout: gatewayTimeout, IdleTimeout: 60 * time.Second}
+	servers := []*http.Server{oauthServer, imageServer, creatorServer, athubServer, gatewayServer}
 	if cfg.ImageLegacyHTTPAddr != "" {
 		servers = append(servers, &http.Server{Addr: cfg.ImageLegacyHTTPAddr, Handler: images.Files(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.ImageHTTPTimeout, WriteTimeout: cfg.ImageHTTPTimeout, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10})
 	}

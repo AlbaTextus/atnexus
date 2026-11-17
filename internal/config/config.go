@@ -18,6 +18,7 @@ type Config struct {
 	ATHubHTTPAddr                  string
 	CreatplatHTTPAddr              string
 	ImageHTTPAddr                  string
+	GatewayHTTPAddr                string
 	ImageLegacyHTTPAddr            string
 	ImageDatabaseURL               string
 	ImageLocalRoot                 string
@@ -67,6 +68,7 @@ func Load() (Config, error) {
 		ATHubHTTPAddr:                  getenv("ATHUB_HTTP_ADDR", ":8005"),
 		CreatplatHTTPAddr:              getenv("CREATPLAT_HTTP_ADDR", ":8004"),
 		ImageHTTPAddr:                  getenv("IMAGE_HTTP_ADDR", ":8002"),
+		GatewayHTTPAddr:                getenv("GATEWAY_HTTP_ADDR", ":8288"),
 		ImageLegacyHTTPAddr:            strings.TrimSpace(os.Getenv("IMAGE_LEGACY_HTTP_ADDR")),
 		ImageDatabaseURL:               strings.TrimSpace(os.Getenv("IMAGE_DATABASE_URL")),
 		ImageLocalRoot:                 strings.TrimSpace(os.Getenv("IMAGE_LOCAL_ROOT")),

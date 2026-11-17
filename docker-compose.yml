@@ -69,6 +69,7 @@ services:
       ATHUB_HTTP_ADDR: :8005
       CREATPLAT_HTTP_ADDR: :8004
       IMAGE_HTTP_ADDR: :8002
+      GATEWAY_HTTP_ADDR: :8288
       IMAGE_DATABASE_URL: ${IMAGE_COMPOSE_DATABASE_URL:?Set IMAGE_COMPOSE_DATABASE_URL to the independent image database}
       IMAGE_LOCAL_ROOT: /data/images
       IMAGE_TEMP_ROOT: /tmp/image
@@ -108,6 +109,7 @@ services:
       - "8002:8002"
       - "8004:8004"
       - "8005:8005"
+      - "8288:8288"
     volumes:
       - type: bind
         source: ${IMAGE_COMPOSE_LOCAL_ROOT:?Set IMAGE_COMPOSE_LOCAL_ROOT to the existing image directory}

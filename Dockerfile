@@ -7,6 +7,6 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/atnexus ./cmd/serv
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/atnexus /atnexus
-EXPOSE 8001 8002 8004 8005
+EXPOSE 8001 8002 8004 8005 8288
 USER nonroot:nonroot
 ENTRYPOINT ["/atnexus"]

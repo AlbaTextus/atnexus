@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/AlbaTextus/atnexus/internal/apibase"
 	"github.com/AlbaTextus/atnexus/internal/store"
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
@@ -29,6 +30,11 @@ func normalizeAvatar(ctx context.Context, data []byte) ([]byte, error) {
 	if format == "gif" {
 		return normalizeGIF(ctx, data, nil)
 	}
+	release, err := apibase.AcquireImageWork(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -77,6 +83,10 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	original, err := readProfileOriginal(r, true)
+	if r.Context().Err() != nil {
+		// The reply was already taken over by the timeout, or nobody is waiting.
+		return
+	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid_avatar", "error_description": "头像原图无效，请选择不超过 5 MB、1600 万像素的图片。"})
 		return

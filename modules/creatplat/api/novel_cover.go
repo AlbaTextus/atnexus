@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/AlbaTextus/atnexus/internal/apibase"
 	"github.com/google/uuid"
 	"golang.org/x/image/draw"
 )
@@ -22,10 +23,6 @@ func normalizeNovelCover(ctx context.Context, data []byte) ([]byte, error) {
 	return normalizeNovelImage(ctx, data, 1600)
 }
 
-// Decoding and rescaling one image can hold well over 100 MiB of pixels, so
-// only a few run at once; further uploads wait holding just their encoded bytes.
-var imageWork = make(chan struct{}, 2)
-
 func normalizeNovelImage(ctx context.Context, data []byte, maxSide int) ([]byte, error) {
 	if len(data) == 0 || len(data) > maxNovelCoverBytes {
 		return nil, fmt.Errorf("invalid image size")
@@ -35,13 +32,11 @@ func normalizeNovelImage(ctx context.Context, data []byte, maxSide int) ([]byte,
 	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > 8192 || cfg.Height > 8192 || int64(cfg.Width)*int64(cfg.Height) > 16_000_000 {
 		return nil, fmt.Errorf("invalid image dimensions")
 	}
-	// A request that timed out or was abandoned stops waiting for its turn.
-	select {
-	case imageWork <- struct{}{}:
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	release, err := apibase.AcquireImageWork(ctx)
+	if err != nil {
+		return nil, err
 	}
-	defer func() { <-imageWork }()
+	defer release()
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, err

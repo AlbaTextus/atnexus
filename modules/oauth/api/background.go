@@ -2,17 +2,19 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/png"
 	"io"
 	"net/http"
 
+	"github.com/AlbaTextus/atnexus/internal/apibase"
 	"github.com/AlbaTextus/atnexus/internal/store"
 	"golang.org/x/image/draw"
 )
 
-func normalizeBackground(data []byte) ([]byte, error) {
+func normalizeBackground(ctx context.Context, data []byte) ([]byte, error) {
 	if len(data) == 0 || len(data) > maxAvatarBytes {
 		return nil, fmt.Errorf("invalid image size")
 	}
@@ -20,6 +22,11 @@ func normalizeBackground(data []byte) ([]byte, error) {
 	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > 8192 || cfg.Height > 8192 || int64(cfg.Width)*int64(cfg.Height) > 16_000_000 || format == "gif" {
 		return nil, fmt.Errorf("invalid background image")
 	}
+	release, err := apibase.AcquireImageWork(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -80,6 +87,10 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	original, err := readProfileOriginal(r, false)
+	if r.Context().Err() != nil {
+		// The reply was already taken over by the timeout, or nobody is waiting.
+		return
+	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid_background", "error_description": "背投原图无效，请选择不超过 5 MB、1600 万像素的 PNG、JPEG 或 WebP 图片。"})
 		return
@@ -92,7 +103,11 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxAvatarBytes+1))
 	if err == nil {
-		data, err = normalizeBackground(data)
+		data, err = normalizeBackground(r.Context(), data)
+	}
+	if r.Context().Err() != nil {
+		// The reply was already taken over by the timeout, or nobody is waiting.
+		return
 	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid_background", "error_description": "请使用不超过 5 MB、1600 万像素的有效 PNG、JPEG 或 WebP 图片。"})

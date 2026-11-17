@@ -205,7 +205,7 @@ func TestChapterBodyDiff(t *testing.T) {
 		{"replacement", "原来的段落", "<script>另一段</script>"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			hunks := chapterBodyDiff(test.before, test.after)
+			hunks := chapterBodyDiff(test.before, test.after, chapterDiffTimeout)
 			if got := reconstructBody(t, test.before, hunks); got != test.after {
 				t.Fatalf("reconstructed %q, want %q", got, test.after)
 			}

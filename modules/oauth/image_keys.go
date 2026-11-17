@@ -23,6 +23,7 @@ import (
 type ImageKeys struct {
 	pool     *pgxpool.Pool
 	sessions auth.Verifier
+	owned    bool
 }
 type ImageKey struct {
 	ID          string     `json:"id"`
@@ -45,15 +46,29 @@ func NewImageKeys(ctx context.Context, databaseURL string, sessions auth.Verifie
 	if err != nil {
 		return nil, errors.New("OAuth image key pool unavailable")
 	}
-	rows, err := p.Query(ctx, `SELECT id,token_hash,permissions,disabled FROM image_api_keys LIMIT 0`)
+	keys, err := NewImageKeysWithPool(ctx, p, sessions)
 	if err != nil {
 		p.Close()
+		return nil, err
+	}
+	keys.owned = true
+	return keys, nil
+}
+
+// NewImageKeysWithPool uses the caller's account-database pool; Close leaves it open.
+func NewImageKeysWithPool(ctx context.Context, p *pgxpool.Pool, sessions auth.Verifier) (*ImageKeys, error) {
+	rows, err := p.Query(ctx, `SELECT id,token_hash,permissions,disabled FROM image_api_keys LIMIT 0`)
+	if err != nil {
 		return nil, errors.New("OAuth image key schema not ready; run npm run db:deploy")
 	}
 	rows.Close()
-	return &ImageKeys{p, sessions}, nil
+	return &ImageKeys{pool: p, sessions: sessions}, nil
 }
-func (s *ImageKeys) Close() { s.pool.Close() }
+func (s *ImageKeys) Close() {
+	if s.owned {
+		s.pool.Close()
+	}
+}
 func (s *ImageKeys) AuthorizeImageKey(ctx context.Context, raw, permission string) (string, error) {
 	var id string
 	var scopes []string

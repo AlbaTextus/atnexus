@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime"
 	"strings"
 
 	"github.com/AlbaTextus/atnexus/internal/config"
@@ -15,6 +16,24 @@ import (
 	"github.com/AlbaTextus/atnexus/modules/oauth"
 	"github.com/AlbaTextus/atnexus/pkg/auth"
 )
+
+// Decoding and rescaling one image can hold well over 100 MiB of pixels, so
+// every module shares one small bound however many CPUs there are; further
+// uploads wait holding just their encoded bytes.
+var imageWork = make(chan struct{}, min(4, max(2, runtime.GOMAXPROCS(0))))
+
+// AcquireImageWork waits for a turn to decode an image and returns the function
+// that ends it. Callers validate cheaply first, so images that will be refused
+// never queue, and never wait for a second turn while holding one. A request
+// that timed out or was abandoned stops waiting.
+func AcquireImageWork(ctx context.Context) (release func(), err error) {
+	select {
+	case imageWork <- struct{}{}:
+		return func() { <-imageWork }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
 
 // Store remains a transitional adapter for the unchanged account schema.
 type Base struct {
@@ -36,6 +55,13 @@ func (a *Base) CurrentUser(r *http.Request) (store.User, bool) {
 }
 
 func (a *Base) AccountActor(w http.ResponseWriter, r *http.Request) (store.User, bool) {
+	user, _, ok := a.SessionActor(w, r)
+	return user, ok
+}
+
+// SessionActor also returns the session that authenticated the request, already
+// checked for revocation, expiry and ownership, so handlers never look it up again.
+func (a *Base) SessionActor(w http.ResponseWriter, r *http.Request) (store.User, store.Session, bool) {
 	w.Header().Set("Cache-Control", "no-store")
 	identity, err := oauth.NewSessions(a.Store, a.Config.SessionCookieName).Authenticate(r)
 	if err != nil {
@@ -44,14 +70,13 @@ func (a *Base) AccountActor(w http.ResponseWriter, r *http.Request) (store.User,
 			status, code = http.StatusUnauthorized, "login_required"
 		}
 		WriteJSON(w, status, map[string]string{"error": code})
-		return store.User{}, false
+		return store.User{}, store.Session{}, false
 	}
-	user := identity.User
 	if r.Method != http.MethodGet && (r.Header.Get("X-AlbaTextus-Client") != "account-center" || r.Header.Get("Sec-Fetch-Site") == "cross-site") {
 		WriteJSON(w, 403, map[string]string{"error": "invalid_origin"})
-		return user, false
+		return identity.User, identity.Session, false
 	}
-	return user, true
+	return identity.User, identity.Session, true
 }
 
 func ReadJSON(w http.ResponseWriter, r *http.Request, target any) bool {
@@ -79,15 +104,26 @@ func (a *Base) ApplicationError(w http.ResponseWriter, err error) {
 }
 
 func (a *Base) ATHubActor(w http.ResponseWriter, r *http.Request) (store.User, store.ATHubStore, bool) {
-	user, ok := a.AccountActor(w, r)
+	user, _, st, ok := a.athubActor(w, r)
+	return user, st, ok
+}
+
+// ATHubSessionActor is ATHubActor for handlers that act on behalf of the session.
+func (a *Base) ATHubSessionActor(w http.ResponseWriter, r *http.Request) (store.User, store.Session, bool) {
+	user, session, _, ok := a.athubActor(w, r)
+	return user, session, ok
+}
+
+func (a *Base) athubActor(w http.ResponseWriter, r *http.Request) (store.User, store.Session, store.ATHubStore, bool) {
+	user, session, ok := a.SessionActor(w, r)
 	if !ok {
-		return user, nil, false
+		return user, session, nil, false
 	}
 	st, ok := a.Store.(store.ATHubStore)
 	if !ok {
 		WriteJSON(w, 503, map[string]string{"error": "service_unavailable"})
 	}
-	return user, st, ok
+	return user, session, st, ok
 }
 
 func (a *Base) PolicyError(w http.ResponseWriter, err error) {

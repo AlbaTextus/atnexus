@@ -147,7 +147,7 @@ func (m *Module) sweepPending(ctx context.Context) error {
 		if key == "" {
 			key = id
 		}
-		info, err := store.Open(ctx, key, "", true)
+		info, err := store.Open(ctx, key, "", true, validators{})
 		if info.Body != nil {
 			info.Body.Close()
 		}

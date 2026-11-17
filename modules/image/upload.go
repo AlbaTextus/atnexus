@@ -186,7 +186,7 @@ func (m *Module) upload(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	blocked, err := m.setting(r.Context(), "manage@blockipList")
+	blocked, err := m.cachedSetting(r.Context(), "manage@blockipList")
 	if err != nil {
 		m.failure(w, err)
 		return

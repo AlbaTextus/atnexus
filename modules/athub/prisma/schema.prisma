@@ -122,6 +122,10 @@ model Chapter {
   content   String   @db.Text
   // Stored generated column (non-whitespace characters of content); never written directly.
   wordCount Int      @default(dbgenerated())
+  // Stored generated md5(content) and length(content), so history snapshots
+  // never read chapter bodies; never written directly.
+  contentHash   String @default(dbgenerated())
+  contentLength Int    @default(dbgenerated())
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   novel     Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
   volume    Volume?  @relation(fields: [volumeId, novelId], references: [id, novelId], onDelete: NoAction)

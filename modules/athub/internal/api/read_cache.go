@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -19,21 +20,42 @@ type cachedRead struct {
 type readCache struct {
 	mu         sync.Mutex
 	entries    map[string]cachedRead
-	pending    map[string]chan struct{}
+	pending    map[string]*readFill
 	bytes      int
 	generation uint64
 }
 
-func newReadCache() *readCache {
-	return &readCache{entries: make(map[string]cachedRead), pending: make(map[string]chan struct{})}
+// readFill is one in-flight load that identical requests wait for.
+type readFill struct {
+	done   chan struct{}
+	stored bool
 }
 
-func (c *readCache) invalidate() {
+func newReadCache() *readCache {
+	return &readCache{entries: make(map[string]cachedRead), pending: make(map[string]*readFill)}
+}
+
+// illustrationPrefix covers the illustration and illustration-layout endpoints.
+// Their writes change only their own tables, which no other read returns.
+const illustrationPrefix = "/api/v2/illustration"
+
+// invalidate drops the responses a write to path may have changed. The
+// generation always advances, so every in-flight fill is discarded.
+func (c *readCache) invalidate(path string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.generation++
-	c.entries = make(map[string]cachedRead)
-	c.bytes = 0
+	if !strings.HasPrefix(path, illustrationPrefix) {
+		c.entries = make(map[string]cachedRead)
+		c.bytes = 0
+		return
+	}
+	for key, entry := range c.entries {
+		if strings.HasPrefix(key, illustrationPrefix) {
+			c.bytes -= len(entry.body)
+			delete(c.entries, key)
+		}
+	}
 }
 
 // This handler is INSIDE the host middleware: every cache hit still passes
@@ -46,7 +68,7 @@ func (a *API) serveCachedContent(w http.ResponseWriter, r *http.Request) {
 		// A 5xx may follow a committed mutation (for example an audit
 		// completion failure), so it must not leave an older cached response.
 		if response.status >= 200 && response.status < 300 || response.status >= 500 {
-			a.cache.invalidate()
+			a.cache.invalidate(r.URL.Path)
 		}
 		replayResponse(w, response)
 		return
@@ -71,11 +93,18 @@ func (a *API) serveCachedContent(w http.ResponseWriter, r *http.Request) {
 		if waiting, ok := c.pending[key]; ok {
 			c.mu.Unlock()
 			select {
-			case <-waiting:
-				continue
+			case <-waiting.done:
 			case <-r.Context().Done():
 				return
 			}
+			if waiting.stored {
+				continue
+			}
+			// The result was not cacheable (an error, an oversized body, or a
+			// write during the load). Queueing behind another fill would run
+			// identical requests one at a time, so load this one directly.
+			a.serveContent(w, r)
+			return
 		}
 		// Bound both stored responses and concurrent unique cache fills.
 		if len(c.pending) >= readCacheEntries {
@@ -83,7 +112,7 @@ func (a *API) serveCachedContent(w http.ResponseWriter, r *http.Request) {
 			a.serveContent(w, r)
 			return
 		}
-		waiting := make(chan struct{})
+		waiting := &readFill{done: make(chan struct{})}
 		c.pending[key] = waiting
 		generation := c.generation
 		c.mu.Unlock()
@@ -91,7 +120,7 @@ func (a *API) serveCachedContent(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				c.mu.Lock()
 				delete(c.pending, key)
-				close(waiting)
+				close(waiting.done)
 				c.mu.Unlock()
 			}()
 			response := &bufferedResponse{header: make(http.Header)}
@@ -118,6 +147,8 @@ func (a *API) serveCachedContent(w http.ResponseWriter, r *http.Request) {
 					body := append([]byte(nil), response.body.Bytes()...)
 					c.entries[key] = cachedRead{header: response.header.Clone(), body: body, expires: time.Now().Add(ttl)}
 					c.bytes += len(body)
+					// Set under the lock and before done closes, so waiters read it safely.
+					waiting.stored = true
 				}
 				c.mu.Unlock()
 			}

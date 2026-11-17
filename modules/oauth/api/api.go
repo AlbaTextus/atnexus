@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlbaTextus/atnexus/internal/apibase"
@@ -35,6 +36,8 @@ type API struct {
 	turnstile     *turnstile.Service
 	mailer        email.Sender
 	imageKeys     http.Handler
+	decoyOnce     sync.Once
+	decoyHash     string
 }
 
 func (a *API) SetImageKeys(handler http.Handler) { a.imageKeys = handler }
@@ -67,7 +70,9 @@ func (a *API) Router() http.Handler {
 		a.Base = &apibase.Base{}
 	}
 	r := chi.NewRouter()
-	r.Use(a.requestID, a.securityHeaders, a.recoverer, a.accessLog, a.timeout, a.maintenanceGate)
+	// The listener wraps this router in the request timeout (server.ModuleHTTP);
+	// a second TimeoutHandler here would buffer every response twice.
+	r.Use(a.requestID, a.securityHeaders, a.recoverer, a.accessLog, a.maintenanceGate)
 	r.Get("/api/v1/maintenance", a.getMaintenance)
 	if a.imageKeys != nil {
 		r.Handle("/api/v1/admin/image/keys", a.imageKeys)
@@ -195,9 +200,6 @@ func (a *API) accessLog(next http.Handler) http.Handler {
 	})
 }
 
-func (a *API) timeout(next http.Handler) http.Handler {
-	return http.TimeoutHandler(next, a.Config.HTTPRequestTimeout, `{"error":"server_timeout"}`)
-}
 func (a *API) health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if err := a.Store.Ping(r.Context()); err != nil {
@@ -294,11 +296,30 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	email := normalizeEmail(in.Email)
+	limits := a.loginLimits(r, email)
+	if !a.loginAllowed(w, r, limits) {
+		return
+	}
 	u, err := a.Store.UserByEmail(r.Context(), email)
-	if err != nil || !u.IsActive || !security.CheckPassword(u.PasswordHash, in.Password) {
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		a.loginUncounted(r.Context(), limits)
+		a.Log.Error("load user for login", "error", err)
+		writeJSON(w, 500, map[string]string{"error": "server_error"})
+		return
+	}
+	// A rejected attempt stays counted: loginAllowed reserved it up front.
+	if err != nil || !u.IsActive {
+		// Spend the same hashing time as a real check so response timing does
+		// not reveal whether the email belongs to an active account.
+		security.CheckPassword(a.decoyPasswordHash(), in.Password)
 		writeJSON(w, 401, map[string]any{"error": "invalid_credentials"})
 		return
 	}
+	if !security.CheckPassword(u.PasswordHash, in.Password) {
+		writeJSON(w, 401, map[string]any{"error": "invalid_credentials"})
+		return
+	}
+	a.loginSucceeded(r, email, limits)
 	if !a.allowMaintenanceLogin(w, r, u) {
 		return
 	}
@@ -308,6 +329,17 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, userView(u))
+}
+
+// decoyPasswordHash is a hash at the configured cost that matches no password
+// a client can know; it is derived once from a fresh random value.
+func (a *API) decoyPasswordHash() string {
+	a.decoyOnce.Do(func() {
+		if value, err := security.RandomToken(32); err == nil {
+			a.decoyHash, _ = security.HashPassword(value, a.Config.BCryptCost)
+		}
+	})
+	return a.decoyHash
 }
 
 func (a *API) issueSession(w http.ResponseWriter, r *http.Request, user store.User) error {
@@ -477,7 +509,11 @@ func (a *API) passkeyRegistrationOptions(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]any{"ceremony_token": ceremonyToken, "publicKey": options})
 }
 
+// A WebAuthn response is a few kilobytes; the library reads the body unbounded.
+const maxPasskeyBody = 64 << 10
+
 func (a *API) passkeyRegistrationFinish(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxPasskeyBody)
 	user, ok := a.CurrentUser(r)
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "login_required"})
@@ -523,6 +559,7 @@ func (a *API) passkeyLoginOptions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxPasskeyBody)
 	token := strings.TrimSpace(r.Header.Get("X-WebAuthn-Ceremony"))
 	if token == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ceremony_token_required"})

@@ -210,6 +210,9 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
       setError("作者名字不能超过 200 个字符，且不能包含无效字符。"); setActive("authorId"); return
     }
     if (payload.tagNames?.some(name => name.includes("\0"))) { setError("标签中含有无效字符，请移除后重试。"); setActive("tagIds"); return }
+    if (payload.tagIds.length > 100 || (payload.tagNames?.length ?? 0) > 100 || payload.tagNames?.some(name => Array.from(name).length > 100)) {
+      setError("标签最多 100 个，每个标签不能超过 100 个字符。"); setActive("tagIds"); return
+    }
     if (payload.coverUrl && !safeContentURL(payload.coverUrl)) { setError("封面链接需要使用有效的 HTTP 或 HTTPS 地址。"); setActive("coverUrl"); return }
     if ([payload.title, payload.summary, payload.coverUrl].some(value => value?.includes("\0"))) { setError("资料中含有无效字符，请移除后重试。"); return }
     const body = JSON.stringify(payload)

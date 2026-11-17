@@ -111,7 +111,11 @@ func (a *API) uploadNovelIllustration(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxNovelCoverBytes+1))
 	if err == nil {
-		data, err = normalizeNovelImage(data, 4096)
+		data, err = normalizeNovelImage(r.Context(), data, 4096)
+	}
+	if r.Context().Err() != nil {
+		// The reply was already taken over by the timeout, or nobody is waiting.
+		return
 	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "illustration_invalid", "error_description": "图片无效或尺寸过大，请使用 JPG、PNG、WebP 或 GIF 图片（最长边不超过 8192 像素，总像素不超过 1600 万）。"})

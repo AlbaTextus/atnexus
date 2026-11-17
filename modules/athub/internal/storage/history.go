@@ -130,13 +130,22 @@ func (p *Postgres) Mutate(ctx context.Context, fn func(context.Context) error) e
 			return err
 		}
 	}
+	// Prepared revisions must be settled on every path, or they stay pending.
+	abandon := func(err error) error {
+		if finish != nil {
+			finalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			return errors.Join(err, finish(finalCtx, false))
+		}
+		return err
+	}
 	if receipt != nil {
 		raw, encodeErr := json.Marshal(receipt)
 		if encodeErr != nil {
-			return encodeErr
+			return abandon(encodeErr)
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO "MutationReceipt"(id,response) VALUES($1::uuid,$2)`, receipt.ID, raw); err != nil {
-			return err
+			return abandon(err)
 		}
 	}
 	err = tx.Commit(ctx)

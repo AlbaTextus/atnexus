@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -99,10 +100,21 @@ func checkGIFBudget(data []byte) error {
 	return bad
 }
 
-func normalizeGIF(data []byte, crop *avatarCrop) ([]byte, error) {
+// Re-rendering an animated avatar is CPU and memory heavy, so only a few run
+// at once; further requests wait holding just their encoded bytes.
+var gifWork = make(chan struct{}, 2)
+
+func normalizeGIF(ctx context.Context, data []byte, crop *avatarCrop) ([]byte, error) {
 	if err := checkGIFBudget(data); err != nil {
 		return nil, err
 	}
+	// A request that timed out or was abandoned stops waiting for its turn.
+	select {
+	case gifWork <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	defer func() { <-gifWork }()
 	animation, err := gif.DecodeAll(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -217,7 +229,11 @@ func (a *API) previewAvatarGIF(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
-	output, err := normalizeGIF(data, &crop)
+	output, err := normalizeGIF(r.Context(), data, &crop)
+	if r.Context().Err() != nil {
+		// The reply was already taken over by the timeout, or nobody is waiting.
+		return
+	}
 	if err != nil {
 		fail()
 		return

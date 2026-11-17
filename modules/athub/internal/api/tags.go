@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"unicode/utf8"
 	"strings"
 
 	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
@@ -60,6 +61,9 @@ func (a *API) tags(w http.ResponseWriter, r *http.Request) error {
 		input.Name = strings.TrimSpace(input.Name)
 		if input.Name == "" || strings.ContainsRune(input.Name, 0) {
 			return badRequest("name is required and cannot contain NUL characters")
+		}
+		if utf8.RuneCountInString(input.Name) > maxTagNameRunes {
+			return badRequest("tag names can have at most " + strconv.Itoa(maxTagNameRunes) + " characters")
 		}
 		var tag storage.Tag
 		status := http.StatusOK

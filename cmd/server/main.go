@@ -51,7 +51,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer imageKeys.Close()
-	images, err := imagebackend.New(ctx, imagebackend.Config{DatabaseURL: cfg.ImageDatabaseURL, LocalRoot: cfg.ImageLocalRoot, TempRoot: cfg.ImageTempRoot, PublicURL: cfg.ImagePublicURL, MaxUploadBytes: cfg.ImageMaxUploadBytes, MaxChunkBytes: cfg.ImageMaxChunkBytes, MaxChunks: cfg.ImageMaxChunks, UploadTTL: cfg.ImageUploadTTL}, imagebackend.Dependencies{Sessions: sessions, Keys: imageKeys, Logger: logger})
+	images, err := imagebackend.New(ctx, imagebackend.Config{DatabaseURL: cfg.ImageDatabaseURL, LocalRoot: cfg.ImageLocalRoot, TempRoot: cfg.ImageTempRoot, PublicURL: cfg.ImagePublicURL, MaxUploadBytes: cfg.ImageMaxUploadBytes, MaxChunkBytes: cfg.ImageMaxChunkBytes, MaxChunks: cfg.ImageMaxChunks, UploadTTL: cfg.ImageUploadTTL, MaxSessionsPerOwner: cfg.ImageMaxUploadSessions, MaxConns: int32(cfg.ImageDatabaseMaxConns)}, imagebackend.Dependencies{Sessions: sessions, Keys: imageKeys, Logger: logger})
 	if err != nil {
 		return fmt.Errorf("image initialization failed: %w", err)
 	}
@@ -141,6 +141,7 @@ func run(logger *slog.Logger) error {
 	}
 	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	go st.RunExpiryPurge(signalCtx, logger)
 	if err := server.Run(signalCtx, cfg.HTTPShutdownTimeout, logger, servers...); err != nil {
 		return err
 	}

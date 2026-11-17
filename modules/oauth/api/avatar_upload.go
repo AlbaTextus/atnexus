@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -23,7 +24,7 @@ import (
 const maxAvatarBytes = 5 << 20
 
 // Decode and re-encode a bounded image, preserving GIF animation.
-func normalizeAvatar(data []byte) ([]byte, error) {
+func normalizeAvatar(ctx context.Context, data []byte) ([]byte, error) {
 	if len(data) == 0 || len(data) > maxAvatarBytes {
 		return nil, fmt.Errorf("invalid image size")
 	}
@@ -32,7 +33,7 @@ func normalizeAvatar(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("invalid image dimensions")
 	}
 	if format == "gif" {
-		return normalizeGIF(data, nil)
+		return normalizeGIF(ctx, data, nil)
 	}
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
@@ -94,7 +95,11 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxAvatarBytes+1))
 	if err == nil {
-		data, err = normalizeAvatar(data)
+		data, err = normalizeAvatar(r.Context(), data)
+	}
+	if r.Context().Err() != nil {
+		// The reply was already taken over by the timeout, or nobody is waiting.
+		return
 	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid_avatar", "error_description": "请使用不超过 5 MB 的有效图片；GIF 最多 200 帧，全部画面合计不超过 4000 万像素。"})

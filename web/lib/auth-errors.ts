@@ -16,6 +16,7 @@ const messages: Record<string, string> = {
   external_login_disabled: "第三方登录已关闭，请使用邮箱或通行密钥登录。",
   login_provider_disabled: "该第三方登录方式已关闭，请选择其他登录方式。",
   site_features_unavailable: "暂时无法读取站点功能设置，请稍后重试。",
+  login_rate_limited: "登录失败次数过多，请稍后再试。",
   invalid_credentials: "邮箱或密码不正确，请检查后重试。",
   email_exists: "这个邮箱已经注册过了，请直接登录。",
   invalid_request: "请检查填写的信息后重试。",

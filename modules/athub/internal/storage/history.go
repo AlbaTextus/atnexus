@@ -202,6 +202,8 @@ func (p *Postgres) trackNovel(ctx context.Context, id int32, created bool) error
 
 func snapshot(ctx context.Context, q database, id int32) (map[string]map[string]any, error) {
 	// Only metadata and stored chapter hashes/lengths; chapter bodies are never read.
+	// Chapter columns are listed by name because to_jsonb(c) would load the body:
+	// a new Chapter column that history should track must be added to that list.
 	rows, err := q.Query(ctx, `SELECT 'Novel',n."id"::text,
 		(to_jsonb(n)-'updatedAt'-'createdAt') || jsonb_build_object('tagIds',
 			ARRAY(SELECT "tagId" FROM "NovelTag" WHERE "novelId"=n."id" ORDER BY "tagId"),

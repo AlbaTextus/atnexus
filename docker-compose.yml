@@ -105,8 +105,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
-      # Startup includes the legacy creator data check.
-      start_period: ${CREATPLAT_MIGRATION_CHECK_TIMEOUT:-10m}
+      # Listeners come up after the short startup checks. The full legacy creator
+      # data check runs in the background and does not delay readiness.
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy

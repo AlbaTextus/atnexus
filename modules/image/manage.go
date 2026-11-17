@@ -130,7 +130,7 @@ func (m *Module) moveFile(ctx context.Context, id, target string) (File, error) 
 	if tag.RowsAffected() == 0 {
 		return next, ErrConflict
 	}
-	object, err := store.Open(ctx, key, "", false)
+	object, err := store.Open(ctx, key, "", false, validators{})
 	if err != nil {
 		return next, err
 	}
@@ -321,12 +321,13 @@ func (m *Module) folderAction(w http.ResponseWriter, r *http.Request, folder, de
 	success := []string{}
 	failed := []string{}
 	// A move keeps its connection for the whole copy, so moves stay serial.
-	workers := 1
-	if !strings.Contains(r.URL.Path, "/move/") {
-		workers = deleteWorkers
+	move := strings.Contains(r.URL.Path, "/move/")
+	workers := deleteWorkers
+	if move {
+		workers = 1
 	}
 	errs := eachFile(ids, workers, func(id string) error {
-		if workers == 1 {
+		if move {
 			_, err := m.moveFile(r.Context(), id, path.Join(dest, strings.TrimPrefix(id, folder+"/")))
 			return err
 		}
@@ -566,7 +567,9 @@ func (m *Module) uploadSettings(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet, http.MethodPost) {
 		return
 	}
-	cfg, err := m.channels(r.Context())
+	// Blank credentials in a save are filled from this copy and written back, so
+	// it must be the stored value, not the briefly cached one.
+	cfg, err := m.channelsWith(r.Context(), m.pool)
 	if err != nil {
 		m.failure(w, err)
 		return
@@ -610,7 +613,7 @@ func (m *Module) uploadSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	raw, err := json.Marshal(next)
 	if err == nil {
-		err = m.setSetting(r.Context(), "manage@sysConfig@upload", string(raw))
+		err = m.setSetting(r.Context(), uploadConfigKey, string(raw))
 	}
 	if err != nil {
 		m.failure(w, err)
@@ -760,7 +763,7 @@ func (m *Module) restoreFiles(w http.ResponseWriter, r *http.Request) {
 		if key == "" {
 			key = id
 		}
-		info, e := store.Open(r.Context(), key, "", true)
+		info, e := store.Open(r.Context(), key, "", true, validators{})
 		if info.Body != nil {
 			info.Body.Close()
 		}

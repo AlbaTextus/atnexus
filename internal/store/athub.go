@@ -140,12 +140,12 @@ func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 	// All admission checks travel in one round trip. Statements run in order, so
 	// the lock order matches administrator changes and rotations: user, then
 	// credential, then settings. Recheck before dispatch so an earlier lookup
-	// cannot outlive a committed ban. The user row is only read here, and a
-	// shared lock still excludes every administrator change; concurrent calls
-	// by one user no longer queue behind each other.
+	// cannot outlive a committed ban. The user lock is exclusive on purpose:
+	// shared lockers never queue behind a waiting writer, so a client that keeps
+	// calls in flight could hold off a ban, a rotation or a sign-out indefinitely.
 	const role = `(SELECT role FROM users WHERE id=$1)`
 	checks := &pgx.Batch{}
-	checks.Queue(`SELECT is_active AND NOT athub_disabled FROM users WHERE id=$1 FOR SHARE`, call.UserID)
+	checks.Queue(`SELECT is_active AND NOT athub_disabled FROM users WHERE id=$1 FOR UPDATE`, call.UserID)
 	if call.SessionID != nil {
 		checks.Queue(`SELECT revoked_at IS NULL AND expires_at>now(),0::bigint FROM user_sessions
 			WHERE id=$1 AND user_id=$2 FOR SHARE`, call.SessionID, call.UserID)

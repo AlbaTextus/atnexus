@@ -27,7 +27,9 @@ type objectInfo struct {
 }
 type objectStore interface {
 	Put(context.Context, string, io.Reader, int64, string) error
-	Open(context.Context, string, string, bool) (objectInfo, error)
+	// Open takes the key, an optional byte range, whether only the object's
+	// details are wanted, and the caller's cache validators (zero for none).
+	Open(context.Context, string, string, bool, validators) (objectInfo, error)
 	Delete(context.Context, string) error
 }
 type localStore struct{ root *os.Root }
@@ -78,7 +80,7 @@ func (l *localStore) Put(ctx context.Context, key string, r io.Reader, size int6
 	}
 	return nil
 }
-func (l *localStore) Open(ctx context.Context, key, byteRange string, head bool) (objectInfo, error) {
+func (l *localStore) Open(ctx context.Context, key, byteRange string, head bool, _ validators) (objectInfo, error) {
 	if !validKey(key) {
 		return objectInfo{}, ErrInvalid
 	}
@@ -189,35 +191,29 @@ func (m *Module) s3For(c Channel) (*s3Store, error) {
 	return cached.(*s3Store), nil
 }
 
-type notModifiedContext struct{}
+// validators are a client's cache validators. Remote storage answers 304 for
+// them without sending the body, which reaches the caller as a response error.
+// Local files ignore them: http.ServeContent evaluates the same headers itself.
+type validators struct {
+	etag  string
+	since *time.Time
+}
 
-// withValidators forwards a client's cache validators to remote storage, which
-// then answers 304 without sending the body. Local files ignore them:
-// http.ServeContent evaluates the same headers itself.
-func withValidators(ctx context.Context, r *http.Request) context.Context {
+func requestValidators(r *http.Request) validators {
 	v := validators{etag: r.Header.Get("If-None-Match")}
 	if v.etag == "" {
 		if t, err := http.ParseTime(r.Header.Get("If-Modified-Since")); err == nil {
 			v.since = &t
 		}
 	}
-	if v.etag == "" && v.since == nil {
-		return ctx
-	}
-	return context.WithValue(ctx, notModifiedContext{}, v)
-}
-
-type validators struct {
-	etag  string
-	since *time.Time
+	return v
 }
 
 func (s *s3Store) Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error {
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key), Body: r, ContentLength: aws.Int64(size), ContentType: aws.String(contentType), IfNoneMatch: aws.String("*")})
 	return err
 }
-func (s *s3Store) Open(ctx context.Context, key, byteRange string, head bool) (objectInfo, error) {
-	cond, _ := ctx.Value(notModifiedContext{}).(validators)
+func (s *s3Store) Open(ctx context.Context, key, byteRange string, head bool, cond validators) (objectInfo, error) {
 	var etag *string
 	if cond.etag != "" {
 		etag = aws.String(cond.etag)

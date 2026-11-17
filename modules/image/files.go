@@ -70,11 +70,12 @@ func (m *Module) serveFile(w http.ResponseWriter, r *http.Request) {
 	if key == "" {
 		key = id
 	}
-	ctx := r.Context()
+	// Admin previews are never cached, so only public requests revalidate.
+	var cond validators
 	if !preview {
-		ctx = withValidators(ctx, r)
+		cond = requestValidators(r)
 	}
-	info, err := store.Open(ctx, key, r.Header.Get("Range"), r.Method == http.MethodHead)
+	info, err := store.Open(r.Context(), key, r.Header.Get("Range"), r.Method == http.MethodHead, cond)
 	if err != nil {
 		var remote *smithyhttp.ResponseError
 		errors.As(err, &remote)

@@ -13,8 +13,13 @@ import (
 func NewATHubHandler(content http.Handler, ping func(context.Context) error) http.Handler {
 	legacy := NewContentHandler(content, ping)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/healthz" {
-			legacy.ServeHTTP(w, r)
+		// Health is answered before the content engine, so probes are neither
+		// authenticated nor recorded as API calls.
+		if r.URL.Path == "/api/v5/healthz" {
+			request := r.Clone(r.Context())
+			request.URL.Path, request.URL.RawPath = "/healthz", ""
+			request.RequestURI = request.URL.RequestURI()
+			legacy.ServeHTTP(w, request)
 			return
 		}
 		if r.URL.Path != "/api/v5" && !strings.HasPrefix(r.URL.Path, "/api/v5/") {

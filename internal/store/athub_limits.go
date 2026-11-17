@@ -57,7 +57,18 @@ func (p *Postgres) SetATHubKeyLimit(ctx context.Context, role string, limit *int
 	if !ValidATHubKeyLimit(role, limit) {
 		return result, ErrInvalidATHubKeyLimit
 	}
-	err := p.pool.QueryRow(ctx, `UPDATE athub_key_limits SET total_call_limit=$2,updated_by=$3,updated_at=clock_timestamp()
-		WHERE role=$1 RETURNING role,total_call_limit,updated_at`, role, limit, actor).Scan(&result.Role, &result.TotalCallLimit, &result.UpdatedAt)
-	return result, err
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return result, err
+	}
+	defer tx.Rollback(ctx)
+	// Wait out calls admitted under the old limit; later ones queue behind this.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(`+athubRoleLock(`$1`)+`)`, role); err != nil {
+		return result, err
+	}
+	if err = tx.QueryRow(ctx, `UPDATE athub_key_limits SET total_call_limit=$2,updated_by=$3,updated_at=clock_timestamp()
+		WHERE role=$1 RETURNING role,total_call_limit,updated_at`, role, limit, actor).Scan(&result.Role, &result.TotalCallLimit, &result.UpdatedAt); err != nil {
+		return result, err
+	}
+	return result, tx.Commit(ctx)
 }

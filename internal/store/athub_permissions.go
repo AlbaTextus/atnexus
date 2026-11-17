@@ -287,6 +287,12 @@ func (p *Postgres) SetATHubPolicy(ctx context.Context, actor uuid.UUID, policy A
 	if !revision.Equal(policy.UpdatedAt) {
 		return policy, ErrConflict
 	}
+	// Wait out calls admitted under the old rules; later ones queue behind this.
+	// It follows the policy row lock so this transaction never waits for a row
+	// while calls queue behind it.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(`+athubRoleLock(`$1`)+`)`, policy.Role); err != nil {
+		return policy, err
+	}
 	if _, err = tx.Exec(ctx, `DELETE FROM athub_access_rules WHERE role=$1`, policy.Role); err != nil {
 		return policy, err
 	}

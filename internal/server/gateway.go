@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -22,7 +23,8 @@ type GatewayRoute struct {
 }
 
 // NewGateway serves every module on one listener, dispatching by path prefix
-// without changing the request. /healthz reports all modules together.
+// without changing the request. /healthz reports all modules together, using
+// the same 200 / 433 / other convention as each module's own check.
 func NewGateway(routes ...GatewayRoute) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" {
@@ -57,30 +59,54 @@ func (route GatewayRoute) owns(path string) bool {
 	return false
 }
 
+// statusMaintenance is the platform's planned-maintenance health status; the
+// status monitor reports it as maintenance instead of an outage.
+const statusMaintenance = 433
+
 func gatewayHealth(w http.ResponseWriter, r *http.Request, routes []GatewayRoute) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		apibase.WriteJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
 		return
 	}
-	status, code := "ok", http.StatusOK
+	// One deadline for all probes: a stalled module cannot hold the check open.
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	// A fresh request keeps the caller's Origin and credentials out of the probes.
+	probe, err := http.NewRequestWithContext(ctx, http.MethodGet, "/healthz", nil)
+	if err != nil {
+		apibase.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal_server_error"})
+		return
+	}
+	code := http.StatusOK
 	modules := make(map[string]string, len(routes))
 	for _, route := range routes {
-		// A fresh request keeps the caller's Origin and credentials out of the probe.
-		probe, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "/healthz", nil)
-		if err != nil {
-			modules[route.Name] = "unhealthy"
-			status, code = "unhealthy", http.StatusServiceUnavailable
-			continue
-		}
 		result := &statusWriter{header: make(http.Header)}
-		route.Handler.ServeHTTP(result, probe)
-		if result.status == http.StatusOK {
+		route.Handler.ServeHTTP(result, probe.Clone(ctx))
+		switch result.status {
+		case http.StatusOK:
 			modules[route.Name] = "ok"
-			continue
+		case statusMaintenance:
+			modules[route.Name] = "maintenance"
+			// An outage elsewhere outranks planned maintenance.
+			if code == http.StatusOK {
+				code = statusMaintenance
+				if retry := result.header.Get("Retry-After"); retry != "" {
+					w.Header().Set("Retry-After", retry)
+				}
+			}
+		default:
+			modules[route.Name] = "unhealthy"
+			code = http.StatusServiceUnavailable
 		}
-		modules[route.Name] = "unhealthy"
-		status, code = "unhealthy", http.StatusServiceUnavailable
+	}
+	status := "ok"
+	switch code {
+	case statusMaintenance:
+		status = "maintenance"
+	case http.StatusServiceUnavailable:
+		status = "unhealthy"
+		w.Header().Del("Retry-After")
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	apibase.WriteJSON(w, code, map[string]any{"status": status, "modules": modules})

@@ -10,16 +10,17 @@ import (
 	"time"
 )
 
-func gatewayModule(name string, healthy bool) http.Handler {
+func gatewayModule(name string, health int) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" {
 			if r.Header.Get("Origin") != "" || r.Header.Get("Authorization") != "" {
 				w.WriteHeader(http.StatusForbidden)
 				return
 			}
-			if !healthy {
-				w.WriteHeader(http.StatusServiceUnavailable)
+			if health == 433 {
+				w.Header().Set("Retry-After", "15")
 			}
+			w.WriteHeader(health)
 			_, _ = w.Write([]byte(`{}`))
 			return
 		}
@@ -30,17 +31,17 @@ func gatewayModule(name string, healthy bool) http.Handler {
 	})
 }
 
-func testGateway(athubHealthy bool) http.Handler {
+func testGateway(oauthHealth, athubHealth int) http.Handler {
 	return NewGateway(
-		GatewayRoute{Name: "oauth", Prefixes: []string{"/api/v1", "/oauth", "/.well-known"}, Handler: gatewayModule("oauth", true)},
-		GatewayRoute{Name: "image", Prefixes: []string{"/api/v2", "/file"}, Handler: gatewayModule("image", true)},
-		GatewayRoute{Name: "creatplat", Prefixes: []string{"/api/v4"}, Handler: gatewayModule("creatplat", true)},
-		GatewayRoute{Name: "athub", Prefixes: []string{"/api/v5"}, Handler: gatewayModule("athub", athubHealthy)},
+		GatewayRoute{Name: "oauth", Prefixes: []string{"/api/v1", "/oauth", "/.well-known"}, Handler: gatewayModule("oauth", oauthHealth)},
+		GatewayRoute{Name: "image", Prefixes: []string{"/api/v2", "/file"}, Handler: gatewayModule("image", 200)},
+		GatewayRoute{Name: "creatplat", Prefixes: []string{"/api/v4"}, Handler: gatewayModule("creatplat", 200)},
+		GatewayRoute{Name: "athub", Prefixes: []string{"/api/v5"}, Handler: gatewayModule("athub", athubHealth)},
 	)
 }
 
 func TestGatewayDispatchesByPrefix(t *testing.T) {
-	handler := testGateway(true)
+	handler := testGateway(200, 200)
 	for _, tc := range []struct {
 		path   string
 		module string
@@ -76,18 +77,26 @@ func TestGatewayDispatchesByPrefix(t *testing.T) {
 
 func TestGatewayHealthReportsEveryModule(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		healthy bool
-		status  int
-		athub   string
-	}{{"healthy", true, 200, "ok"}, {"one module down", false, 503, "unhealthy"}} {
+		name         string
+		oauth, athub int
+		code         int
+		status       string
+		oauthState   string
+		athubState   string
+		retryAfter   string
+	}{
+		{"healthy", 200, 200, 200, "ok", "ok", "ok", ""},
+		{"one module down", 200, 503, 503, "unhealthy", "ok", "unhealthy", ""},
+		{"maintenance", 433, 200, 433, "maintenance", "maintenance", "ok", "15"},
+		{"outage outranks maintenance", 433, 500, 503, "unhealthy", "maintenance", "unhealthy", ""},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequest("GET", "/healthz", nil)
 			// Caller headers must not reach the module probes.
 			r.Header.Set("Origin", "https://attacker.example")
 			r.Header.Set("Authorization", "Bearer test")
 			w := httptest.NewRecorder()
-			testGateway(tc.healthy).ServeHTTP(w, r)
+			testGateway(tc.oauth, tc.athub).ServeHTTP(w, r)
 			var body struct {
 				Status  string            `json:"status"`
 				Modules map[string]string `json:"modules"`
@@ -95,18 +104,36 @@ func TestGatewayHealthReportsEveryModule(t *testing.T) {
 			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 				t.Fatal(err)
 			}
-			if w.Code != tc.status || body.Modules["athub"] != tc.athub || body.Modules["oauth"] != "ok" || len(body.Modules) != 4 {
+			if w.Code != tc.code || body.Status != tc.status || len(body.Modules) != 4 {
 				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 			}
-			if (body.Status == "ok") != tc.healthy || w.Header().Get("Cache-Control") != "no-store" {
-				t.Fatalf("status=%q cache=%q", body.Status, w.Header().Get("Cache-Control"))
+			if body.Modules["oauth"] != tc.oauthState || body.Modules["athub"] != tc.athubState || body.Modules["image"] != "ok" {
+				t.Fatalf("modules=%v", body.Modules)
+			}
+			if w.Header().Get("Retry-After") != tc.retryAfter || w.Header().Get("Cache-Control") != "no-store" {
+				t.Fatalf("retry=%q cache=%q", w.Header().Get("Retry-After"), w.Header().Get("Cache-Control"))
 			}
 		})
 	}
 	w := httptest.NewRecorder()
-	testGateway(true).ServeHTTP(w, httptest.NewRequest("POST", "/healthz", nil))
+	testGateway(200, 200).ServeHTTP(w, httptest.NewRequest("POST", "/healthz", nil))
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("POST /healthz status=%d", w.Code)
+	}
+}
+
+// Probes share one deadline, so a stalled module cannot hold the check open.
+func TestGatewayHealthProbesCarryDeadline(t *testing.T) {
+	stalled := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, bounded := r.Context().Deadline(); !bounded {
+			t.Error("health probe has no deadline")
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	w := httptest.NewRecorder()
+	NewGateway(GatewayRoute{Name: "image", Handler: stalled}).ServeHTTP(w, httptest.NewRequest("GET", "/healthz", nil))
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d", w.Code)
 	}
 }
 

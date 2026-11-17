@@ -287,15 +287,29 @@ func (p *Postgres) SetATHubPolicy(ctx context.Context, actor uuid.UUID, policy A
 	if !revision.Equal(policy.UpdatedAt) {
 		return policy, ErrConflict
 	}
-	if _, err = tx.Exec(ctx, `DELETE FROM athub_access_rules WHERE role=$1`, policy.Role); err != nil {
-		return policy, err
-	}
+	// Wait out calls admitted under the old rules; later ones queue behind this
+	// until commit, so the lock and every write share one round trip. The lock
+	// follows the policy row lock so this transaction never waits for a row
+	// while calls queue behind it.
+	changes := &pgx.Batch{}
+	changes.Queue(`SELECT pg_advisory_xact_lock(`+athubRoleLock(`$1`)+`)`, policy.Role)
+	changes.Queue(`DELETE FROM athub_access_rules WHERE role=$1`, policy.Role)
 	for _, rule := range policy.Rules {
-		if _, err = tx.Exec(ctx, `INSERT INTO athub_access_rules(role,operation,method,path,allowed) VALUES($1,$2,$3,$4,$5)`, policy.Role, rule.Operation, rule.Method, rule.Path, rule.Allowed); err != nil {
-			return policy, err
-		}
+		changes.Queue(`INSERT INTO athub_access_rules(role,operation,method,path,allowed) VALUES($1,$2,$3,$4,$5)`, policy.Role, rule.Operation, rule.Method, rule.Path, rule.Allowed)
 	}
-	if err = tx.QueryRow(ctx, `UPDATE athub_role_policies SET review_required=$2,updated_at=clock_timestamp() WHERE role=$1 RETURNING updated_at`, policy.Role, policy.ReviewRequired).Scan(&policy.UpdatedAt); err != nil {
+	writes := changes.Len()
+	changes.Queue(`UPDATE athub_role_policies SET review_required=$2,updated_at=clock_timestamp() WHERE role=$1 RETURNING updated_at`, policy.Role, policy.ReviewRequired)
+	results := tx.SendBatch(ctx, changes)
+	for i := 0; i < writes && err == nil; i++ {
+		_, err = results.Exec()
+	}
+	if err == nil {
+		err = results.QueryRow().Scan(&policy.UpdatedAt)
+	}
+	if closeErr := results.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
 		return policy, err
 	}
 	return policy, tx.Commit(ctx)

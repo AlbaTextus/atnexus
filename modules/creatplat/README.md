@@ -1,18 +1,10 @@
 # 创作者平台
 
-本模块负责投稿、审核、修订、贡献历史与相关查询。统一服务在本地默认 `8004` 挂载 `/api/v4/*`，由 `CREATPLAT_HTTP_ADDR` 配置。
+本文件不再维护，说明统一写在文档站。
 
-**本模块使用独立 PostgreSQL 数据库**，由必填的 `CREATPLAT_DATABASE_URL` 配置，不回退到账户库。建库、迁移、核对与回退步骤见 [DATABASE.md](DATABASE.md)。
-
-- `api/`：投稿、作品修改、封面/插图提交、审核列表与决策接口。沿用旧资源路径结构，将前缀从 v1 改为 v4。
-- `governance.go`：变更入队、审核执行、可信贡献者与幂等执行回执衔接。
-- `history.go`：贡献记录准备/确认与历史、贡献者查询。
-- `repository/history.go`：历史 SQL 与类型，运行时使用创作者独立连接池。
-- `storage/`：独立库初始化、审核存储、迁移核对及旧数据导入。
-- `prisma/`：创作者数据库的独立 schema 和迁移链。
-
-历史与贡献者查询入口为 `/api/v4/history`、`/api/v4/contributors`。为保留原权限与审计语义，宿主适配器暂将这些请求转换为旧操作标签，再执行原准入事务；外部不再使用该内部标签作为新路径。
-
-正式内容仍由 ATHub 保存，审核通过后调用其私有执行能力。内容回执与内容变更保持原事务语义，贡献历史确认失败保留待核对状态。图片继续调用根目录原图床服务，不迁移图床代码或数据。
-
-审核、历史和修订写入创作者库；角色权限、session、准入和额度仍由原账户能力接口校验。跨库事务不原子，通过内容回执和历史准备/确认保留原失败处理语义。
+| 内容 | 文档 |
+| --- | --- |
+| 职责与边界 | [模块概览](https://docs.albatextus.com/creatplat/overview) |
+| 页面入口、审核流程与作品编辑 | [投稿、编辑与审核](https://docs.albatextus.com/creatplat/workflow) |
+| `/api/v4` 接口与请求约定 | [接口一览](https://docs.albatextus.com/creatplat/api) |
+| 建库、旧数据迁移与回退限制 | [独立数据库](https://docs.albatextus.com/creatplat/database) |

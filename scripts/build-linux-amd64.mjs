@@ -210,6 +210,7 @@ For a new installation, copy .env.example to .env and configure it; chmod 600 .e
 chmod +x atnexus atnexus-migrate-creatplat atnexus-migrate-image start-backend.sh start-frontend.sh
 Run ./start-backend.sh and ./start-frontend.sh as separate services.
 Ports: OAuth 8001, image 8002, creator platform 8004, ATHub 8005, frontend 3288.
+Port 8288 serves all four backend APIs together for a single reverse proxy upstream.
 HOSTNAME_OVERRIDE and PORT configure the frontend listener.
 
 Build-time configuration:

@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -70,11 +71,38 @@ func TestATHubV5Boundary(t *testing.T) {
 	if w.Code != 201 || seen != "/api/v2/novelinfo?view=page" || w.Header().Get("Location") != "/api/v5/novelinfo?id=9" {
 		t.Fatalf("status=%d path=%s location=%s", w.Code, seen, w.Header().Get("Location"))
 	}
-	for _, path := range []string{"/api/v2/novelinfo", "/api/v4/history", "/api/v3/contributors"} {
+	for _, path := range []string{"/api/v2/novelinfo", "/api/v4/history", "/api/v3/contributors", "/healthz", "/api/v2/healthz"} {
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
 		if w.Code != 404 {
 			t.Fatalf("exposed wrong module %s", path)
+		}
+	}
+}
+
+// Health lives under the module prefix and never reaches the content engine,
+// where it would be authenticated and recorded as an API call.
+func TestATHubV5Health(t *testing.T) {
+	healthy := true
+	content := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("health probe reached the content engine: %s %s", r.Method, r.URL.Path)
+	})
+	handler := NewATHubHandler(content, func(context.Context) error {
+		if !healthy {
+			return errors.New("database unavailable")
+		}
+		return nil
+	})
+	for _, tc := range []struct {
+		method  string
+		healthy bool
+		status  int
+	}{{"GET", true, 200}, {"GET", false, 503}, {"POST", true, 405}} {
+		healthy = tc.healthy
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(tc.method, "/api/v5/healthz", nil))
+		if w.Code != tc.status {
+			t.Fatalf("%s healthy=%v status=%d, want=%d", tc.method, tc.healthy, w.Code, tc.status)
 		}
 	}
 }

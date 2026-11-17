@@ -141,6 +141,7 @@ model ATHubAPIKey {
   expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
   revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
   lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  authenticatedCalls BigInt @default(0) @map("authenticated_calls")
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   calls ATHubAPICall[]
 

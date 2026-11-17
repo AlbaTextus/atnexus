@@ -55,7 +55,6 @@ type Config struct {
 	ImgbedURL                      string
 	ImgbedAPIToken                 string
 	SMTP                           SMTP
-	Redis                          Redis
 }
 
 func Load() (Config, error) {
@@ -110,10 +109,6 @@ func Load() (Config, error) {
 		c.WebAuthnRPName = "ALBATEXTUS"
 	}
 	c.SMTP, err = loadSMTP()
-	if err != nil {
-		return Config{}, err
-	}
-	c.Redis, err = loadRedis()
 	if err != nil {
 		return Config{}, err
 	}

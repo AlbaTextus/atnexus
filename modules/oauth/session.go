@@ -39,13 +39,7 @@ func (s *Sessions) Authenticate(r *http.Request) (SessionIdentity, error) {
 	if err != nil || cookie.Value == "" {
 		return SessionIdentity{}, auth.ErrUnauthenticated
 	}
-	lookup := s.store.SessionByHash
-	if authoritative, ok := s.store.(interface {
-		SessionByHashUncached(context.Context, string) (store.Session, error)
-	}); ok {
-		lookup = authoritative.SessionByHashUncached
-	}
-	session, err := lookup(r.Context(), security.HashToken(cookie.Value))
+	session, err := s.store.SessionByHash(r.Context(), security.HashToken(cookie.Value))
 	if errors.Is(err, store.ErrNotFound) {
 		return SessionIdentity{}, auth.ErrUnauthenticated
 	}

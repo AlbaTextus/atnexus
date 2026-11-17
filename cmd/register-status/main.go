@@ -135,7 +135,7 @@ func run(appURL, issuerURL, adminID, output string, migrateOwnerAllowlist bool) 
 		if err != nil {
 			return err
 		}
-		hash, err := security.HashPassword(secret, 12)
+		hash, err := security.HashClientSecret(secret, 12)
 		if err != nil {
 			return err
 		}

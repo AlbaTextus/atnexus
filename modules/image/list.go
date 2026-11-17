@@ -93,11 +93,12 @@ func imageFilter(q url.Values, category string) (filter, string, error) {
 			if tag == "" {
 				continue
 			}
-			condition := "COALESCE(metadata->'Tags','[]'::jsonb) @> ?::jsonb"
+			// Containment on the whole column can use the metadata GIN index.
+			condition := "metadata @> ?::jsonb"
 			if item.exclude {
 				condition = "NOT (" + condition + ")"
 			}
-			encoded, _ := json.Marshal([]string{tag})
+			encoded, _ := json.Marshal(map[string][]string{"Tags": {tag}})
 			f.add(condition, string(encoded))
 		}
 	}

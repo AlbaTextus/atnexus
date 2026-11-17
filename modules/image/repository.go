@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -91,7 +93,56 @@ func (m *Module) setting(ctx context.Context, key string) (string, error) {
 }
 func (m *Module) setSetting(ctx context.Context, key, value string) error {
 	_, err := m.pool.Exec(ctx, `INSERT INTO image_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value)
+	// Drop the cache even on failure: the write may still have been applied.
+	m.settings.reset()
 	return err
+}
+
+// settingTTL bounds how long a setting changed outside this process stays unseen.
+const settingTTL = 5 * time.Second
+
+type settingCache struct {
+	mu         sync.Mutex
+	generation uint64
+	values     map[string]settingEntry
+}
+type settingEntry struct {
+	value   string
+	expires time.Time
+}
+
+func (c *settingCache) reset() {
+	c.mu.Lock()
+	c.generation++
+	c.values = nil
+	c.mu.Unlock()
+}
+
+// cachedSetting spares hot paths (file serving, uploads) a query per request.
+// Writes through setSetting are visible immediately.
+func (m *Module) cachedSetting(ctx context.Context, key string) (string, error) {
+	c := &m.settings
+	c.mu.Lock()
+	entry, ok := c.values[key]
+	generation := c.generation
+	c.mu.Unlock()
+	if ok && time.Now().Before(entry.expires) {
+		return entry.value, nil
+	}
+	value, err := m.setting(ctx, key)
+	if err != nil {
+		return "", err
+	}
+	c.mu.Lock()
+	// A write that raced this read wins: never store a value read before it.
+	if c.generation == generation {
+		if c.values == nil {
+			c.values = make(map[string]settingEntry)
+		}
+		c.values[key] = settingEntry{value, time.Now().Add(settingTTL)}
+	}
+	c.mu.Unlock()
+	return value, nil
 }
 func (m *Module) patchMetadata(ctx context.Context, id string, fn func(map[string]any) error) (File, error) {
 	tx, err := m.pool.Begin(ctx)

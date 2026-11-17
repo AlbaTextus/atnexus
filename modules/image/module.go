@@ -39,6 +39,7 @@ type Module struct {
 	deps       Dependencies
 	chunkSlots chan struct{}
 	s3Clients  sync.Map
+	settings   settingCache
 	lifetime   context.Context
 	stop       context.CancelFunc
 	done       chan struct{}

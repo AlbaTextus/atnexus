@@ -50,7 +50,7 @@ func run(appURL, backendURL, output string) error {
 		if err != nil {
 			return err
 		}
-		hash, err := security.HashPassword(secret, 12)
+		hash, err := security.HashClientSecret(secret, 12)
 		if err != nil {
 			return err
 		}

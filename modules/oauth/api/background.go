@@ -2,23 +2,19 @@ package httpapi
 
 import (
 	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
 	"image"
 	"image/png"
 	"io"
-	"mime/multipart"
 	"net/http"
-	"net/textproto"
-	"net/url"
-	"strings"
-	"time"
 
+	"github.com/AlbaTextus/atnexus/internal/apibase"
 	"github.com/AlbaTextus/atnexus/internal/store"
 	"golang.org/x/image/draw"
 )
 
-func normalizeBackground(data []byte) ([]byte, error) {
+func normalizeBackground(ctx context.Context, data []byte) ([]byte, error) {
 	if len(data) == 0 || len(data) > maxAvatarBytes {
 		return nil, fmt.Errorf("invalid image size")
 	}
@@ -26,6 +22,11 @@ func normalizeBackground(data []byte) ([]byte, error) {
 	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > 8192 || cfg.Height > 8192 || int64(cfg.Width)*int64(cfg.Height) > 16_000_000 || format == "gif" {
 		return nil, fmt.Errorf("invalid background image")
 	}
+	release, err := apibase.AcquireImageWork(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -86,6 +87,10 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	original, err := readProfileOriginal(r, false)
+	if r.Context().Err() != nil {
+		// The reply was already taken over by the timeout, or nobody is waiting.
+		return
+	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid_background", "error_description": "背投原图无效，请选择不超过 5 MB、1600 万像素的 PNG、JPEG 或 WebP 图片。"})
 		return
@@ -98,55 +103,18 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxAvatarBytes+1))
 	if err == nil {
-		data, err = normalizeBackground(data)
+		data, err = normalizeBackground(r.Context(), data)
+	}
+	if r.Context().Err() != nil {
+		// The reply was already taken over by the timeout, or nobody is waiting.
+		return
 	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid_background", "error_description": "请使用不超过 5 MB、1600 万像素的有效 PNG、JPEG 或 WebP 图片。"})
 		return
 	}
-	var body bytes.Buffer
-	form := multipart.NewWriter(&body)
-	part, err := form.CreatePart(textproto.MIMEHeader{"Content-Disposition": {`form-data; name="file"; filename="background.png"`}, "Content-Type": {"image/png"}})
+	backgroundURL, err := a.uploadToImgbed(r.Context(), "backgrounds", user.ID, "background.png", "image/png", data)
 	if err != nil {
-		a.ApplicationError(w, err)
-		return
-	}
-	_, _ = part.Write(data)
-	_ = form.Close()
-	target := a.Config.ImgbedURL + "/api/v2/categories/user/backgrounds/upload?returnFormat=full&entityId=" + user.ID.String()
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, target, &body)
-	if err != nil {
-		a.ApplicationError(w, err)
-		return
-	}
-	req.Header.Set("Authorization", "Bearer "+a.Config.ImgbedAPIToken)
-	req.Header.Set("Content-Type", form.FormDataContentType())
-	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := client.Do(req)
-	if err != nil {
-		backgroundUploadError(w)
-		return
-	}
-	defer response.Body.Close()
-	var uploaded []struct {
-		Src string `json:"src"`
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 || json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&uploaded) != nil || len(uploaded) != 1 {
-		backgroundUploadError(w)
-		return
-	}
-	base, err := url.Parse(a.Config.ImgbedURL)
-	if err != nil {
-		backgroundUploadError(w)
-		return
-	}
-	ref, err := url.Parse(uploaded[0].Src)
-	if err != nil {
-		backgroundUploadError(w)
-		return
-	}
-	resolved := base.ResolveReference(ref)
-	if resolved.Scheme != base.Scheme || resolved.Host != base.Host || resolved.User != nil || resolved.Fragment != "" || !strings.HasPrefix(resolved.Path, "/file/") || len(resolved.String()) > 2048 {
 		backgroundUploadError(w)
 		return
 	}
@@ -155,7 +123,7 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 		backgroundUploadError(w)
 		return
 	}
-	updated, err := st.UpdateBackground(r.Context(), user.ID, resolved.String(), originalURL)
+	updated, err := st.UpdateBackground(r.Context(), user.ID, backgroundURL, originalURL)
 	if err != nil {
 		a.ApplicationError(w, err)
 		return

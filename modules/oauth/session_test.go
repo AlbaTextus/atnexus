@@ -15,19 +15,16 @@ import (
 )
 
 type sessionFixture struct {
-	session  store.Session
-	user     store.User
-	err      error
-	hash     string
-	uncached bool
+	session store.Session
+	user    store.User
+	err     error
+	hash    string
+	looked  bool
 }
 
-func (s *sessionFixture) SessionByHash(context.Context, string) (store.Session, error) {
-	panic("cached session lookup must not authorize modules")
-}
-func (s *sessionFixture) SessionByHashUncached(_ context.Context, hash string) (store.Session, error) {
+func (s *sessionFixture) SessionByHash(_ context.Context, hash string) (store.Session, error) {
 	s.hash = hash
-	s.uncached = true
+	s.looked = true
 	return s.session, s.err
 }
 func (s *sessionFixture) UserByID(context.Context, uuid.UUID) (store.User, error) { return s.user, nil }
@@ -62,7 +59,7 @@ func TestSharedSessionAuthority(t *testing.T) {
 			}
 			identity, err := NewSessions(fixture, "session").VerifySession(request)
 			if scenario == "valid" {
-				if err != nil || identity.UserID != id || identity.SessionID != fixture.session.ID || identity.Role != "USER" || !fixture.uncached || fixture.hash != security.HashToken("opaque-session") {
+				if err != nil || identity.UserID != id || identity.SessionID != fixture.session.ID || identity.Role != "USER" || !fixture.looked || fixture.hash != security.HashToken("opaque-session") {
 					t.Fatalf("identity=%+v err=%v", identity, err)
 				}
 			} else if err == nil || errors.Is(err, auth.ErrUnauthenticated) != wantInvalid {

@@ -92,6 +92,10 @@ func sourceSnapshot(ctx context.Context, pool *pgxpool.Pool) (tableDigest, table
 	return reviews, history, tx.Commit(ctx)
 }
 
+// ErrLegacyDataMismatch means the retired source tables do not match what was
+// imported. Other check failures (timeouts, connectivity) are not this error.
+var ErrLegacyDataMismatch = errors.New("legacy creator data mismatch")
+
 // CheckLegacyMigration refuses to start against an empty new database when
 // existing reviews/history have not been imported. It also detects resumed
 // writes in the retired source tables after cutover.
@@ -116,13 +120,48 @@ func (p *Postgres) CheckLegacyMigration(ctx context.Context, sourceURL string) e
 		return nil
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
-		return errors.New("legacy creator data exists; stop the old service and run npm run db:creatplat:import before starting")
+		return fmt.Errorf("%w: legacy creator data exists; stop the old service and run npm run db:creatplat:import before starting", ErrLegacyDataMismatch)
 	}
 	if err != nil {
 		return err
 	}
 	if oldID != id || oldReviews != reviews || oldHistory != history {
-		return errors.New("legacy creator data changed after import; stop writers and reconcile before starting")
+		return fmt.Errorf("%w: legacy creator data changed after import; stop writers and reconcile before starting", ErrLegacyDataMismatch)
+	}
+	return nil
+}
+
+// CheckLegacyMigrationCounts is the cheap startup gate: it compares only the
+// source identity and row counts with the import marker. It catches a missing
+// import and added or removed rows; CheckLegacyMigration also catches edits.
+func (p *Postgres) CheckLegacyMigrationCounts(ctx context.Context, sourceURL string) error {
+	source, err := pgxpool.New(ctx, sourceURL)
+	if err != nil {
+		return errors.New("could not check legacy creator data")
+	}
+	defer source.Close()
+	id, err := identify(ctx, source)
+	if err != nil {
+		return errors.New("could not identify legacy creator database")
+	}
+	var reviews, history int64
+	if err := source.QueryRow(ctx, `SELECT (SELECT count(*) FROM athub_reviews),(SELECT count(*) FROM novel_revisions)`).Scan(&reviews, &history); err != nil {
+		return fmt.Errorf("could not check legacy creator data: %w", err)
+	}
+	var oldID databaseIdentity
+	var oldReviews, oldHistory int64
+	err = p.pool.QueryRow(ctx, `SELECT source_database,source_server,review_count,history_count FROM creator_migration_state WHERE key='legacy_account'`).Scan(&oldID.Database, &oldID.Server, &oldReviews, &oldHistory)
+	if errors.Is(err, pgx.ErrNoRows) && reviews == 0 && history == 0 {
+		return nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("%w: legacy creator data exists; stop the old service and run npm run db:creatplat:import before starting", ErrLegacyDataMismatch)
+	}
+	if err != nil {
+		return err
+	}
+	if oldID != id || oldReviews != reviews || oldHistory != history {
+		return fmt.Errorf("%w: legacy creator data changed after import; stop writers and reconcile before starting", ErrLegacyDataMismatch)
 	}
 	return nil
 }

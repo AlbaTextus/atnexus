@@ -3,6 +3,7 @@ package security
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"strings"
 	"testing"
 )
 
@@ -30,6 +31,35 @@ func TestValidPKCEValue(t *testing.T) {
 	}
 	if ValidPKCEValue("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=") {
 		t.Fatal("padding is not an RFC 7636 character")
+	}
+}
+
+func TestClientSecretHashes(t *testing.T) {
+	generated, err := RandomToken(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fast, err := HashClientSecret(generated, 4)
+	if err != nil || !strings.HasPrefix(fast, fastSecretPrefix) {
+		t.Fatalf("generated secret hash=%q err=%v", fast, err)
+	}
+	if !CheckSecret(fast, generated) || CheckSecret(fast, generated+"x") || CheckSecret("", generated) {
+		t.Fatal("fast hash verification is wrong")
+	}
+	chosen := "operator-chosen-secret"
+	slow, err := HashClientSecret(chosen, 4)
+	if err != nil || strings.HasPrefix(slow, fastSecretPrefix) || !CheckSecret(slow, chosen) {
+		t.Fatalf("chosen secret must keep bcrypt: %q err=%v", slow, err)
+	}
+	if UpgradedSecretHash(slow, chosen) != "" || UpgradedSecretHash(fast, generated) != "" {
+		t.Fatal("unexpected upgrade")
+	}
+	legacy, err := HashPassword(generated, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next := UpgradedSecretHash(legacy, generated); next != fast || !CheckSecret(legacy, generated) {
+		t.Fatalf("legacy hash upgrade=%q", next)
 	}
 }
 

@@ -14,8 +14,7 @@ import (
 )
 
 type Postgres struct {
-	pool         *pgxpool.Pool
-	sessionCache *redisSessionCache
+	pool *pgxpool.Pool
 }
 
 func NewPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
@@ -33,21 +32,31 @@ func NewPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
 	return &Postgres{pool: pool}, nil
 }
 
-func (p *Postgres) EnableRedisSessionCache(ctx context.Context, rawURL, prefix string, ttl time.Duration) error {
-	cache, err := newRedisSessionCache(ctx, rawURL, prefix, ttl)
+// Pool lets account-owned modules share this pool instead of opening another
+// one against the same database.
+func (p *Postgres) Pool() *pgxpool.Pool { return p.pool }
+
+// UserAvatars resolves the selected avatar of many accounts in one query.
+// Unknown IDs are absent from the result.
+func (p *Postgres) UserAvatars(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]string, error) {
+	rows, err := p.pool.Query(ctx, `SELECT users.id,`+userAvatarColumn+` FROM users WHERE users.id=ANY($1)`, ids)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	p.sessionCache = cache
-	return nil
+	defer rows.Close()
+	avatars := make(map[uuid.UUID]string, len(ids))
+	for rows.Next() {
+		var id uuid.UUID
+		var avatar string
+		if err := rows.Scan(&id, &avatar); err != nil {
+			return nil, err
+		}
+		avatars[id] = avatar
+	}
+	return avatars, rows.Err()
 }
 
-func (p *Postgres) Close() {
-	if p.sessionCache != nil {
-		p.sessionCache.close()
-	}
-	p.pool.Close()
-}
+func (p *Postgres) Close()                         { p.pool.Close() }
 func (p *Postgres) Ping(ctx context.Context) error { return p.pool.Ping(ctx) }
 
 func isUniqueViolation(err error) bool {
@@ -57,10 +66,12 @@ func isUniqueViolation(err error) bool {
 
 // Resolve the selected avatar at read time so refreshed provider images and
 // unlinked identities are reflected in every login and profile response.
-const userColumns = `users.id,users.email,users.password_hash,users.display_name,users.role,users.is_active,users.created_at,
- users.avatar_source,CASE WHEN users.avatar_source='custom' THEN users.custom_avatar_url ELSE COALESCE((SELECT avatar_url FROM external_identities
+const userAvatarColumn = `CASE WHEN users.avatar_source='custom' THEN users.custom_avatar_url ELSE COALESCE((SELECT avatar_url FROM external_identities
  WHERE user_id=users.id AND avatar_url<>'' AND (users.avatar_source='auto' OR provider=users.avatar_source)
- ORDER BY created_at,id LIMIT 1),'') END,users.custom_avatar_url,users.numeric_id,users.bio,users.email_verified,users.profile_setup_required,users.background_url,users.avatar_original_url,users.background_original_url`
+ ORDER BY created_at,id LIMIT 1),'') END`
+
+const userColumns = `users.id,users.email,users.password_hash,users.display_name,users.role,users.is_active,users.created_at,
+ users.avatar_source,` + userAvatarColumn + `,users.custom_avatar_url,users.numeric_id,users.bio,users.email_verified,users.profile_setup_required,users.background_url,users.avatar_original_url,users.background_original_url`
 
 // userScanDestinations follows userColumns; managed reads append their extra fields.
 func userScanDestinations(u *User) []any {
@@ -128,10 +139,6 @@ func (p *Postgres) CreateSession(ctx context.Context, userID uuid.UUID, tokenHas
 	if device, ok := ctx.Value(loginDeviceKey{}).(LoginDevice); ok {
 		metadata, _ = json.Marshal(device)
 	}
-	var version sessionCacheVersion
-	if p.sessionCache != nil {
-		_, _, version = p.sessionCache.get(ctx, tokenHash)
-	}
 	id := uuid.New()
 	_, err := p.pool.Exec(ctx, `WITH session AS (
 	 INSERT INTO user_sessions (id, token_hash, user_id, expires_at, created_at) VALUES ($1, $2, $3, $4, NOW()) RETURNING user_id
@@ -142,21 +149,12 @@ func (p *Postgres) CreateSession(ctx context.Context, userID uuid.UUID, tokenHas
 	if err != nil {
 		return fmt.Errorf("create session: %w", err)
 	}
-	if p.sessionCache != nil {
-		p.sessionCache.set(ctx, tokenHash, Session{ID: id, UserID: userID, ExpiresAt: expiresAt}, version)
-	}
 	return nil
 }
 
+// SessionByHash always reads the database, so a revocation or a disabled
+// account takes effect on the next request.
 func (p *Postgres) SessionByHash(ctx context.Context, tokenHash string) (Session, error) {
-	var version sessionCacheVersion
-	if p.sessionCache != nil {
-		if session, ok, snapshot := p.sessionCache.get(ctx, tokenHash); ok {
-			return session, nil
-		} else {
-			version = snapshot
-		}
-	}
 	var s Session
 	err := p.pool.QueryRow(ctx, `SELECT s.id, s.user_id, s.expires_at, s.revoked_at FROM user_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND u.is_active = true`, tokenHash).Scan(&s.ID, &s.UserID, &s.ExpiresAt, &s.RevokedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -164,9 +162,6 @@ func (p *Postgres) SessionByHash(ctx context.Context, tokenHash string) (Session
 	}
 	if err != nil {
 		return Session{}, fmt.Errorf("find session: %w", err)
-	}
-	if p.sessionCache != nil {
-		p.sessionCache.set(ctx, tokenHash, s, version)
 	}
 	return s, nil
 }
@@ -176,16 +171,7 @@ func (p *Postgres) RevokeSession(ctx context.Context, tokenHash string) error {
 	if err != nil {
 		return fmt.Errorf("revoke session: %w", err)
 	}
-	if p.sessionCache != nil {
-		p.sessionCache.delete(ctx, tokenHash)
-	}
 	return nil
-}
-
-func (p *Postgres) invalidateUserSessionCache(ctx context.Context, userID uuid.UUID) {
-	if p.sessionCache != nil {
-		p.sessionCache.invalidateUser(ctx, userID)
-	}
 }
 
 func scanPasskey(row pgx.Row) (PasskeyCredential, error) {

@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -26,11 +29,44 @@ import (
 
 func main() {
 	_ = godotenv.Load()
+	// The runtime image has no shell or HTTP client, so the binary probes itself.
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		if err := healthcheck(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	if err := run(logger); err != nil {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+// All listeners start together, so the account API answering means startup finished.
+func healthcheck() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("invalid configuration: %w", err)
+	}
+	host, port, err := net.SplitHostPort(cfg.HTTPAddr)
+	if err != nil {
+		return fmt.Errorf("invalid HTTP_ADDR: %w", err)
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	response, err := client.Get("http://" + net.JoinHostPort(host, port) + "/healthz")
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("unhealthy: status %d", response.StatusCode)
+	}
+	return nil
 }
 
 func run(logger *slog.Logger) error {
@@ -46,7 +82,7 @@ func run(logger *slog.Logger) error {
 	}
 	defer st.Close()
 	sessions := oauth.NewSessions(st, cfg.SessionCookieName)
-	imageKeys, err := oauth.NewImageKeys(ctx, cfg.DatabaseURL, sessions)
+	imageKeys, err := oauth.NewImageKeysWithPool(ctx, st.Pool(), sessions)
 	if err != nil {
 		return err
 	}
@@ -82,12 +118,6 @@ func run(logger *slog.Logger) error {
 	access.EnableAPIKeys(oauth.NewAPIKeys(st))
 	access.EnableCreatorStorage(creatorDB)
 	hubConfig := athub.Config{DatabaseURL: cfg.ATHubDatabaseURL, WrapHandler: access.Wrap, RecordChanges: access.RecordChanges}
-	if cfg.Redis.Enabled {
-		if err := st.EnableRedisSessionCache(ctx, cfg.Redis.URL, cfg.Redis.KeyPrefix, cfg.Redis.SessionTTL); err != nil {
-			return fmt.Errorf("redis cache initialization failed: %w", err)
-		}
-		logger.Info("redis session cache enabled", "ttl", cfg.Redis.SessionTTL)
-	}
 	api, err := httpapi.New(cfg, st, logger)
 	if err != nil {
 		return fmt.Errorf("http api initialization failed: %w", err)
@@ -98,12 +128,9 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("ATHub initialization failed: %w", err)
 	}
 	defer hub.Close()
-	// Full legacy-history verification can outlast the connection setup deadline.
-	logger.Info("checking legacy creator data", "timeout", cfg.CreatplatMigrationCheckTimeout)
-	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), cfg.CreatplatMigrationCheckTimeout)
-	err = creatorDB.CheckLegacyMigration(migrationCtx, cfg.DatabaseURL)
-	migrationCancel()
-	if err != nil {
+	// Startup compares only row counts; the full row-by-row digest runs in the
+	// background once the listeners are up.
+	if err = creatorDB.CheckLegacyMigrationCounts(ctx, cfg.DatabaseURL); err != nil {
 		return fmt.Errorf("creator migration check failed: %w", err)
 	}
 	creators := creatorapi.New(cfg, st, logger)
@@ -141,10 +168,39 @@ func run(logger *slog.Logger) error {
 		servers = append(servers, &http.Server{Addr: cfg.ImageLegacyHTTPAddr, Handler: images.Files(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.ImageHTTPTimeout, WriteTimeout: cfg.ImageHTTPTimeout, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10})
 	}
 	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	// Background work stops with the listeners and finishes before the deferred
+	// pool closes run: on every return path the context is cancelled first,
+	// then the work is awaited.
+	var background sync.WaitGroup
+	defer background.Wait()
 	defer stop()
-	go st.RunExpiryPurge(signalCtx, logger)
+	background.Go(func() { st.RunExpiryPurge(signalCtx, logger) })
+	// Edited legacy rows mean the old service is still writing: stop serving,
+	// exactly as the startup check used to refuse to start.
+	var legacyMismatch error
+	background.Go(func() {
+		logger.Info("verifying legacy creator data", "timeout", cfg.CreatplatMigrationCheckTimeout)
+		checkCtx, cancel := context.WithTimeout(signalCtx, cfg.CreatplatMigrationCheckTimeout)
+		defer cancel()
+		err := creatorDB.CheckLegacyMigration(checkCtx, cfg.DatabaseURL)
+		switch {
+		case err == nil:
+			logger.Info("legacy creator data verified")
+		case errors.Is(err, creatorstorage.ErrLegacyDataMismatch):
+			legacyMismatch = fmt.Errorf("creator migration check failed: %w", err)
+			logger.Error("legacy creator data mismatch; stopping", "error", err)
+			stop()
+		case signalCtx.Err() == nil:
+			// Could not finish (timeout, connectivity): not evidence of a mismatch.
+			logger.Error("legacy creator data verification did not complete", "error", err)
+		}
+	})
 	if err := server.Run(signalCtx, cfg.HTTPShutdownTimeout, logger, servers...); err != nil {
 		return err
+	}
+	background.Wait()
+	if legacyMismatch != nil {
+		return legacyMismatch
 	}
 	logger.Info("server stopped")
 	return nil

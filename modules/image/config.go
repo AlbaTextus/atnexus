@@ -16,7 +16,14 @@ type Config struct {
 	MaxChunkBytes  int64
 	MaxChunks      int
 	UploadTTL      time.Duration
+	// MaxSessionsPerOwner bounds unfinished chunked uploads per owner; zero
+	// selects the default.
+	MaxSessionsPerOwner int
+	// MaxConns sizes the metadata pool; zero keeps the DSN or module default.
+	MaxConns int32
 }
+
+const defaultSessionsPerOwner = 20
 
 func (c Config) Validate() error {
 	if strings.TrimSpace(c.DatabaseURL) == "" {
@@ -28,6 +35,9 @@ func (c Config) Validate() error {
 	u, err := url.Parse(c.PublicURL)
 	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") || (u.Scheme != "https" && u.Scheme != "http") {
 		return errors.New("IMAGE_PUBLIC_URL must be an HTTP(S) origin")
+	}
+	if c.MaxSessionsPerOwner < 0 || c.MaxConns < 0 {
+		return errors.New("image session and connection limits must not be negative")
 	}
 	if c.MaxUploadBytes <= 0 || c.MaxChunkBytes <= 0 || c.MaxChunks <= 0 || c.MaxChunks > 10000 || c.UploadTTL <= 0 {
 		return errors.New("image upload limits must be positive and max chunks at most 10000")

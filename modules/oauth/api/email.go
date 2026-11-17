@@ -160,7 +160,7 @@ func (a *API) emailError(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrRegistrationDisabled):
 		status, code, message = http.StatusForbidden, "registration_disabled", "全站注册已关闭，已有账户仍可正常登录。"
 	default:
-		a.Log.Error("email operation failed")
+		a.Log.Error("email operation failed", "error", err)
 	}
 	writeJSON(w, status, map[string]string{"error": code, "error_description": message})
 }

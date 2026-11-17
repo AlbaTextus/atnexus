@@ -48,12 +48,17 @@ func scanFile(row interface{ Scan(...any) error }) (File, error) {
 
 const fileColumns = `id,value,metadata,revision`
 
-func openPool(ctx context.Context, raw string) (*pgxpool.Pool, error) {
+func openPool(ctx context.Context, raw string, maxConns int32) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(raw)
 	if err != nil {
 		return nil, errors.New("invalid IMAGE_DATABASE_URL")
 	}
-	cfg.MaxConns = 10
+	// An explicit setting wins, then pool_max_conns in the DSN, then 10.
+	if maxConns > 0 {
+		cfg.MaxConns = maxConns
+	} else if !strings.Contains(raw, "pool_max_conns") {
+		cfg.MaxConns = 10
+	}
 	p, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, errors.New("image PostgreSQL pool unavailable")

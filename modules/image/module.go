@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/AlbaTextus/atnexus/pkg/auth"
 	"github.com/aws/smithy-go"
@@ -36,6 +38,10 @@ type Module struct {
 	scratch    *os.Root
 	deps       Dependencies
 	chunkSlots chan struct{}
+	s3Clients  sync.Map
+	lifetime   context.Context
+	stop       context.CancelFunc
+	done       chan struct{}
 }
 
 func New(ctx context.Context, cfg Config, deps Dependencies) (*Module, error) {
@@ -48,7 +54,10 @@ func New(ctx context.Context, cfg Config, deps Dependencies) (*Module, error) {
 	if deps.Logger == nil {
 		deps.Logger = slog.Default()
 	}
-	p, err := openPool(ctx, cfg.DatabaseURL)
+	if cfg.MaxSessionsPerOwner == 0 {
+		cfg.MaxSessionsPerOwner = defaultSessionsPerOwner
+	}
+	p, err := openPool(ctx, cfg.DatabaseURL, cfg.MaxConns)
 	if err != nil {
 		return nil, err
 	}
@@ -70,9 +79,28 @@ func New(ctx context.Context, cfg Config, deps Dependencies) (*Module, error) {
 	}
 	// A merge holds its session lock while committing a durable file receipt.
 	// Bound such operations so they cannot occupy the entire metadata pool.
-	return &Module{cfg: cfg, pool: p, local: &localStore{root}, scratch: scratch, deps: deps, chunkSlots: make(chan struct{}, max(1, int(p.Config().MaxConns/3)))}, nil
+	m := &Module{cfg: cfg, pool: p, local: &localStore{root}, scratch: scratch, deps: deps, chunkSlots: make(chan struct{}, max(1, int(p.Config().MaxConns/3))), done: make(chan struct{})}
+	background, stop := context.WithCancel(context.Background())
+	m.lifetime, m.stop = background, stop
+	go m.janitor(background)
+	return m, nil
 }
-func (m *Module) Close() { m.scratch.Close(); m.local.root.Close(); m.pool.Close() }
+
+// detached bounds work that must finish after its request is gone, such as
+// removing bytes whose row is already committed as deleting. It outlives the
+// request but not the module, so shutdown is never held up by it.
+func (m *Module) detached(ctx context.Context, limit time.Duration) (context.Context, context.CancelFunc) {
+	out, cancel := context.WithTimeout(context.WithoutCancel(ctx), limit)
+	release := context.AfterFunc(m.lifetime, cancel)
+	return out, func() { release(); cancel() }
+}
+func (m *Module) Close() {
+	m.stop()
+	<-m.done
+	m.scratch.Close()
+	m.local.root.Close()
+	m.pool.Close()
+}
 func (m *Module) Ping(ctx context.Context) error {
 	if err := m.pool.Ping(ctx); err != nil {
 		return err

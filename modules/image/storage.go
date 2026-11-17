@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -148,11 +149,45 @@ func newS3Store(c Channel, transport *http.Client) (*s3Store, error) {
 		region = "auto"
 	}
 	if transport == nil {
-		transport = &http.Client{Timeout: 2 * time.Minute}
+		transport = defaultS3HTTPClient
 	}
 	client := s3.NewFromConfig(aws.Config{Region: region, Credentials: credentials.NewStaticCredentialsProvider(c.AccessKey, c.Secret, ""), HTTPClient: transport}, func(o *s3.Options) { o.BaseEndpoint = aws.String(c.Endpoint); o.UsePathStyle = c.PathStyle })
 	return &s3Store{client, c.Bucket}, nil
 }
+// A whole-request client timeout would cut large transfers on slow links, so
+// only connection setup and time-to-first-header are bounded; the request
+// context bounds the transfer itself.
+var defaultS3HTTPClient = &http.Client{Transport: &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ResponseHeaderTimeout: 2 * time.Minute,
+	ExpectContinueTimeout: time.Second,
+	IdleConnTimeout:       90 * time.Second,
+	MaxIdleConnsPerHost:   16,
+	ForceAttemptHTTP2:     true,
+}}
+
+type s3Identity struct {
+	Endpoint, Bucket, Region, AccessKey, Secret string
+	PathStyle                                   bool
+}
+
+// s3For reuses one client per distinct channel configuration, so edited
+// credentials or endpoints naturally select a new client.
+func (m *Module) s3For(c Channel) (*s3Store, error) {
+	key := s3Identity{c.Endpoint, c.Bucket, c.Region, c.AccessKey, c.Secret, c.PathStyle}
+	if cached, ok := m.s3Clients.Load(key); ok {
+		return cached.(*s3Store), nil
+	}
+	st, err := newS3Store(c, m.deps.StorageHTTPClient)
+	if err != nil {
+		return nil, err
+	}
+	cached, _ := m.s3Clients.LoadOrStore(key, st)
+	return cached.(*s3Store), nil
+}
+
 func (s *s3Store) Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error {
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key), Body: r, ContentLength: aws.Int64(size), ContentType: aws.String(contentType), IfNoneMatch: aws.String("*")})
 	return err
@@ -247,8 +282,11 @@ func (m *Module) storeForWith(ctx context.Context, meta map[string]any, q rowQue
 		if len(matches) != 1 || key == "" {
 			return nil, "", errors.New("S3 channel cannot be resolved unambiguously")
 		}
-		st, err := newS3Store(matches[0], m.deps.StorageHTTPClient)
-		return st, key, err
+		st, err := m.s3For(matches[0])
+		if err != nil {
+			return nil, "", err
+		}
+		return st, key, nil
 	default:
 		return nil, "", errors.New("unsupported historical storage channel")
 	}

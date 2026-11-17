@@ -57,6 +57,7 @@ model Novel {
 
   @@index([platformId])
   @@index([authorId])
+  @@index([updatedAt(sort: Desc), id(sort: Desc)])
 }
 
 model Illustration {

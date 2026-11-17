@@ -346,6 +346,12 @@ func (a *API) content(w http.ResponseWriter, r *http.Request) error {
 	}
 }
 
+// Tag names are indexed, so an unbounded name would fail deep in the database.
+const (
+	maxNovelTags    = 100
+	maxTagNameRunes = 100
+)
+
 func validateNovel(n *storage.NovelInput) error {
 	if n.AuthorName != nil && n.AuthorID != nil {
 		return badRequest("provide authorName or authorId, not both")
@@ -353,12 +359,19 @@ func validateNovel(n *storage.NovelInput) error {
 	if err := normalizeAuthorName(&n.AuthorName); err != nil {
 		return err
 	}
+	// Every name costs statements inside the write transaction.
+	if len(n.TagNames) > maxNovelTags || len(n.TagIDs) > maxNovelTags {
+		return badRequest("a novel can have at most " + strconv.Itoa(maxNovelTags) + " tags")
+	}
 	names := make([]string, 0, len(n.TagNames))
 	seenNames := make(map[string]bool, len(n.TagNames))
 	for _, name := range n.TagNames {
 		name = strings.TrimSpace(name)
 		if name == "" || strings.ContainsRune(name, 0) {
 			return badRequest("tagNames must contain nonempty names without NUL characters")
+		}
+		if utf8.RuneCountInString(name) > maxTagNameRunes {
+			return badRequest("tag names can have at most " + strconv.Itoa(maxTagNameRunes) + " characters")
 		}
 		if !seenNames[name] {
 			names = append(names, name)

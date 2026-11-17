@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -129,7 +130,7 @@ func (m *Module) moveFile(ctx context.Context, id, target string) (File, error) 
 	if tag.RowsAffected() == 0 {
 		return next, ErrConflict
 	}
-	object, err := store.Open(ctx, key, "", false)
+	object, err := store.Open(ctx, key, "", false, validators{})
 	if err != nil {
 		return next, err
 	}
@@ -319,19 +320,48 @@ func (m *Module) folderAction(w http.ResponseWriter, r *http.Request, folder, de
 	}
 	success := []string{}
 	failed := []string{}
-	for _, id := range ids {
-		if strings.Contains(r.URL.Path, "/move/") {
-			_, err = m.moveFile(r.Context(), id, path.Join(dest, strings.TrimPrefix(id, folder+"/")))
-		} else {
-			err = m.deleteFile(r.Context(), id)
+	// A move keeps its connection for the whole copy, so moves stay serial.
+	move := strings.Contains(r.URL.Path, "/move/")
+	workers := deleteWorkers
+	if move {
+		workers = 1
+	}
+	errs := eachFile(ids, workers, func(id string) error {
+		if move {
+			_, err := m.moveFile(r.Context(), id, path.Join(dest, strings.TrimPrefix(id, folder+"/")))
+			return err
 		}
-		if err != nil {
+		return m.deleteFile(r.Context(), id)
+	})
+	for i, id := range ids {
+		if errs[i] != nil {
 			failed = append(failed, id)
 		} else {
 			success = append(success, id)
 		}
 	}
 	respond(w, 200, map[string]any{"success": len(failed) == 0, "deleted": success, "failed": failed})
+}
+
+// Each delete is mostly a storage round trip and holds a database connection
+// only briefly, so a few run at once without crowding the metadata pool.
+const deleteWorkers = 4
+
+// eachFile runs fn for every id with bounded concurrency and returns the
+// results in input order.
+func eachFile(ids []string, workers int, fn func(string) error) []error {
+	errs := make([]error, len(ids))
+	slots := make(chan struct{}, workers)
+	var wg sync.WaitGroup
+	for i, id := range ids {
+		slots <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-slots }()
+			errs[i] = fn(id)
+		})
+	}
+	wg.Wait()
+	return errs
 }
 
 func (m *Module) batchDelete(w http.ResponseWriter, r *http.Request) {
@@ -347,8 +377,9 @@ func (m *Module) batchDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	deleted := []string{}
 	failed := []map[string]string{}
-	for _, id := range input.IDs {
-		if err := m.deleteFile(r.Context(), id); err != nil {
+	errs := eachFile(input.IDs, deleteWorkers, func(id string) error { return m.deleteFile(r.Context(), id) })
+	for i, id := range input.IDs {
+		if err := errs[i]; err != nil {
 			failed = append(failed, map[string]string{"fileId": id, "error": safeError(err)})
 		} else {
 			deleted = append(deleted, id)
@@ -536,7 +567,9 @@ func (m *Module) uploadSettings(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet, http.MethodPost) {
 		return
 	}
-	cfg, err := m.channels(r.Context())
+	// Blank credentials in a save are filled from this copy and written back, so
+	// it must be the stored value, not the briefly cached one.
+	cfg, err := m.channelsWith(r.Context(), m.pool)
 	if err != nil {
 		m.failure(w, err)
 		return
@@ -580,7 +613,7 @@ func (m *Module) uploadSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	raw, err := json.Marshal(next)
 	if err == nil {
-		err = m.setSetting(r.Context(), "manage@sysConfig@upload", string(raw))
+		err = m.setSetting(r.Context(), uploadConfigKey, string(raw))
 	}
 	if err != nil {
 		m.failure(w, err)
@@ -730,7 +763,7 @@ func (m *Module) restoreFiles(w http.ResponseWriter, r *http.Request) {
 		if key == "" {
 			key = id
 		}
-		info, e := store.Open(r.Context(), key, "", true)
+		info, e := store.Open(r.Context(), key, "", true, validators{})
 		if info.Body != nil {
 			info.Body.Close()
 		}

@@ -89,6 +89,5 @@ func (p *Postgres) ChangePassword(ctx context.Context, id uuid.UUID, previousHas
 	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
-	p.invalidateUserSessionCache(ctx, id)
 	return nil
 }

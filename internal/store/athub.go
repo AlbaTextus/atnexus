@@ -88,7 +88,7 @@ func (p *Postgres) CheckATHubSchema(ctx context.Context) error {
 		`SELECT role,operation,method,path,allowed,total_call_limit FROM athub_access_rules LIMIT 0`,
 		`SELECT id,user_id,payload,status,reviewer_id FROM athub_reviews LIMIT 0`,
 		`SELECT operation FROM athub_api_calls LIMIT 0`,
-		`SELECT id,user_id,name,token_hash,prefix,created_at,expires_at,revoked_at,last_used_at,is_current FROM athub_api_keys LIMIT 0`,
+		`SELECT id,user_id,name,token_hash,prefix,created_at,expires_at,revoked_at,last_used_at,is_current,authenticated_calls FROM athub_api_keys LIMIT 0`,
 		`SELECT id,user_id,key_id,request_id,method,path,port,authenticated,status,duration_ms,response_bytes,started_at,completed_at FROM athub_api_calls LIMIT 0`,
 	} {
 		rows, err := p.pool.Query(ctx, query)
@@ -121,76 +121,114 @@ func (p *Postgres) ResolveATHubKey(ctx context.Context, hash string) (ATHubIdent
 }
 
 func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
+	const record = `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,port,authenticated,operation)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`
+	operation := ATHubOperation(call.Method, call.Path)
+	if !call.Authenticated {
+		// Nothing to recheck or lock: one statement records the anonymous call.
+		_, err := p.pool.Exec(ctx, record, call.ID, call.UserID, call.KeyID, call.RequestID, call.Method, call.Path, call.Port, false, operation)
+		return err
+	}
+	if call.UserID == nil || (call.KeyID == nil && call.SessionID == nil) {
+		return ErrNotFound
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
-	denied, limited := false, false
-	var permissionErr error
-	if call.Authenticated {
-		var userAllowed, keyAllowed bool
-		var role string
-		if call.UserID == nil || (call.KeyID == nil && call.SessionID == nil) {
-			return ErrNotFound
+	defer tx.Rollback(context.WithoutCancel(ctx))
+	// All admission checks travel in one round trip. Statements run in order, so
+	// the lock order matches administrator changes and rotations: user, then
+	// credential, then settings. Recheck before dispatch so an earlier lookup
+	// cannot outlive a committed ban. The user lock is exclusive on purpose:
+	// shared lockers never queue behind a waiting writer, so a client that keeps
+	// calls in flight could hold off a ban, a rotation or a sign-out indefinitely.
+	const role = `(SELECT role FROM users WHERE id=$1)`
+	checks := &pgx.Batch{}
+	checks.Queue(`SELECT is_active AND NOT athub_disabled FROM users WHERE id=$1 FOR UPDATE`, call.UserID)
+	if call.SessionID != nil {
+		checks.Queue(`SELECT revoked_at IS NULL AND expires_at>now(),0::bigint FROM user_sessions
+			WHERE id=$1 AND user_id=$2 FOR SHARE`, call.SessionID, call.UserID)
+	} else {
+		// The exclusive key lock serializes admission, so the returned counter
+		// includes every committed call. Session-based reads are not key calls.
+		checks.Queue(`SELECT is_current AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now()),authenticated_calls
+			FROM athub_api_keys WHERE id=$1 AND user_id=$2 FOR UPDATE`, call.KeyID, call.UserID)
+		// Lock settings too: a committed administrator change applies to the
+		// next admitted call.
+		checks.Queue(`SELECT total_call_limit FROM athub_key_limits WHERE role=`+role+` FOR SHARE`, call.UserID)
+	}
+	if operation != "" {
+		checks.Queue(`SELECT true FROM athub_role_policies WHERE role=`+role+` FOR SHARE`, call.UserID)
+		checks.Queue(`SELECT operation,method,path,allowed FROM athub_access_rules
+			WHERE role=`+role+` AND operation=$2 AND (method='' OR (method=$3 AND path=$4))`, call.UserID, operation, call.Method, call.Path)
+	}
+	var userAllowed, keyAllowed, policyFound bool
+	var used int64
+	var limit *int64
+	var limitErr, policyErr error
+	policy := ATHubRolePolicy{}
+	results := tx.SendBatch(ctx, checks)
+	err = results.QueryRow().Scan(&userAllowed)
+	if err == nil {
+		err = results.QueryRow().Scan(&keyAllowed, &used)
+		if call.SessionID != nil && errors.Is(err, pgx.ErrNoRows) {
+			err = nil
 		}
-		// Use the same lock order as administrator changes and rotations. Recheck
-		// before dispatch so an earlier lookup cannot outlive a committed ban.
-		if err := tx.QueryRow(ctx, `SELECT is_active AND NOT athub_disabled,role FROM users WHERE id=$1 FOR UPDATE`, call.UserID).Scan(&userAllowed, &role); err != nil {
-			return err
-		}
-		if call.SessionID != nil {
-			err := tx.QueryRow(ctx, `SELECT revoked_at IS NULL AND expires_at>now() FROM user_sessions
-				WHERE id=$1 AND user_id=$2 FOR SHARE`, call.SessionID, call.UserID).Scan(&keyAllowed)
-			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-				return err
-			}
-		} else if err := tx.QueryRow(ctx, `SELECT is_current AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now())
-			FROM athub_api_keys WHERE id=$1 AND user_id=$2 FOR UPDATE`, call.KeyID, call.UserID).Scan(&keyAllowed); err != nil {
-			return err
-		}
-		denied = !userAllowed || !keyAllowed
-		if denied {
-			call.Authenticated = false
-		} else if call.KeyID != nil {
-			var limit *int64
-			// The key row above serializes admission. Read the count in a separate
-			// statement after acquiring it so concurrent calls see committed usage.
-			// Lock settings too: a committed administrator change applies to the
-			// next admitted call. Session-based library reads are not key calls.
-			if err := tx.QueryRow(ctx, `SELECT total_call_limit FROM athub_key_limits WHERE role=$1 FOR SHARE`, role).Scan(&limit); err != nil {
-				return err
-			}
-			if limit != nil {
-				var used int64
-				if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM athub_api_calls WHERE key_id=$1 AND authenticated`, call.KeyID).Scan(&used); err != nil {
-					return err
+	}
+	if err == nil && call.KeyID != nil && call.SessionID == nil {
+		limitErr = results.QueryRow().Scan(&limit)
+	}
+	if err == nil && operation != "" {
+		policyErr = results.QueryRow().Scan(&policyFound)
+		if policyErr == nil {
+			var rows pgx.Rows
+			if rows, policyErr = results.Query(); policyErr == nil {
+				for rows.Next() {
+					var rule ATHubAccessRule
+					if policyErr = rows.Scan(&rule.Operation, &rule.Method, &rule.Path, &rule.Allowed); policyErr != nil {
+						break
+					}
+					policy.Rules = append(policy.Rules, rule)
 				}
-				limited = used >= *limit
-				if limited {
-					call.Authenticated = false
+				rows.Close()
+				if policyErr == nil {
+					policyErr = rows.Err()
 				}
-			}
-		}
-		if call.Authenticated {
-			permissionErr = checkATHubRule(ctx, tx, call, role)
-			if permissionErr != nil && !errors.Is(permissionErr, ErrATHubPermissionDenied) {
-				return permissionErr
-			}
-			if permissionErr != nil {
-				call.Authenticated = false
 			}
 		}
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,port,authenticated,operation)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, call.ID, call.UserID, call.KeyID, call.RequestID, call.Method, call.Path, call.Port, call.Authenticated, ATHubOperation(call.Method, call.Path))
+	if closeErr := results.Close(); err == nil && limitErr == nil && policyErr == nil {
+		err = closeErr
+	}
 	if err != nil {
 		return err
 	}
-	if call.Authenticated && call.KeyID != nil {
-		if _, err := tx.Exec(ctx, `UPDATE athub_api_keys SET last_used_at=now() WHERE id=$1`, call.KeyID); err != nil {
-			return err
+	denied, limited := !userAllowed || !keyAllowed, false
+	var permissionErr error
+	// Settings matter only for calls that are still admitted, as before.
+	if !denied && call.KeyID != nil && call.SessionID == nil {
+		if limitErr != nil {
+			return limitErr
 		}
+		limited = limit != nil && used >= *limit
+	}
+	if !denied && !limited && operation != "" {
+		if policyErr != nil {
+			return policyErr
+		}
+		if !policy.Rule(operation, call.Method, call.Path).Allowed {
+			permissionErr = ErrATHubPermissionDenied
+		}
+	}
+	call.Authenticated = !denied && !limited && permissionErr == nil
+	writes := &pgx.Batch{}
+	writes.Queue(record, call.ID, call.UserID, call.KeyID, call.RequestID, call.Method, call.Path, call.Port, call.Authenticated, operation)
+	if call.Authenticated && call.KeyID != nil {
+		writes.Queue(`UPDATE athub_api_keys SET last_used_at=now(),authenticated_calls=authenticated_calls+1 WHERE id=$1`, call.KeyID)
+	}
+	if err := tx.SendBatch(ctx, writes).Close(); err != nil {
+		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return err
@@ -259,7 +297,7 @@ func (p *Postgres) athubUsage(ctx context.Context, userID uuid.UUID, from, until
 	var quota ATHubCallQuota
 	var used int64
 	if err := tx.QueryRow(ctx, `SELECT l.total_call_limit,
-		(SELECT COUNT(*) FROM athub_api_calls c WHERE c.key_id=k.id AND c.authenticated)
+		COALESCE(k.authenticated_calls,0)
 		FROM users u JOIN athub_key_limits l ON l.role=u.role
 		LEFT JOIN athub_api_keys k ON k.user_id=u.id AND k.is_current
 		WHERE u.id=$1`, userID).Scan(&quota.TotalCallLimit, &used); err != nil {

@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// SecretCipher stores recoverable client credentials separately from their bcrypt hashes.
+// SecretCipher stores recoverable client credentials separately from their verification hashes.
 type SecretCipher struct{ aead cipher.AEAD }
 
 func NewSecretCipher(encodedKey string) (*SecretCipher, error) {

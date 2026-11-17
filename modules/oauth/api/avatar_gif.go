@@ -15,6 +15,8 @@ import (
 	"net/http"
 
 	"golang.org/x/image/draw"
+
+	"github.com/AlbaTextus/atnexus/internal/apibase"
 )
 
 type avatarCrop struct {
@@ -100,21 +102,16 @@ func checkGIFBudget(data []byte) error {
 	return bad
 }
 
-// Re-rendering an animated avatar is CPU and memory heavy, so only a few run
-// at once; further requests wait holding just their encoded bytes.
-var gifWork = make(chan struct{}, 2)
-
 func normalizeGIF(ctx context.Context, data []byte, crop *avatarCrop) ([]byte, error) {
+	// The block scan is cheap, so GIFs that will be refused never queue.
 	if err := checkGIFBudget(data); err != nil {
 		return nil, err
 	}
-	// A request that timed out or was abandoned stops waiting for its turn.
-	select {
-	case gifWork <- struct{}{}:
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	release, err := apibase.AcquireImageWork(ctx)
+	if err != nil {
+		return nil, err
 	}
-	defer func() { <-gifWork }()
+	defer release()
 	animation, err := gif.DecodeAll(bytes.NewReader(data))
 	if err != nil {
 		return nil, err

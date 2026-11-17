@@ -49,12 +49,21 @@ func (p *Postgres) trackChapterBodies(ctx context.Context, q database, novelID i
 	return rows.Err()
 }
 
-func chapterBodyDiff(before, after string) []BodyHunk {
+// A fine-grained diff is best effort: past its timeout the library falls back
+// to replacing the remaining middle wholesale, which is still a correct diff.
+const chapterDiffTimeout = 50 * time.Millisecond
+
+// mutationDiffBudget caps the diffing time of one request, however many
+// chapters it rewrites.
+const mutationDiffBudget = 2 * time.Second
+
+func chapterBodyDiff(before, after string, timeout time.Duration) []BodyHunk {
 	if before == after {
 		return nil
 	}
 	dmp := diffmatchpatch.New()
-	dmp.DiffTimeout = 50 * time.Millisecond
+	// Zero would disable the library's deadline entirely.
+	dmp.DiffTimeout = max(time.Millisecond, timeout)
 	diffs := dmp.DiffMain(before, after, true)
 	oldPositions, newPositions := make([]int, len(diffs)+1), make([]int, len(diffs)+1)
 	for i, part := range diffs {

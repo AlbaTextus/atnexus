@@ -246,7 +246,7 @@ func (p *Postgres) CheckSchema(ctx context.Context) error {
 		`SELECT "novelId", "tagId" FROM "NovelTag" LIMIT 0`,
 		`SELECT ` + novelColumns + ` FROM "Novel" LIMIT 0`,
 		`SELECT "id", "novelId", "order", "title", "createdAt", "updatedAt" FROM "Volume" LIMIT 0`,
-		`SELECT ` + chapterColumns + `, "wordCount" FROM "Chapter" LIMIT 0`,
+		`SELECT ` + chapterColumns + `, "wordCount", "contentHash", "contentLength" FROM "Chapter" LIMIT 0`,
 	} {
 		rows, err := p.db(ctx).Query(ctx, query)
 		if err != nil {

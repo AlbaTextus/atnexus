@@ -98,21 +98,8 @@ func (a *Governance) QueueMutation(w http.ResponseWriter, r *http.Request, call 
 	}
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	allowedQuery := map[string]bool{}
-	if r.Method == http.MethodPost && r.URL.Path == "/api/v2/illustrations" {
-		allowedQuery["novelId"] = true
-	}
-	if r.Method == http.MethodDelete || r.Method == http.MethodPut {
-		if r.URL.Path == "/api/v2/content" || r.URL.Path == "/api/v2/volumes" {
-			if r.Method == http.MethodDelete {
-				allowedQuery = map[string]bool{"novelId": true, "order": true}
-			}
-		} else if r.Method == http.MethodPut && r.URL.Path == "/api/v2/illustration-layout" {
-			allowedQuery["novelId"] = true
-		} else if r.Method == http.MethodDelete && r.URL.Path == "/api/v2/illustrations" {
-			allowedQuery = map[string]bool{"novelId": true, "id": true}
-		} else {
-			allowedQuery["id"] = true
-		}
+	for _, key := range store.ATHubReviewQuery(r.Method, r.URL.Path) {
+		allowedQuery[key] = true
 	}
 	if err != nil {
 		apibase.WriteError(w, 400, "invalid_query")
@@ -185,7 +172,7 @@ func (a *Governance) ApplyReview(ctx context.Context, item store.ATHubReview) (s
 	if a.content == nil || item.UserID == nil {
 		return store.ATHubReviewResult{}, errors.New("review executor unavailable")
 	}
-	if store.ATHubOperation(item.Method, item.Path) != item.Operation || (item.Operation != "upload" && item.Operation != "edit" && item.Operation != "delete") {
+	if store.ATHubOperation(item.Method, item.Path) != item.Operation || !store.ATHubMutation(item.Operation) {
 		return store.ATHubReviewResult{}, store.ErrATHubPermissionDenied
 	}
 	var actor athub.Contributor

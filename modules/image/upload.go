@@ -1,6 +1,7 @@
 package image
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -185,7 +186,7 @@ func (m *Module) upload(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	blocked, err := m.setting(r.Context(), "manage@blockipList")
+	blocked, err := m.cachedSetting(r.Context(), "manage@blockipList")
 	if err != nil {
 		m.failure(w, err)
 		return
@@ -228,7 +229,7 @@ func (m *Module) upload(w http.ResponseWriter, r *http.Request) {
 		respondError(w, 400, "file_required")
 		return
 	}
-	result, err := m.saveUpload(r.Context(), form, r.URL.Query(), ip)
+	result, err := m.saveUpload(r.Context(), form.Name, form.Type, form.File, form.Size, r.URL.Query(), ip)
 	if err != nil {
 		m.failure(w, err)
 		return
@@ -277,7 +278,7 @@ func (m *Module) chooseChannels(ctx context.Context, q url.Values) ([]Channel, e
 	return selectedChannels, nil
 }
 
-func (m *Module) saveUpload(ctx context.Context, form *parsedForm, q url.Values, ip string) ([]map[string]string, error) {
+func (m *Module) saveUpload(ctx context.Context, fileName, fileType string, body io.ReadSeeker, size int64, q url.Values, ip string) ([]map[string]string, error) {
 	receipt, _ := ctx.Value(uploadReceiptKey{}).(string)
 	if receipt != "" {
 		var id, state string
@@ -297,28 +298,28 @@ func (m *Module) saveUpload(ctx context.Context, form *parsedForm, q url.Values,
 		return nil, err
 	}
 	folder := sanitizeFolder(q.Get("uploadFolder"))
-	name := unsafeName.ReplaceAllString(path.Base(strings.ReplaceAll(form.Name, "\\", "/")), "_")
+	name := unsafeName.ReplaceAllString(path.Base(strings.ReplaceAll(fileName, "\\", "/")), "_")
 	if name == "" || name == "." || name == ".." {
 		return nil, ErrInvalid
 	}
 	if len(name) > 240 {
 		return nil, ErrInvalid
 	}
-	contentType, _, err := mime.ParseMediaType(form.Type)
+	contentType, _, err := mime.ParseMediaType(fileType)
 	if err != nil {
 		contentType = "application/octet-stream"
 	}
-	metadata := map[string]any{"FileName": form.Name, "FileType": contentType, "FileSize": fmt.Sprintf("%.2f", float64(form.Size)/(1024*1024)), "FileSizeBytes": form.Size, "UploadIP": ip, "ListType": "None", "TimeStamp": time.Now().UnixMilli(), "Directory": "", "Tags": []string{}}
+	metadata := map[string]any{"FileName": fileName, "FileType": contentType, "FileSize": fmt.Sprintf("%.2f", float64(size)/(1024*1024)), "FileSizeBytes": size, "UploadIP": ip, "ListType": "None", "TimeStamp": time.Now().UnixMilli(), "Directory": "", "Tags": []string{}}
 	if receipt != "" {
 		metadata["UploadSession"] = receipt
 	}
 	if folder != "" {
 		metadata["Directory"] = folder + "/"
 	}
-	if _, err = form.File.Seek(0, 0); err != nil {
+	if _, err = body.Seek(0, 0); err != nil {
 		return nil, err
 	}
-	if cfg, _, e := image.DecodeConfig(io.LimitReader(form.File, 1<<20)); e == nil {
+	if cfg, _, e := image.DecodeConfig(io.LimitReader(body, 1<<20)); e == nil {
 		metadata["Width"] = cfg.Width
 		metadata["Height"] = cfg.Height
 	}
@@ -358,7 +359,7 @@ func (m *Module) saveUpload(ctx context.Context, form *parsedForm, q url.Values,
 			if threshold <= 0 {
 				threshold = 95
 			}
-			if err != nil || used+float64(form.Size) > channel.Quota.LimitGB*1024*1024*1024*threshold/100 {
+			if err != nil || used+float64(size) > channel.Quota.LimitGB*1024*1024*1024*threshold/100 {
 				tx.Rollback(context.WithoutCancel(ctx))
 				if err != nil {
 					return nil, err
@@ -416,10 +417,10 @@ func (m *Module) saveUpload(ctx context.Context, form *parsedForm, q url.Values,
 		if err = tx.Commit(ctx); err != nil {
 			return nil, err
 		}
-		if _, err = form.File.Seek(0, 0); err != nil {
+		if _, err = body.Seek(0, 0); err != nil {
 			return nil, err
 		}
-		err = store.Put(ctx, id, form.File, form.Size, contentType)
+		err = store.Put(ctx, id, body, size, contentType)
 		if err != nil {
 			// A remote timeout can occur after S3 committed the object. Keep the
 			// reservation for reconciliation instead of creating a duplicate elsewhere.
@@ -454,4 +455,20 @@ func (m *Module) uploadResult(id string, q url.Values) []map[string]string {
 		link = fileURL(m.cfg.PublicURL, id)
 	}
 	return []map[string]string{{"src": link}}
+}
+
+// Save stores an image for another module in this process, which has already
+// authenticated its user, and returns the public file URL.
+func (m *Module) Save(ctx context.Context, category, entityID, fileName, contentType string, data []byte) (string, error) {
+	folder, err := categoryFolder(category, "", entityID)
+	if err != nil {
+		return "", err
+	}
+	q := url.Values{"uploadFolder": {folder}, "returnFormat": {"full"}}
+	result, err := m.saveUpload(ctx, fileName, contentType, bytes.NewReader(data), int64(len(data)), q, "")
+	if err != nil {
+		m.deps.Logger.Error("image operation failed", "error", safeError(err))
+		return "", err
+	}
+	return result[0]["src"], nil
 }

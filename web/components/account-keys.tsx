@@ -143,7 +143,7 @@ export function AccountKeys() {
         {keysLoading && !keys.length ? <Skeleton className="h-10 w-full" /> : !keys.length ? <p className="py-6 text-center text-muted-foreground">暂时无法加载密钥</p> :
           keys.map(key => <div key={key.id} className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-3"><KeyRound className="size-5 text-muted-foreground" /><code className="text-sm">{key.prefix}••••••••</code><Badge variant={key.admin_disabled || key.revoked_at ? "outline" : "secondary"}>{keyState(key)}</Badge></div>
+              <div className="flex flex-wrap items-center gap-3"><KeyRound className="size-5 text-amber-600 dark:text-amber-400" /><code className="text-sm">{key.prefix}••••••••</code><Badge variant={key.admin_disabled || key.revoked_at ? "outline" : "secondary"}>{keyState(key)}</Badge></div>
               <div className="flex gap-2">
                 <Button ref={resetButton} variant="outline" disabled={busy || keysLoading || key.admin_disabled} onClick={() => { setAction("reset"); setActionError("") }}><RefreshCw />重置</Button>
                 <Button variant="outline" disabled={busy || keysLoading || key.admin_disabled || Boolean(key.revoked_at)} onClick={() => { setAction("disable"); setActionError("") }}>停用</Button>

@@ -56,7 +56,7 @@ export function BackgroundSettings({ onPreviewChange }: { onPreviewChange?: (url
     } catch (reason) { setError(reason instanceof Error ? reason.message : "背投保存失败，请重试。") }
     finally { setBusy(false) }
   }
-  return <section className="profile-image-section" aria-labelledby="profile-background-heading">
+  return <section className="profile-image-section" data-profile-source="background" aria-labelledby="profile-background-heading">
     <h2 id="profile-background-heading">背投</h2>
     <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={selectFile} className="sr-only" aria-label="选择背投原图" />
     <ProfileImageUpload title="背投" src={originalPreview || user.background_original_url || user.background_url} disabled={busy} onClick={() => input.current?.click()} />

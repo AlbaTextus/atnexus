@@ -37,7 +37,7 @@ export function ChangePassword() {
     catch (reason) { setError(managementError(reason)); if (reason instanceof ApiError && reason.code === "incorrect_password") setInvalid("current") } finally { setBusy(false) }
   }
   return <form onSubmit={submit} aria-busy={busy}><Card className="border border-border">
-    <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound size={18} />登录密码</CardTitle><CardDescription>{hasPassword ? "修改密码需要验证当前密码，完成后需重新登录。" : user.email_is_alias ? "设置密码后，也可以使用个人资料中的登录标识登录。" : "你目前使用第三方账号登录。设置密码后，也可使用邮箱登录。"}</CardDescription></CardHeader>
+    <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound size={18} className="shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />登录密码</CardTitle><CardDescription>{hasPassword ? "修改密码需要验证当前密码，完成后需重新登录。" : user.email_is_alias ? "设置密码后，也可以使用个人资料中的登录标识登录。" : "你目前使用第三方账号登录。设置密码后，也可使用邮箱登录。"}</CardDescription></CardHeader>
     <CardContent>{done ? <Alert><Check /><AlertDescription role="status">密码已更新，原有登录会话和应用授权已失效。请使用新密码重新登录。</AlertDescription></Alert> : <FieldGroup>
       {error && <Alert variant="destructive" id="password-change-error"><AlertCircle /><AlertDescription>{error}</AlertDescription></Alert>}
       {hasPassword && <Field data-disabled={busy} data-invalid={invalid === "current"}><FieldLabel htmlFor="current-password">当前密码</FieldLabel><PasswordInput id="current-password" label="当前密码" autoComplete="current-password" required value={current} onChange={event => { setCurrent(event.target.value); resetError() }} disabled={busy} aria-invalid={invalid === "current"} aria-describedby={invalid === "current" ? "password-change-error" : undefined} /></Field>}

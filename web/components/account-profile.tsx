@@ -10,6 +10,7 @@ import { AvatarSettings } from "@/components/avatar-settings"
 import { BioEditor } from "@/components/bio-editor"
 import { BackgroundSettings } from "@/components/background-settings"
 import { UserProfilePreview } from "@/components/user-profile-card"
+import { ProfileImageLinks } from "@/components/profile-image-links"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
@@ -49,6 +50,7 @@ export function AccountProfile() {
   return <div className="profile-editor-page profile-editor-layout mx-auto flex w-full flex-col gap-10">
     <h1 className="sr-only">编辑个人资料</h1>
     <div className="profile-media-layout">
+      <ProfileImageLinks />
       <AvatarSettings onPreviewChange={setAvatarPreview} />
       <div className="profile-card-preview text-left"><UserProfilePreview profile={{ ...user, display_name: user.display_name || (user.email_is_alias ? "用户" : user.email.split("@")[0]), avatar_url: avatarPreview ?? user.avatar_url ?? "", background_url: user.background_url || "", bio: user.bio || "", created_at: user.created_at || "" }} previewURL={backgroundPreview} nameAction={nameAction} /></div>
       <BackgroundSettings onPreviewChange={setBackgroundPreview} />

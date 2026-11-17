@@ -68,16 +68,16 @@ export function LinkedAccounts() {
   }
 
   return <Card className="border border-border">
-    <CardHeader><CardTitle className="flex items-center gap-2"><Link2 size={18} />第三方账号</CardTitle><CardDescription>绑定后，可使用第三方账号登录同一个 ALBATEXTUS 账户。</CardDescription></CardHeader>
+    <CardHeader><CardTitle className="flex items-center gap-2"><Link2 size={18} className="shrink-0 text-violet-600 dark:text-violet-400" aria-hidden="true" />第三方账号</CardTitle><CardDescription>绑定后，可使用第三方账号登录同一个 ALBATEXTUS 账户。</CardDescription></CardHeader>
     <CardContent className="flex flex-col gap-4">
       {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}<Button variant="link" disabled={Boolean(busy)} onClick={() => { setError(""); void load() }}>重新加载</Button></AlertDescription></Alert>}
-      {notice && <Alert><Check /><AlertDescription role="status">{notice}</AlertDescription></Alert>}
+      {notice && <Alert><Check className="text-emerald-600 dark:text-emerald-400" aria-hidden="true" /><AlertDescription role="status">{notice}</AlertDescription></Alert>}
       {loading ? <Skeleton className="h-36 w-full" /> : <div className="flex flex-col divide-y rounded-xl border">{providers.map(provider => {
         const identity = identities.find(item => item.provider === provider.id)
         return <div key={provider.id} className="flex flex-wrap items-center gap-3 p-4">
-          {identity?.avatar_url ? <UserAvatar src={identity.avatar_url} name={identity.display_name || provider.name} /> : <ProviderIcon provider={provider.id} className="size-5" />}
+          {identity?.avatar_url ? <UserAvatar src={identity.avatar_url} name={identity.display_name || provider.name} /> : <ProviderIcon provider={provider.id} className="size-5 text-violet-600 dark:text-violet-400" />}
           <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">{provider.name}</p><Badge variant={identity ? "success" : "secondary"}>{identity ? "已绑定" : provider.enabled ? "未绑定" : "暂未开放"}</Badge></div><p className="mt-1 break-all text-xs text-muted-foreground">{identity ? identity.display_name || identity.email || "已关联第三方账号" : provider.enabled ? "连接你的账号，下次登录更方便。" : "此登录方式尚未开放，开放后即可绑定。"}</p></div>
-          <Button type="button" variant="outline" disabled={Boolean(busy) || loading || (!identity && !provider.enabled) || Boolean(identity && !hasPassword)} title={identity && !hasPassword ? "请先设置登录密码" : undefined} onClick={() => identity ? setUnlinking(provider) : void link(provider)}>{busy === provider.id ? <Spinner data-icon="inline-start" aria-hidden="true" /> : identity ? <Unlink data-icon="inline-start" /> : <Link2 data-icon="inline-start" />}{identity ? "解绑" : "绑定"}</Button>
+          <Button type="button" variant="outline" disabled={Boolean(busy) || loading || (!identity && !provider.enabled) || Boolean(identity && !hasPassword)} title={identity && !hasPassword ? "请先设置登录密码" : undefined} onClick={() => identity ? setUnlinking(provider) : void link(provider)}>{busy === provider.id ? <Spinner data-icon="inline-start" aria-hidden="true" /> : identity ? <Unlink data-icon="inline-start" className="text-rose-600 dark:text-rose-400" aria-hidden="true" /> : <Link2 data-icon="inline-start" className="text-violet-600 dark:text-violet-400" aria-hidden="true" />}{identity ? "解绑" : "绑定"}</Button>
         </div>
       })}</div>}
       {!hasPassword && identities.length > 0 && <p className="text-xs text-muted-foreground">请先设置登录密码，再解绑第三方账号，以便继续登录。</p>}

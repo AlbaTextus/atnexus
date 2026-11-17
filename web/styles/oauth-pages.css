@@ -127,12 +127,16 @@
 .profile-editor-page [data-slot="input"] { text-align: center; }
 .profile-editor-page [data-slot="textarea"], .profile-editor-page .profile-editor-avatar { flex-direction: column; justify-content: center; }
 .profile-editor-avatar > div:last-child { align-items: center; }
-.profile-editor-layout { max-width: 1080px; padding-top: 4px; }
-.profile-media-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 336px) minmax(0, 1fr); align-items: start; gap: 32px; }
-.profile-card-preview { padding-top: 36px; }
+.profile-editor-layout { max-width: 880px; padding-top: 4px; }
+.profile-media-layout { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 336px) minmax(0, 1fr); align-items: start; gap: 56px; }
+.profile-card-preview { min-width: 0; }
+.profile-image-links { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; overflow: visible; pointer-events: none; color: var(--muted-foreground); }
+.profile-image-links path { fill: none; stroke: currentColor; stroke-width: 1.25; opacity: .55; }
+.profile-image-links circle { fill: var(--card); stroke: currentColor; stroke-width: 1.25; }
 .profile-image-section { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 14px; }
+.profile-image-section[data-profile-source="avatar"] { padding-top: 56px; }
 .profile-image-section h2 { margin: 0; font-size: 15px; font-weight: 500; line-height: 22px; }
-.profile-image-upload { position: relative; display: flex; width: 100%; height: 196px; align-items: center; justify-content: center; overflow: hidden; border: 1px dashed var(--input); border-radius: 16px; background: var(--card); transition: border-color 160ms ease, background-color 160ms ease; }
+.profile-image-upload { position: relative; display: flex; width: 100%; max-width: 176px; height: 144px; align-items: center; justify-content: center; overflow: hidden; border: 1px dashed var(--input); border-radius: 12px; background: var(--card); transition: border-color 160ms ease, background-color 160ms ease; }
 .profile-image-upload:hover { border-color: var(--foreground); background: var(--accent); }
 .profile-image-upload:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
 .profile-image-upload:disabled { cursor: wait; opacity: .6; }

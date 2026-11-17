@@ -19,9 +19,9 @@ export function UserProfilePreview({ profile, previewURL, nameAction }: { profil
   const background = previewURL || safeContentURL(profile.background_url)
   const joinedAt = new Date(profile.created_at)
   return <article className="w-full overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground">
-    <div className="aspect-[3/1] bg-muted">{background && <img src={background} alt="" className="size-full object-cover" />}</div>
+    <div data-profile-preview="background" className="aspect-[3/1] bg-muted">{background && <img src={background} alt="" className="size-full object-cover" />}</div>
     <div className="px-5 pb-5">
-      <UserAvatar src={profile.avatar_url} name={name} className="relative -mt-9 size-18 ring-4 ring-popover" />
+      <div data-profile-preview="avatar" className="relative -mt-9 size-18"><UserAvatar src={profile.avatar_url} name={name} className="size-18 ring-4 ring-popover" /></div>
       <div className="mt-4 flex min-w-0 items-center gap-2"><h3 className="min-w-0 break-words text-xl font-semibold">{name}</h3>{nameAction}</div>
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1.5"><ShieldCheck className="size-3.5" aria-hidden="true" />LT{profile.level}</span>

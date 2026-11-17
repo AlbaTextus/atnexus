@@ -105,7 +105,7 @@ export function AvatarSettings({ onPreviewChange }: { onPreviewChange?: (url: st
   }
 
   return <Dialog open={editorOpen} onOpenChange={changeEditorOpen}>
-    <section className="profile-image-section" aria-labelledby="profile-avatar-heading">
+    <section className="profile-image-section" data-profile-source="avatar" aria-labelledby="profile-avatar-heading">
       <h2 id="profile-avatar-heading">头像</h2>
       <input ref={uploadInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" aria-label="选择头像原图" disabled={busy} onChange={selectFile} />
       <ProfileImageUpload title="头像" src={originalPreview || user.avatar_original_url || user.avatar_url} disabled={busy} onClick={() => uploadInput.current?.click()} />

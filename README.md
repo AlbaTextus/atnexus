@@ -29,9 +29,9 @@ Go module 路径为 `github.com/AlbaTextus/atnexus`，根工作区包为 `@albat
 书库列表、标签分类、数据来源、作品详情及章节目录通过浏览器
 直接请求 `NEXT_PUBLIC_ATHUB_API_URL` 下的 `/api/v5/*`，Next.js 不转发小说接口。
 书库与详情直接复制 `demo-2` 原组件及其 Button、Badge、Tabs、ToggleGroup 等控件到
-`web/components/novel-demo/`，原样复用 DOM、类名和 CSS 声明；样式仅加
+`web/components/novel/`（控件位于 `web/components/novel/ui/`），原样复用 DOM、类名和 CSS 声明；样式仅加
 `.novel-demo` 作用域，避免影响主页和用户中心。与后端的连接由
-`web/lib/novel-demo-data.ts` 适配，共用站点顶部导航；不改演示仓库，不引入其 SQLite、
+`web/lib/novel/novel-view-models.ts` 适配，共用站点顶部导航；不改演示仓库，不引入其 SQLite、
 固定书名、示例封面或跨项目源码引用。
 作品详情沿用原图标页签，增加章节目录入口。目录仅使用 `/api/v5/toc` 返回的标题，
 按“作品 → 卷 → 章节”展开和收起，卷与章节分别按 `order` 排序。
@@ -332,7 +332,7 @@ pnpm web:dev
 
 小说内容 `/api/v5/*` 不经过 Next.js 转发。浏览器使用 `NEXT_PUBLIC_ATHUB_API_URL` 直连 ATHub（本地 `http://localhost:8005`），历史查询使用 `NEXT_PUBLIC_CREATPLAT_API_URL`（本地 `http://localhost:8004`）；两个变量都需在前端构建前配置。生产入口须与账户页面共享 Cookie 主机范围。
 
-`pnpm web:dev` 默认使用 Turbopack。中文字体的 `regular.css` 和 `medium.css` 在 `web/app/layout.tsx` 中作为独立 CSS 入口加载，不要再通过 `web/styles/fonts.css` 的 `@import` 合并。Windows 本地环境中，两套分片字体及其 source map 合并为大型 PostCSS IPC 结果时会卡住首次编译；分离入口保留相同的字体、字重和样式，并缩小单次转换结果。
+`pnpm web:dev` 默认使用 Turbopack。中文字体的 `regular.css` 和 `medium.css` 在 `web/app/layout.tsx` 中作为独立 CSS 入口加载，不要再通过 `web/styles/base/fonts.css` 的 `@import` 合并。Windows 本地环境中，两套分片字体及其 source map 合并为大型 PostCSS IPC 结果时会卡住首次编译；分离入口保留相同的字体、字重和样式，并缩小单次转换结果。
 
 ## 登录与账户
 
@@ -730,8 +730,9 @@ modules/creatplat/    投稿、审核、历史、修订及独立创作者库迁�
 modules/athub/        正式内容、准入适配、测试及内容库迁移
 prisma/               账户数据库 schema 与完整历史迁移
 web/app/              Next.js 页面与全局样式
-web/components/       账户、管理后台与基础 UI 组件
-web/lib/              前端 API 与共享逻辑
+web/components/       按业务域分组的组件，见「前端目录与命名规范」
+web/lib/              前端 API 与按业务域分组的逻辑
+web/styles/           全局与各业务域样式
 temp/                 本地临时脚本、检查与日志
 release/              本地构建与发布产物
 ```
@@ -759,6 +760,30 @@ Prisma schema 与迁移是数据库结构的来源；Go 服务没有 Prisma Clie
 
 目前未提供邮箱验证码绑定、OIDC ID Token 或跨子系统统一登出。功能问题和接入反馈可提交到 [GitHub Issues](https://github.com/AlbaTextus/atnexus/issues)。
 
+## 前端目录与命名规范
+
+`web/` 下的 `components/`、`lib/`、`styles/` 均按业务域分组，三者使用同一套域名：
+
+```text
+components/ui/            shadcn 基础组件，由 components.json 管理
+components/presentation/  不依赖路由与业务反馈的纯展示实现
+components/shared/        跨业务域复用的组件
+components/layout/        站点页头、页脚、主题与全局 Provider
+components/{auth,account,admin,home,maintenance,novel,creatplat}/
+lib/                      根目录只放跨域基础：api、feedback、content-cache、utils、wiki
+lib/{auth,account,admin,athub,novel,creatplat,maintenance,home}/
+styles/index.css          全局样式入口，由 app/globals.css 引入
+styles/base/              主题 token、字体、滚动条及通用组件样式
+styles/{site,auth,novel,creatplat}/
+hooks/                    跨域复用的 React hooks
+```
+
+- 文件与目录一律使用 kebab-case；组件文件名与其主导出的组件名对应（`novel-detail-view.tsx` 导出 `NovelDetailView`）。
+- 新文件放入所属业务域目录，不在 `components/`、`styles/` 根目录平铺；只有被两个以上业务域使用的组件才放入 `shared/`。
+- 业务域专用的基础控件放在该域的 `ui/` 子目录（如 `components/novel/ui/`），不与 `components/ui/` 混用。
+- 跨目录引用统一使用 `@/` 绝对路径；样式文件之间使用相对路径 `@import`。
+- 正式代码的文件名与标识符不使用 demo、temp 等过程性命名。
+
 ## UI 与字体维护
 
 Web 的组件、主题、字体与页面展示样式在 atnexus 项目内独立维护，不再依赖 `@albatextus/ui` 包或相邻的 ATUI 仓库。迁移使用此前实际安装的组件版本，保留现有外观与交互；独立 ATUI 项目不受影响。基础组件实现位于 `web/components/ui/`，其他展示组件位于 `web/components/`，带业务反馈或路由适配的组件继续包装 `web/components/presentation/` 中的本地实现。
@@ -767,6 +792,6 @@ Web 的组件、主题、字体与页面展示样式在 atnexus 项目内独立�
 
 PasswordInput 与 CopyField 的静态密钥显隐共用本地 InputGroupPassword；ClientSecretField 继续独立负责按需读取及隐藏时清除服务端密钥，不将其改为预加载静态字段。底层 Base UI、动画和 Markdown 等依赖直接在 `web/package.json` 中声明。
 
-首页授权示例使用 `web/components/code-highlighted/` 中的 `CodeHighlighted`，保留深色终端外观，只为该示例加载 HTTP 语法，不在全局初始化高亮引擎。个人简介及编辑预览中的 Markdown 代码块继续按需高亮，沿用全站明暗主题、中文复制反馈和纯文本回退。
+首页授权示例使用 `web/components/shared/code-highlighted/` 中的 `CodeHighlighted`，保留深色终端外观，只为该示例加载 HTTP 语法，不在全局初始化高亮引擎。个人简介及编辑预览中的 Markdown 代码块继续按需高亮，沿用全站明暗主题、中文复制反馈和纯文本回退。
 
-`web/app/globals.css` 引入本地 `web/styles/oauth.css`，主题 token、页面样式与字体声明均保留在 `web/styles/`。字体文件和 OFL 许可证位于 `web/fonts/`，构建时自动生成静态资源地址，不依赖外部字体服务。修改后运行 `pnpm web:typecheck` 和 `pnpm web:build`；依赖更新时同步锁文件，部署使用 `pnpm install --frozen-lockfile`。Docker 构建只需 atnexus 自身目录，不再需要额外 UI 构建上下文。
+`web/app/globals.css` 引入本地 `web/styles/index.css`，主题 token、页面样式与字体声明均保留在 `web/styles/`。字体文件和 OFL 许可证位于 `web/fonts/`，构建时自动生成静态资源地址，不依赖外部字体服务。修改后运行 `pnpm web:typecheck` 和 `pnpm web:build`；依赖更新时同步锁文件，部署使用 `pnpm install --frozen-lockfile`。Docker 构建只需 atnexus 自身目录，不再需要额外 UI 构建上下文。

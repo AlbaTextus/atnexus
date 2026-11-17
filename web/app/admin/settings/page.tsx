@@ -1,7 +1,7 @@
-import { AdminKeyLimits } from "@/components/admin-key-limits"
-import { MaintenanceControl } from "@/components/maintenance-control"
-import { AdminInterfaces } from "@/components/admin-interfaces"
-import { SiteFeatureControls } from "@/components/site-feature-controls"
+import { AdminKeyLimits } from "@/components/admin/admin-key-limits"
+import { MaintenanceControl } from "@/components/maintenance/maintenance-control"
+import { AdminInterfaces } from "@/components/admin/admin-interfaces"
+import { SiteFeatureControls } from "@/components/admin/site-feature-controls"
 
 export default function AdminSettingsPage() {
   return <section className="space-y-7 [&>[data-slot=card]]:border [&>[data-slot=card]]:border-border [&>[data-slot=card]]:shadow-none [&>[data-slot=card]]:ring-0" aria-labelledby="admin-settings-title">

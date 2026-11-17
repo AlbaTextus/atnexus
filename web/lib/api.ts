@@ -1,6 +1,6 @@
-import { collectLoginDevice } from "@/lib/login-device"
+import { collectLoginDevice } from "@/lib/auth/login-device"
 import { clearStoredContent } from "@/lib/content-cache"
-import { maintenancePath } from "@/lib/maintenance-navigation"
+import { maintenancePath } from "@/lib/maintenance/maintenance-navigation"
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) {

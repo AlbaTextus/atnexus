@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
-import { AuthLayout } from "@/components/auth-layout"
-import { LoginForm } from "@/components/login-form"
-import { readMaintenance } from "@/lib/maintenance"
+import { AuthLayout } from "@/components/auth/auth-layout"
+import { LoginForm } from "@/components/auth/login-form"
+import { readMaintenance } from "@/lib/maintenance/maintenance"
 
 export const metadata: Metadata = { title: "ALBATEXTUS", robots: { index: false, follow: false } }
 

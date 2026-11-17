@@ -1,0 +1,8 @@
+"use client"
+
+import Link from "next/link"
+import { BrandWordmark } from "@/components/layout/brand-wordmark"
+
+export function AuthWordmark({ verified }: { verified: boolean }) {
+  return <BrandWordmark variant="auth" collapsed={verified} LinkComponent={Link} />
+}

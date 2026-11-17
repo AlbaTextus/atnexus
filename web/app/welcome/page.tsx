@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
-import { AuthLayout } from "@/components/auth-layout"
-import { ProfileSetupForm } from "@/components/profile-setup-form"
-import { requireAccount } from "@/lib/account-session"
-import { afterProfileSetup, profileSetupPath } from "@/lib/profile-setup"
+import { AuthLayout } from "@/components/auth/auth-layout"
+import { ProfileSetupForm } from "@/components/auth/profile-setup-form"
+import { requireAccount } from "@/lib/account/account-session"
+import { afterProfileSetup, profileSetupPath } from "@/lib/auth/profile-setup"
 
 export const metadata: Metadata = { title: "ALBATEXTUS", robots: { index: false, follow: false } }
 

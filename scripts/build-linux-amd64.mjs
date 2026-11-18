@@ -17,10 +17,10 @@ Output: release/<name>/, <name>.tar.gz, and <name>.tar.gz.sha256.
 Target server: Linux AMD64 with glibc, Node.js >= 20.9, PostgreSQL.
 
 Optional build environment:
-  OAUTH_BACKEND_URL          http://127.0.0.1:8001
+  OAUTH_BACKEND_URL          http://127.0.0.1:8010
   NEXT_PUBLIC_ATHUB_API_URL https://api.albatextus.com
   NEXT_PUBLIC_CREATPLAT_API_URL  public creator API origin
-  CREATPLAT_BACKEND_URL     http://127.0.0.1:8004
+  CREATPLAT_BACKEND_URL     http://127.0.0.1:8010
   NEXT_PUBLIC_WIKI_URL      http://localhost:3200
   NEXT_PUBLIC_CREDIT_URL    http://localhost:3300
 
@@ -79,10 +79,10 @@ for (const suffix of ["", ".tar.gz", ".tar.gz.sha256"]) {
   if (exists) throw new Error(`Output already exists: release/${name + suffix}`)
 }
 const urls = {
-  OAUTH_BACKEND_URL: process.env.OAUTH_BACKEND_URL || "http://127.0.0.1:8001",
-  CREATPLAT_BACKEND_URL: process.env.CREATPLAT_BACKEND_URL || "http://127.0.0.1:8004",
-  NEXT_PUBLIC_ATHUB_API_URL: process.env.NEXT_PUBLIC_ATHUB_API_URL || "http://localhost:8005",
-  NEXT_PUBLIC_CREATPLAT_API_URL: process.env.NEXT_PUBLIC_CREATPLAT_API_URL || "http://localhost:8004",
+  OAUTH_BACKEND_URL: process.env.OAUTH_BACKEND_URL || "http://127.0.0.1:8010",
+  CREATPLAT_BACKEND_URL: process.env.CREATPLAT_BACKEND_URL || "http://127.0.0.1:8010",
+  NEXT_PUBLIC_ATHUB_API_URL: process.env.NEXT_PUBLIC_ATHUB_API_URL || "http://localhost:8010",
+  NEXT_PUBLIC_CREATPLAT_API_URL: process.env.NEXT_PUBLIC_CREATPLAT_API_URL || "http://localhost:8010",
   NEXT_PUBLIC_WIKI_URL: process.env.NEXT_PUBLIC_WIKI_URL || "http://localhost:3200",
   NEXT_PUBLIC_CREDIT_URL: process.env.NEXT_PUBLIC_CREDIT_URL || "http://localhost:3300",
 }
@@ -209,7 +209,8 @@ Preserve the existing .env, encryption keys, databases and user data.
 For a new installation, copy .env.example to .env and configure it; chmod 600 .env.
 chmod +x atnexus atnexus-migrate-creatplat atnexus-migrate-image start-backend.sh start-frontend.sh
 Run ./start-backend.sh and ./start-frontend.sh as separate services.
-Ports: OAuth 8001, image 8002, creator platform 8004, ATHub 8005, frontend 3288.
+The backend serves all four APIs on port 8010 (GATEWAY_HTTP_ADDR); the frontend uses 3288.
+When upgrading, point reverse proxies and API clients to the gateway instead of the old module ports.
 HOSTNAME_OVERRIDE and PORT configure the frontend listener.
 
 Build-time configuration:
@@ -228,7 +229,8 @@ IMAGE_DATABASE_URL must point to its own PostgreSQL database. Apply account
 and image migrations, stop legacy image writers, back up SQLite and file bytes,
 then run ./atnexus-migrate-image -source /path/to/database.sqlite.
 Set IMAGE_LOCAL_ROOT to the existing byte directory and IMAGE_PUBLIC_URL to the
-public origin. IMAGE_LEGACY_HTTP_ADDR can preserve an old file-only listener.
+public origin. Existing /file paths are served by the gateway; route any old
+public image origin to the gateway if those links must remain reachable.
 The original image frontend is not included or modified by this migration.
 Startup does not migrate databases or seed data.
 Local .env files are excluded from the build and package.

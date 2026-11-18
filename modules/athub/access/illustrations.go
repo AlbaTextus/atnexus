@@ -9,6 +9,33 @@ import (
 	"github.com/google/uuid"
 )
 
+// The creator platform owns the public routes. Reads still use the ATHub
+// admission pipeline and can use a browser session or a personal API key.
+func (a *Access) ListIllustrations(w http.ResponseWriter, r *http.Request, novelID int32) {
+	a.readIllustrationContent(w, r, novelID, "/api/v2/illustrations")
+}
+
+func (a *Access) ReadIllustrationLayout(w http.ResponseWriter, r *http.Request, novelID int32) {
+	a.readIllustrationContent(w, r, novelID, "/api/v2/illustration-layout")
+}
+
+func (a *Access) readIllustrationContent(w http.ResponseWriter, r *http.Request, novelID int32, path string) {
+	if a.wrapped == nil {
+		reply(w, 503, "illustrations_unavailable")
+		return
+	}
+	query := "novelId=" + strconv.FormatInt(int64(novelID), 10)
+	if r.URL.RawQuery != "" {
+		// Preserve the raw query so the content engine can reject malformed,
+		// unknown or duplicate parameters, including another novelId.
+		query += "&" + r.URL.RawQuery
+	}
+	request := r.Clone(r.Context())
+	request.URL = &url.URL{Path: path, RawQuery: query}
+	request.RequestURI = request.URL.RequestURI()
+	a.wrapped.ServeHTTP(w, request)
+}
+
 // Called by the account API after validating the browser session and image.
 func (a *Access) SubmitIllustration(w http.ResponseWriter, r *http.Request, user, session uuid.UUID, novelID int32) {
 	if a.wrapped == nil || user == uuid.Nil || session == uuid.Nil {

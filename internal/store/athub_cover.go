@@ -7,7 +7,7 @@ import (
 )
 
 func (p *Postgres) CheckATHubCoverUpload(ctx context.Context, userID uuid.UUID) error {
-	return p.checkATHubImageUpload(ctx, userID, "/api/v2/upload")
+	return p.checkATHubImageUpload(ctx, userID, ATHubCoverPath)
 }
 
 func (p *Postgres) CheckATHubIllustrationUpload(ctx context.Context, userID uuid.UUID) error {

@@ -53,10 +53,10 @@ export class ContentApiError extends Error {
 }
 
 export async function fetchContent<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const history = /^\/api\/v4\/(history|contributors)(\?|$)/.test(path)
-  if (!path.startsWith("/api/v5/") && !history) throw new Error("无效的内容接口路径。")
-  const base = history ? creatorApiURL : contentApiURL
-  if (!base) throw new Error(history ? "尚未配置创作者平台接口地址。" : "尚未配置 ATHub 接口地址。")
+  const creatorRead = /^\/api\/v4\/(history|contributors|account\/athub\/novels\/\d+\/(illustrations|illustration-layout))(\?|$)/.test(path)
+  if (!path.startsWith("/api/v5/") && !creatorRead) throw new Error("无效的内容接口路径。")
+  const base = creatorRead ? creatorApiURL : contentApiURL
+  if (!base) throw new Error(creatorRead ? "尚未配置创作者平台接口地址。" : "尚未配置 ATHub 接口地址。")
   let response: Response
   try {
     response = await fetch(`${base}${path}`, {

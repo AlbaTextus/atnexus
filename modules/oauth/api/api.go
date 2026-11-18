@@ -80,7 +80,7 @@ func (a *API) Router() http.Handler {
 	r.Put("/api/v1/admin/maintenance", a.setMaintenance)
 	r.Get("/api/v1/admin/features", a.getSiteFeatures)
 	r.Patch("/api/v1/admin/features", a.setSiteFeature)
-	r.Get("/healthz", a.health)
+	r.Get("/api/v1/healthz", a.health)
 	r.Get("/.well-known/oauth-authorization-server", a.metadata)
 	r.Post("/api/v1/users", a.register)
 	r.Post("/api/v1/auth/email/code", a.sendRegistrationCode)

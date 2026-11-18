@@ -44,21 +44,21 @@ func main() {
 	}
 }
 
-// All listeners start together, so the account API answering means startup finished.
+// Probe the account API through the only backend listener.
 func healthcheck() error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
-	host, port, err := net.SplitHostPort(cfg.HTTPAddr)
+	host, port, err := net.SplitHostPort(cfg.GatewayHTTPAddr)
 	if err != nil {
-		return fmt.Errorf("invalid HTTP_ADDR: %w", err)
+		return fmt.Errorf("invalid GATEWAY_HTTP_ADDR: %w", err)
 	}
 	if host == "" || host == "0.0.0.0" || host == "::" {
 		host = "127.0.0.1"
 	}
 	client := &http.Client{Timeout: 3 * time.Second}
-	response, err := client.Get("http://" + net.JoinHostPort(host, port) + "/healthz")
+	response, err := client.Get("http://" + net.JoinHostPort(host, port) + "/api/v1/healthz")
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func run(logger *slog.Logger) error {
 	if err := creatorDB.RequireSeparateDatabases(ctx, cfg.DatabaseURL, cfg.ATHubDatabaseURL); err != nil {
 		return err
 	}
-	access, err := athubaccess.New(st, cfg.ATHubHTTPAddr, logger)
+	access, err := athubaccess.New(st, cfg.GatewayHTTPAddr, logger)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func run(logger *slog.Logger) error {
 	}
 	defer hub.Close()
 	// Startup compares only row counts; the full row-by-row digest runs in the
-	// background once the listeners are up.
+	// background once the gateway is up.
 	if err = creatorDB.CheckLegacyMigrationCounts(ctx, cfg.DatabaseURL); err != nil {
 		return fmt.Errorf("creator migration check failed: %w", err)
 	}
@@ -141,16 +141,19 @@ func run(logger *slog.Logger) error {
 	creators.SetATHubReceiptForgetter(hub.ForgetMutation)
 	creators.SetATHubSubmitter(access.SubmitUpload)
 	creators.SetATHubNovelEditor(access.SubmitNovelEdit)
+	creators.SetATHubIllustrationReaders(access.ListIllustrations, access.ReadIllustrationLayout)
 	creators.SetATHubIllustrationSubmitter(access.SubmitIllustration)
 	creators.SetATHubIllustrationDeleter(access.DeleteIllustration)
 	creators.SetATHubIllustrationLayoutEditor(access.SubmitIllustrationLayout)
+	creators.SetATHubKeyCoverUploader(access.UploadCoverWithKey)
+	creators.SetATHubKeyIllustrationUploader(access.UploadIllustrationWithKey)
 	creators.SetHistoryHandler(http.HandlerFunc(access.ServeHistory))
 	// ATHub owns its 15s database deadline and accepts uploads up to 8 MiB.
 	requestTimeout := max(cfg.HTTPRequestTimeout, 30*time.Second)
 	contentOrigins := append([]string{cfg.AuthUIURL}, cfg.WebAuthnRPOrigins...)
-	oauthServer := &http.Server{Addr: cfg.HTTPAddr, Handler: server.ModuleHTTP(api.Router(), cfg.HTTPRequestTimeout, logger, contentOrigins...), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.HTTPRequestTimeout, WriteTimeout: cfg.HTTPRequestTimeout, IdleTimeout: 60 * time.Second}
-	athubServer := &http.Server{Addr: cfg.ATHubHTTPAddr, Handler: server.ModuleHTTP(server.NewATHubHandler(hub.Handler(), hub.Ping), requestTimeout, logger, contentOrigins...), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: requestTimeout, WriteTimeout: requestTimeout, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
-	creatorServer := &http.Server{Addr: cfg.CreatplatHTTPAddr, Handler: server.ModuleHTTP(creators.Router(), requestTimeout, logger, contentOrigins...), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: requestTimeout, WriteTimeout: requestTimeout, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
+	oauthHandler := server.ModuleHTTP(api.Router(), cfg.HTTPRequestTimeout, logger, contentOrigins...)
+	athubHandler := server.ModuleHTTP(server.NewATHubHandler(hub.Handler(), hub.Ping), requestTimeout, logger, contentOrigins...)
+	creatorHandler := server.ModuleHTTP(creators.Router(), requestTimeout, logger, contentOrigins...)
 	// File responses and multipart requests must stream without TimeoutHandler's
 	// full response buffer. Listener deadlines still bound transfers.
 	imageAPI := server.ModuleHTTP(images.Router(), 0, logger, contentOrigins...)
@@ -161,16 +164,17 @@ func run(logger *slog.Logger) error {
 		}
 		imageAPI.ServeHTTP(w, r)
 	})
-	if cfg.ImageHTTPTimeout <= 0 {
-		return fmt.Errorf("IMAGE_HTTP_TIMEOUT must be positive")
-	}
-	imageServer := &http.Server{Addr: cfg.ImageHTTPAddr, Handler: imageHandler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.ImageHTTPTimeout, WriteTimeout: cfg.ImageHTTPTimeout, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
-	servers := []*http.Server{oauthServer, imageServer, creatorServer, athubServer}
-	if cfg.ImageLegacyHTTPAddr != "" {
-		servers = append(servers, &http.Server{Addr: cfg.ImageLegacyHTTPAddr, Handler: images.Files(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.ImageHTTPTimeout, WriteTimeout: cfg.ImageHTTPTimeout, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10})
-	}
+	// All routes share one listener but keep their module middleware and deadlines.
+	gateway := server.NewGateway(
+		server.GatewayRoute{Prefixes: []string{"/api/v1", "/oauth", "/.well-known"}, Handler: oauthHandler, Timeout: cfg.HTTPRequestTimeout},
+		server.GatewayRoute{Prefixes: []string{"/api/v2", "/file"}, Handler: imageHandler, Timeout: cfg.ImageHTTPTimeout},
+		server.GatewayRoute{Prefixes: []string{"/api/v4"}, Handler: creatorHandler, Timeout: requestTimeout},
+		server.GatewayRoute{Prefixes: []string{"/api/v5"}, Handler: athubHandler, Timeout: requestTimeout},
+	)
+	gatewayTimeout := max(requestTimeout, cfg.ImageHTTPTimeout)
+	gatewayServer := &http.Server{Addr: cfg.GatewayHTTPAddr, Handler: gateway, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: gatewayTimeout, WriteTimeout: gatewayTimeout, IdleTimeout: 60 * time.Second}
 	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	// Background work stops with the listeners and finishes before the deferred
+	// Background work stops with the listener and finishes before the deferred
 	// pool closes run: on every return path the context is cancelled first,
 	// then the work is awaited.
 	var background sync.WaitGroup
@@ -197,7 +201,7 @@ func run(logger *slog.Logger) error {
 			logger.Error("legacy creator data verification did not complete", "error", err)
 		}
 	})
-	if err := server.Run(signalCtx, cfg.HTTPShutdownTimeout, logger, servers...); err != nil {
+	if err := server.Run(signalCtx, cfg.HTTPShutdownTimeout, logger, gatewayServer); err != nil {
 		return err
 	}
 	background.Wait()

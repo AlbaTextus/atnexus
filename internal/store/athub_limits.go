@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 var ErrATHubCallLimit = errors.New("ATHub key total call limit reached")
@@ -57,7 +58,26 @@ func (p *Postgres) SetATHubKeyLimit(ctx context.Context, role string, limit *int
 	if !ValidATHubKeyLimit(role, limit) {
 		return result, ErrInvalidATHubKeyLimit
 	}
-	err := p.pool.QueryRow(ctx, `UPDATE athub_key_limits SET total_call_limit=$2,updated_by=$3,updated_at=clock_timestamp()
-		WHERE role=$1 RETURNING role,total_call_limit,updated_at`, role, limit, actor).Scan(&result.Role, &result.TotalCallLimit, &result.UpdatedAt)
-	return result, err
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return result, err
+	}
+	defer tx.Rollback(ctx)
+	// Wait out calls admitted under the old limit; later ones queue behind this
+	// until commit, so the lock and the write share one round trip.
+	change := &pgx.Batch{}
+	change.Queue(`SELECT pg_advisory_xact_lock(`+athubRoleLock(`$1`)+`)`, role)
+	change.Queue(`UPDATE athub_key_limits SET total_call_limit=$2,updated_by=$3,updated_at=clock_timestamp()
+		WHERE role=$1 RETURNING role,total_call_limit,updated_at`, role, limit, actor)
+	results := tx.SendBatch(ctx, change)
+	if _, err = results.Exec(); err == nil {
+		err = results.QueryRow().Scan(&result.Role, &result.TotalCallLimit, &result.UpdatedAt)
+	}
+	if closeErr := results.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return result, err
+	}
+	return result, tx.Commit(ctx)
 }

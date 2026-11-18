@@ -30,6 +30,48 @@ func TestATHubPolicyRejectsPrivilegeEscalation(t *testing.T) {
 		}
 	}
 }
+func TestATHubCoverHasItsOwnRuleAndIsNeverReviewed(t *testing.T) {
+	if ATHubOperation("POST", ATHubCoverPath) != "upload" || !ATHubKnownPath(ATHubCoverPath) {
+		t.Fatal("cover upload is missing from the permission surface")
+	}
+	for _, method := range []string{"GET", "PUT", "PATCH", "DELETE"} {
+		if ATHubOperation(method, ATHubCoverPath) != "" {
+			t.Fatalf("%s on the cover path gained an operation", method)
+		}
+	}
+	// It stores a file: nothing to forward for a submitter and nothing to queue.
+	if ATHubSubmissionEndpoint("POST", ATHubCoverPath) || ATHubReviewQuery("POST", ATHubCoverPath) != nil {
+		t.Fatal("cover upload became a reviewable content submission")
+	}
+	listed := false
+	for _, endpoint := range ATHubEndpoints() {
+		listed = listed || endpoint == ATHubEndpoint{"POST", ATHubCoverPath, "upload"}
+	}
+	if !listed {
+		t.Fatal("administrators cannot see the cover rule")
+	}
+	policy := ATHubRolePolicy{Role: "USER"}
+	for _, operation := range []string{"read", "upload", "edit", "review", "delete"} {
+		policy.Rules = append(policy.Rules, ATHubAccessRule{Operation: operation, Allowed: operation == "read" || operation == "upload"})
+	}
+	if !policy.Rule("upload", "POST", ATHubCoverPath).Allowed {
+		t.Fatal("cover upload does not follow the level's upload switch by default")
+	}
+	// Turning batch upload off no longer decides covers, and the reverse.
+	policy.Rules = append(policy.Rules,
+		ATHubAccessRule{Operation: "upload", Method: "POST", Path: "/api/v2/upload", Allowed: false},
+		ATHubAccessRule{Operation: "upload", Method: "POST", Path: ATHubCoverPath, Allowed: true})
+	if !validATHubPolicy(policy) {
+		t.Fatal("a rule for the cover upload was rejected")
+	}
+	if !policy.Rule("upload", "POST", ATHubCoverPath).Allowed || policy.Rule("upload", "POST", "/api/v2/upload").Allowed {
+		t.Fatal("cover and batch upload rules are not independent")
+	}
+	policy.Rules[len(policy.Rules)-1].Allowed = false
+	if policy.Rule("upload", "POST", ATHubCoverPath).Allowed {
+		t.Fatal("the cover rule cannot be turned off")
+	}
+}
 func TestATHubUploadCannotBypassEditPermission(t *testing.T) {
 	edits := ATHubUploadEdits("/api/v2/upload", json.RawMessage(`{"novelId":1,"chapters":[{"order":1}],"volumes":[{"order":1}]}`))
 	if len(edits) != 2 || edits[0].Path != "/api/v2/content" || edits[1].Path != "/api/v2/volumes" {

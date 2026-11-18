@@ -14,11 +14,7 @@ import (
 type Config struct {
 	TrustedProxyCIDRs              []string
 	Env                            string
-	HTTPAddr                       string
-	ATHubHTTPAddr                  string
-	CreatplatHTTPAddr              string
-	ImageHTTPAddr                  string
-	ImageLegacyHTTPAddr            string
+	GatewayHTTPAddr                string
 	ImageDatabaseURL               string
 	ImageLocalRoot                 string
 	ImageTempRoot                  string
@@ -60,15 +56,11 @@ func Load() (Config, error) {
 	c := Config{
 		TrustedProxyCIDRs:              getList("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128"),
 		Env:                            getenv("APP_ENV", "development"),
-		HTTPAddr:                       getenv("OAUTH_HTTP_ADDR", getenv("HTTP_ADDR", ":8001")),
-		ATHubHTTPAddr:                  getenv("ATHUB_HTTP_ADDR", ":8005"),
-		CreatplatHTTPAddr:              getenv("CREATPLAT_HTTP_ADDR", ":8004"),
-		ImageHTTPAddr:                  getenv("IMAGE_HTTP_ADDR", ":8002"),
-		ImageLegacyHTTPAddr:            strings.TrimSpace(os.Getenv("IMAGE_LEGACY_HTTP_ADDR")),
+		GatewayHTTPAddr:                getenv("GATEWAY_HTTP_ADDR", ":8010"),
 		ImageDatabaseURL:               strings.TrimSpace(os.Getenv("IMAGE_DATABASE_URL")),
 		ImageLocalRoot:                 strings.TrimSpace(os.Getenv("IMAGE_LOCAL_ROOT")),
 		ImageTempRoot:                  getenv("IMAGE_TEMP_ROOT", "temp/image"),
-		ImagePublicURL:                 strings.TrimRight(getenv("IMAGE_PUBLIC_URL", "http://localhost:8002"), "/"),
+		ImagePublicURL:                 strings.TrimRight(getenv("IMAGE_PUBLIC_URL", "http://localhost:8010"), "/"),
 		ImageMaxUploadBytes:            int64(env.int("IMAGE_MAX_UPLOAD_BYTES", 512<<20)),
 		ImageMaxChunkBytes:             int64(env.int("IMAGE_MAX_CHUNK_BYTES", 20<<20)),
 		ImageMaxChunks:                 env.int("IMAGE_MAX_CHUNKS", 1000),

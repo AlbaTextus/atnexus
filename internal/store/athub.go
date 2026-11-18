@@ -120,6 +120,21 @@ func (p *Postgres) ResolveATHubKey(ctx context.Context, hash string) (ATHubIdent
 	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound, ErrUserForbidden).ResolveATHubKey(ctx, hash)
 }
 
+// athubRoleLock is the advisory lock key guarding one role's ATHub settings: its
+// key limit and its access rules. role is an SQL expression. Admission holds
+// the lock shared and administrator changes hold it exclusive, both until
+// commit, so a call that commits after a change was judged by it.
+//
+// Row locks cannot do this: a shared row locker never queues behind a waiting
+// writer, so overlapping calls from several accounts of one role would hold off
+// a change indefinitely. The lock manager queues new shared requests behind a
+// waiting exclusive one. It is deadlock free because no holder waits again:
+// admission takes it after its user and credential rows and locks nothing
+// later, and changes take it after any row they must lock first.
+//
+// The two-key form shares no key space with the single-key advisory locks.
+func athubRoleLock(role string) string { return `742190615,hashtext(` + role + `)` }
+
 func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 	const record = `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,port,authenticated,operation)
 		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`
@@ -154,16 +169,22 @@ func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 		// includes every committed call. Session-based reads are not key calls.
 		checks.Queue(`SELECT is_current AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now()),authenticated_calls
 			FROM athub_api_keys WHERE id=$1 AND user_id=$2 FOR UPDATE`, call.KeyID, call.UserID)
-		// Lock settings too: a committed administrator change applies to the
-		// next admitted call.
-		checks.Queue(`SELECT total_call_limit FROM athub_key_limits WHERE role=`+role+` FOR SHARE`, call.UserID)
+	}
+	// Lock settings too: a committed administrator change applies to the next
+	// admitted call. The reads are separate statements after the lock, so their
+	// snapshots are taken once any change ahead of this call has committed.
+	settings := call.SessionID == nil || operation != ""
+	if settings {
+		checks.Queue(`SELECT pg_advisory_xact_lock_shared(`+athubRoleLock(role)+`)`, call.UserID)
+	}
+	if call.SessionID == nil {
+		checks.Queue(`SELECT total_call_limit FROM athub_key_limits WHERE role=`+role, call.UserID)
 	}
 	if operation != "" {
-		checks.Queue(`SELECT true FROM athub_role_policies WHERE role=`+role+` FOR SHARE`, call.UserID)
 		checks.Queue(`SELECT operation,method,path,allowed FROM athub_access_rules
 			WHERE role=`+role+` AND operation=$2 AND (method='' OR (method=$3 AND path=$4))`, call.UserID, operation, call.Method, call.Path)
 	}
-	var userAllowed, keyAllowed, policyFound bool
+	var userAllowed, keyAllowed bool
 	var used int64
 	var limit *int64
 	var limitErr, policyErr error
@@ -176,25 +197,25 @@ func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 			err = nil
 		}
 	}
+	if err == nil && settings {
+		_, err = results.Exec()
+	}
 	if err == nil && call.KeyID != nil && call.SessionID == nil {
 		limitErr = results.QueryRow().Scan(&limit)
 	}
 	if err == nil && operation != "" {
-		policyErr = results.QueryRow().Scan(&policyFound)
-		if policyErr == nil {
-			var rows pgx.Rows
-			if rows, policyErr = results.Query(); policyErr == nil {
-				for rows.Next() {
-					var rule ATHubAccessRule
-					if policyErr = rows.Scan(&rule.Operation, &rule.Method, &rule.Path, &rule.Allowed); policyErr != nil {
-						break
-					}
-					policy.Rules = append(policy.Rules, rule)
+		var rows pgx.Rows
+		if rows, policyErr = results.Query(); policyErr == nil {
+			for rows.Next() {
+				var rule ATHubAccessRule
+				if policyErr = rows.Scan(&rule.Operation, &rule.Method, &rule.Path, &rule.Allowed); policyErr != nil {
+					break
 				}
-				rows.Close()
-				if policyErr == nil {
-					policyErr = rows.Err()
-				}
+				policy.Rules = append(policy.Rules, rule)
+			}
+			rows.Close()
+			if policyErr == nil {
+				policyErr = rows.Err()
 			}
 		}
 	}

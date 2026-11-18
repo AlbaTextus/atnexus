@@ -50,6 +50,12 @@ type ATHubEndpoint struct {
 	Operation string `json:"operation"`
 }
 
+// ATHubCoverPath is the creator platform's cover upload. It stores a file and
+// changes no content, so it has a permission rule and an audit label of its
+// own but is never reviewed. The content listener only serves /api/v2, so this
+// label cannot be reached there.
+const ATHubCoverPath = "/api/v4/account/athub/cover"
+
 // athubRoutes is the single description of the content API surface. Permission
 // rules, audit labels, creator submissions and review queueing all derive from
 // it, so a new endpoint is declared here once.
@@ -78,6 +84,7 @@ var athubRoutes = []struct {
 	{ATHubEndpoint{"POST", "/api/v2/novelinfo", "upload"}, false, nil},
 	{ATHubEndpoint{"POST", "/api/v2/upload", "upload"}, true, nil},
 	{ATHubEndpoint{"POST", "/api/v2/illustrations", "upload"}, true, []string{"novelId"}},
+	{ATHubEndpoint{"POST", ATHubCoverPath, "upload"}, false, nil},
 
 	{ATHubEndpoint{"PUT", "/api/v2/authors", "edit"}, false, []string{"id"}},
 	{ATHubEndpoint{"PUT", "/api/v2/tags", "edit"}, false, []string{"id"}},
@@ -287,15 +294,29 @@ func (p *Postgres) SetATHubPolicy(ctx context.Context, actor uuid.UUID, policy A
 	if !revision.Equal(policy.UpdatedAt) {
 		return policy, ErrConflict
 	}
-	if _, err = tx.Exec(ctx, `DELETE FROM athub_access_rules WHERE role=$1`, policy.Role); err != nil {
-		return policy, err
-	}
+	// Wait out calls admitted under the old rules; later ones queue behind this
+	// until commit, so the lock and every write share one round trip. The lock
+	// follows the policy row lock so this transaction never waits for a row
+	// while calls queue behind it.
+	changes := &pgx.Batch{}
+	changes.Queue(`SELECT pg_advisory_xact_lock(`+athubRoleLock(`$1`)+`)`, policy.Role)
+	changes.Queue(`DELETE FROM athub_access_rules WHERE role=$1`, policy.Role)
 	for _, rule := range policy.Rules {
-		if _, err = tx.Exec(ctx, `INSERT INTO athub_access_rules(role,operation,method,path,allowed) VALUES($1,$2,$3,$4,$5)`, policy.Role, rule.Operation, rule.Method, rule.Path, rule.Allowed); err != nil {
-			return policy, err
-		}
+		changes.Queue(`INSERT INTO athub_access_rules(role,operation,method,path,allowed) VALUES($1,$2,$3,$4,$5)`, policy.Role, rule.Operation, rule.Method, rule.Path, rule.Allowed)
 	}
-	if err = tx.QueryRow(ctx, `UPDATE athub_role_policies SET review_required=$2,updated_at=clock_timestamp() WHERE role=$1 RETURNING updated_at`, policy.Role, policy.ReviewRequired).Scan(&policy.UpdatedAt); err != nil {
+	writes := changes.Len()
+	changes.Queue(`UPDATE athub_role_policies SET review_required=$2,updated_at=clock_timestamp() WHERE role=$1 RETURNING updated_at`, policy.Role, policy.ReviewRequired)
+	results := tx.SendBatch(ctx, changes)
+	for i := 0; i < writes && err == nil; i++ {
+		_, err = results.Exec()
+	}
+	if err == nil {
+		err = results.QueryRow().Scan(&policy.UpdatedAt)
+	}
+	if closeErr := results.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
 		return policy, err
 	}
 	return policy, tx.Commit(ctx)

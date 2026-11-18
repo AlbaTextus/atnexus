@@ -14,7 +14,7 @@ func testHistoryIntegration(t *testing.T, ctx context.Context, st *Postgres) {
 	}
 	var batches [][]RevisionDraft
 	var finalized []bool
-	st.RecordChanges = func(_ context.Context, drafts []RevisionDraft) (func(context.Context, bool) error, error) {
+	st.RecordChanges = func(_ context.Context, _ string, drafts []RevisionDraft) (func(context.Context, bool) error, error) {
 		batches = append(batches, drafts)
 		return func(_ context.Context, committed bool) error { finalized = append(finalized, committed); return nil }, nil
 	}
@@ -73,7 +73,7 @@ func testHistoryIntegration(t *testing.T, ctx context.Context, st *Postgres) {
 	if got, err := st.GetNovel(ctx, novel.ID); err != nil || got.Title != "History" || len(batches) != 2 {
 		t.Fatal("failed mutation changed content/history")
 	}
-	st.RecordChanges = func(context.Context, []RevisionDraft) (func(context.Context, bool) error, error) {
+	st.RecordChanges = func(context.Context, string, []RevisionDraft) (func(context.Context, bool) error, error) {
 		return nil, errors.New("history offline")
 	}
 	if err := st.Mutate(ctx, func(ctx context.Context) error { _, err := st.UpdateNovel(ctx, novel.ID, input); return err }); err == nil || !strings.Contains(err.Error(), "offline") {
@@ -83,7 +83,7 @@ func testHistoryIntegration(t *testing.T, ctx context.Context, st *Postgres) {
 		t.Fatal("history outage failed to roll back content")
 	}
 	// Newly uploaded novels must be attributed too.
-	st.RecordChanges = func(_ context.Context, drafts []RevisionDraft) (func(context.Context, bool) error, error) {
+	st.RecordChanges = func(_ context.Context, _ string, drafts []RevisionDraft) (func(context.Context, bool) error, error) {
 		if len(drafts) != 1 || drafts[0].NovelID <= 0 {
 			t.Fatal("new upload missing novel")
 		}
@@ -109,7 +109,7 @@ func testChapterBodyRevisions(t *testing.T, ctx context.Context, st *Postgres, p
 		t.Fatal(err)
 	}
 	var batches [][]RevisionDraft
-	st.RecordChanges = func(_ context.Context, drafts []RevisionDraft) (func(context.Context, bool) error, error) {
+	st.RecordChanges = func(_ context.Context, _ string, drafts []RevisionDraft) (func(context.Context, bool) error, error) {
 		batches = append(batches, drafts)
 		return func(context.Context, bool) error { return nil }, nil
 	}
@@ -151,7 +151,7 @@ func testChapterBodyRevisions(t *testing.T, ctx context.Context, st *Postgres, p
 	if got, err := st.GetChapter(ctx, novel.ID, 1); err != nil || got.Content != original || len(batches) != 2 {
 		t.Fatal("failed request changed body or history")
 	}
-	st.RecordChanges = func(context.Context, []RevisionDraft) (func(context.Context, bool) error, error) {
+	st.RecordChanges = func(context.Context, string, []RevisionDraft) (func(context.Context, bool) error, error) {
 		return nil, errors.New("body history offline")
 	}
 	if err := st.Mutate(ctx, func(ctx context.Context) error { _, err := st.SaveChapter(ctx, chapter); return err }); err == nil {

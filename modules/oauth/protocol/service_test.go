@@ -149,3 +149,52 @@ func TestCreateAndExchangeAuthorizationCode(t *testing.T) {
 		t.Fatalf("unexpected token response: %#v", response)
 	}
 }
+
+// Introspection tells a client about its own tokens only. Another client's
+// token must look exactly like a token that does not exist.
+func TestIntrospectReportsOnlyTheCallersOwnTokens(t *testing.T) {
+	secretHash, err := security.HashPassword("secret", 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := uuid.New()
+	for _, tc := range []struct {
+		name, issuedTo string
+		active         bool
+	}{{"own token", "web", true}, {"another client's token", "forum", false}} {
+		st := &memoryStore{client: store.Client{ID: "web", IsActive: true, SecretHash: &secretHash}}
+		st.token = store.Token{AccessTokenHash: security.HashToken("access"), ClientID: tc.issuedTo, UserID: &user, Scopes: []string{"email", "openid"}, AccessExpiresAt: time.Now().Add(time.Minute), CreatedAt: time.Now()}
+		result, oauthErr := NewService(st, testConfig()).Introspect(context.Background(), "web", "secret", "access")
+		if oauthErr != nil {
+			t.Fatalf("%s: %#v", tc.name, oauthErr)
+		}
+		if result["active"] != tc.active {
+			t.Errorf("%s: active=%v, want %v", tc.name, result["active"], tc.active)
+		}
+		if tc.active && (result["sub"] != user.String() || result["client_id"] != "web" || result["scope"] != "email openid") {
+			t.Errorf("%s: incomplete answer %v", tc.name, result)
+		}
+		if !tc.active && len(result) != 1 {
+			t.Errorf("%s: disclosed %v", tc.name, result)
+		}
+	}
+}
+
+type brokenClients struct{ *memoryStore }
+
+func (brokenClients) ClientByID(context.Context, string) (store.Client, error) {
+	return store.Client{}, errors.New("connection refused")
+}
+
+func TestAuthorizeReportsAnOutageAsServerError(t *testing.T) {
+	service := NewService(brokenClients{&memoryStore{}}, config.Config{})
+	_, err := service.ValidateAuthorize(context.Background(), AuthorizeRequest{ClientID: "app", RedirectURI: "https://app.example/callback", ResponseType: "code"})
+	if err == nil || err.Code != "server_error" || err.Status != 500 {
+		t.Fatalf("a failed client lookup must be a server error, got %v", err)
+	}
+	service = NewService(&memoryStore{}, config.Config{})
+	_, err = service.ValidateAuthorize(context.Background(), AuthorizeRequest{ClientID: "app", RedirectURI: "https://app.example/callback", ResponseType: "code"})
+	if err == nil || err.Code != "unauthorized_client" || err.Status != 400 {
+		t.Fatalf("an unknown client must stay unauthorized_client, got %v", err)
+	}
+}

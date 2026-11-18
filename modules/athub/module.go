@@ -98,8 +98,27 @@ func (m *Module) Handler() http.Handler          { return m.handler }
 func (m *Module) Ping(ctx context.Context) error { return m.pool.Ping(ctx) }
 func (m *Module) Close()                         { m.pool.Close() }
 
+// WithRehearsal makes the content handler run a change and roll it back, so the
+// host can learn how it would be answered without storing anything.
+func WithRehearsal(ctx context.Context) context.Context { return storage.WithRehearsal(ctx) }
+
+// Rehearsing reports whether ctx belongs to a rehearsal.
+func Rehearsing(ctx context.Context) bool { return storage.Rehearsing(ctx) }
+
 // ForgetMutation drops the replay receipt of a WithMutationID call. Call it only
 // once the host has committed that mutation's final outcome.
 func (m *Module) ForgetMutation(ctx context.Context, id string) error {
 	return m.store.DeleteMutationReceipt(ctx, id)
+}
+
+// CommittedRevisions reports which revision batches reached the content
+// database, for settling revisions whose completion was lost.
+func (m *Module) CommittedRevisions(ctx context.Context, batches []string) ([]string, error) {
+	return m.store.CommittedRevisions(ctx, batches)
+}
+
+// PruneRevisionReceipts drops receipts older than the given time. Call it only
+// after every revision that old has been settled.
+func (m *Module) PruneRevisionReceipts(ctx context.Context, before time.Time) error {
+	return m.store.DeleteRevisionReceipts(ctx, before)
 }

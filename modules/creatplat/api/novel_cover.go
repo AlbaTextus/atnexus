@@ -127,7 +127,7 @@ func (a *API) saveNovelCover(w http.ResponseWriter, r *http.Request, user uuid.U
 		writeJSON(w, 400, map[string]string{"error": "cover_invalid", "error_description": "EPUB 封面不是有效图片，或图片尺寸过大。请更换或移除封面后重试。"})
 		return
 	}
-	location, err := a.uploadNovelImage(r.Context(), data, "covers", user.String())
+	location, err := a.uploadNovelImage(r.Context(), user, data, "covers", user.String())
 	if err != nil {
 		a.novelCoverUploadError(w)
 		return
@@ -135,8 +135,8 @@ func (a *API) saveNovelCover(w http.ResponseWriter, r *http.Request, user uuid.U
 	writeJSON(w, 200, map[string]string{"url": location})
 }
 
-func (a *API) uploadNovelImage(ctx context.Context, data []byte, category, entityID string) (string, error) {
-	return a.Images.Save(ctx, "book/"+category, entityID, "cover.jpg", "image/jpeg", data)
+func (a *API) uploadNovelImage(ctx context.Context, uploader uuid.UUID, data []byte, category, entityID string) (string, error) {
+	return a.Images.Save(ctx, uploader.String(), "book/"+category, entityID, "cover.jpg", "image/jpeg", data)
 }
 
 func (a *API) novelCoverUnavailable(w http.ResponseWriter) {

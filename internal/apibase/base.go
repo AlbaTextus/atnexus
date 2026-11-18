@@ -43,10 +43,30 @@ type Base struct {
 	Images ImageSaver
 }
 
-// ImageSaver is the image module in this process. It stores bytes under an
-// upload category and entity, and returns the public file URL.
+// ImageSaver is the image module in this process. Save stores bytes under an
+// upload category and entity for the given account and returns the public file
+// URL. Remove deletes a file Save returned for the same category and entity,
+// and ignores every other location.
 type ImageSaver interface {
-	Save(ctx context.Context, category, entityID, fileName, contentType string, data []byte) (string, error)
+	Save(ctx context.Context, uploader, category, entityID, fileName, contentType string, data []byte) (string, error)
+	Remove(ctx context.Context, category, entityID, location string) error
+}
+
+// RemoveReplacedImage deletes a stored image that no record points to any
+// more. It is best effort: the replacement already succeeded, so a failure
+// only leaves an unused file behind and is logged, not reported.
+func (a *Base) RemoveReplacedImage(ctx context.Context, category, entityID, previous string, current ...string) {
+	if a.Images == nil || previous == "" {
+		return
+	}
+	for _, location := range current {
+		if location == previous {
+			return
+		}
+	}
+	if err := a.Images.Remove(context.WithoutCancel(ctx), category, entityID, previous); err != nil {
+		a.Log.Warn("replaced image was not removed", "category", category)
+	}
 }
 
 func (a *Base) CurrentUser(r *http.Request) (store.User, bool) {

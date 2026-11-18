@@ -66,7 +66,7 @@ func (a *API) deleteNovelIllustration(w http.ResponseWriter, r *http.Request) {
 	a.athubIllustrationDeleter(w, r, user.ID, session.ID, int32(novelID), int32(imageID))
 }
 
-func (a *API) SetATHubKeyIllustrationUploader(upload func(http.ResponseWriter, *http.Request, func(http.ResponseWriter, *http.Request) (int32, []byte, bool))) {
+func (a *API) SetATHubKeyIllustrationUploader(upload func(http.ResponseWriter, *http.Request, func(http.ResponseWriter, *http.Request, uuid.UUID) (int32, []byte, bool))) {
 	a.athubKeyIllustrationUploader = upload
 }
 
@@ -80,16 +80,18 @@ func (a *API) uploadNovelIllustration(w http.ResponseWriter, r *http.Request) {
 			a.novelIllustrationsUnavailable(w)
 			return
 		}
-		a.athubKeyIllustrationUploader(w, r, func(w http.ResponseWriter, admitted *http.Request) (int32, []byte, bool) {
+		stored := &illustrationUpload{ResponseWriter: w}
+		a.athubKeyIllustrationUploader(stored, r, func(w http.ResponseWriter, admitted *http.Request, user uuid.UUID) (int32, []byte, bool) {
 			// The pipeline gave the admitted request its own path, so the novel
 			// is read from the route as it arrived.
 			id, ok := novelIllustrationID(w, r)
 			if !ok {
 				return 0, nil, false
 			}
-			body, ok := a.storeNovelIllustration(w, admitted, id)
+			body, ok := a.storeNovelIllustration(w, admitted, user, id, stored)
 			return id, body, ok
 		})
+		a.discardRefusedIllustration(r.Context(), stored)
 		return
 	}
 	user, session, ok := a.SessionActor(w, r)
@@ -111,7 +113,8 @@ func (a *API) uploadNovelIllustration(w http.ResponseWriter, r *http.Request) {
 		a.PolicyError(w, err)
 		return
 	}
-	body, ok := a.storeNovelIllustration(w, r, id)
+	stored := &illustrationUpload{ResponseWriter: w}
+	body, ok := a.storeNovelIllustration(w, r, user.ID, id, stored)
 	if !ok {
 		return
 	}
@@ -119,7 +122,44 @@ func (a *API) uploadNovelIllustration(w http.ResponseWriter, r *http.Request) {
 	request.Body = io.NopCloser(bytes.NewReader(body))
 	request.ContentLength = int64(len(body))
 	request.Header.Set("Content-Type", "application/json")
-	a.athubIllustrationSubmitter(w, request, user.ID, session.ID, id)
+	a.athubIllustrationSubmitter(stored, request, user.ID, session.ID, id)
+	a.discardRefusedIllustration(r.Context(), stored)
+}
+
+// illustrationUpload remembers where an upload was stored and how the content
+// API answered the request that records it.
+type illustrationUpload struct {
+	http.ResponseWriter
+	novel    string
+	location string
+	status   int
+}
+
+func (s *illustrationUpload) WriteHeader(status int) {
+	if s.status == 0 {
+		s.status = status
+	}
+	s.ResponseWriter.WriteHeader(status)
+}
+
+func (s *illustrationUpload) Write(data []byte) (int, error) {
+	if s.status == 0 {
+		s.status = http.StatusOK
+	}
+	return s.ResponseWriter.Write(data)
+}
+
+func (s *illustrationUpload) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
+// The image has to be stored before the content API can record it, and only
+// that API knows whether the novel exists and accepts it. A refusal (4xx) is
+// final, so the stored file would never be referenced and is removed. After a
+// 5xx the outcome is unknown, and a file that may be recorded is kept.
+func (a *API) discardRefusedIllustration(ctx context.Context, stored *illustrationUpload) {
+	if stored.location == "" || stored.status < 400 || stored.status >= 500 {
+		return
+	}
+	a.RemoveReplacedImage(ctx, "book/illustrations", stored.novel, stored.location)
 }
 
 // novelIllustrationID reads the novel from the route; an upload takes no query.
@@ -135,7 +175,7 @@ func novelIllustrationID(w http.ResponseWriter, r *http.Request) (int32, bool) {
 // storeNovelIllustration saves the uploaded image of a caller whose permission
 // was already checked, and returns the JSON the content API records for it. It
 // replies itself and returns false when the image cannot be stored.
-func (a *API) storeNovelIllustration(w http.ResponseWriter, r *http.Request, novelID int32) ([]byte, bool) {
+func (a *API) storeNovelIllustration(w http.ResponseWriter, r *http.Request, uploader uuid.UUID, novelID int32, stored *illustrationUpload) ([]byte, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxNovelCoverBytes+(64<<10))
 	if err := r.ParseMultipartForm(maxNovelCoverBytes + (64 << 10)); err != nil {
 		if r.MultipartForm != nil {
@@ -174,11 +214,13 @@ func (a *API) storeNovelIllustration(w http.ResponseWriter, r *http.Request, nov
 		a.ApplicationError(w, err)
 		return nil, false
 	}
-	location, err := a.uploadNovelImage(r.Context(), data, "illustrations", strconv.FormatInt(int64(novelID), 10))
+	novel := strconv.FormatInt(int64(novelID), 10)
+	location, err := a.uploadNovelImage(r.Context(), uploader, data, "illustrations", novel)
 	if err != nil {
 		writeJSON(w, 502, map[string]string{"error": "illustration_upload_failed", "error_description": "插图上传失败，请稍后重试。"})
 		return nil, false
 	}
+	stored.novel, stored.location = novel, location
 	digest := sha256.Sum256(data)
 	body, _ := json.Marshal(map[string]any{"url": location, "sha256": hex.EncodeToString(digest[:]), "width": size.Width, "height": size.Height})
 	return body, true

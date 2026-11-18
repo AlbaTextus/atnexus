@@ -30,12 +30,15 @@ func NewHistory(st any, logger *slog.Logger) *History {
 	return &History{store: st, logger: logger}
 }
 
-func (a *History) RecordChanges(ctx context.Context, drafts []athub.RevisionDraft) (func(context.Context, bool) error, error) {
+func (a *History) RecordChanges(ctx context.Context, batchID string, drafts []athub.RevisionDraft) (func(context.Context, bool) error, error) {
 	st, ok := a.store.(store.NovelHistoryStore)
 	if !ok {
 		return nil, errors.New("novel history store unavailable")
 	}
-	batch := uuid.New()
+	batch, err := uuid.Parse(batchID)
+	if err != nil {
+		return nil, errors.New("revision batch must be a UUID")
+	}
 	revisions := make([]store.NovelRevision, 0, len(drafts))
 	for _, draft := range drafts {
 		userID, err := uuid.Parse(draft.Contributor.ID)
@@ -64,6 +67,90 @@ func (a *History) RecordChanges(ctx context.Context, drafts []athub.RevisionDraf
 		}
 		return err
 	}, nil
+}
+
+// RevisionReceipts is the content database's record of which batches committed.
+type RevisionReceipts interface {
+	CommittedRevisions(context.Context, []string) ([]string, error)
+	PruneRevisionReceipts(context.Context, time.Time) error
+}
+
+const (
+	// Far longer than any content request may run, so a batch this old is no
+	// longer in flight and its receipt, if any, is already visible.
+	revisionSettleAfter = 10 * time.Minute
+	revisionSettleEvery = 5 * time.Minute
+	revisionSettleBatch = 200
+	// Receipts outlive the settling window by a wide margin and are pruned only
+	// after a pass that left no older revision pending.
+	revisionReceiptLife = 7 * 24 * time.Hour
+)
+
+// RunReconciler settles pending revisions until ctx ends.
+func (a *History) RunReconciler(ctx context.Context, content RevisionReceipts) {
+	ticker := time.NewTicker(revisionSettleEvery)
+	defer ticker.Stop()
+	for {
+		if settled, err := a.Reconcile(ctx, content, time.Now()); err != nil {
+			if ctx.Err() == nil {
+				a.logger.Error("novel revision reconciliation failed", "error", err)
+			}
+		} else if settled > 0 {
+			a.logger.Warn("settled novel revisions left pending", "batches", settled)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// Reconcile completes or fails every revision batch that has been pending for
+// longer than the settling window, according to whether its content committed.
+func (a *History) Reconcile(ctx context.Context, content RevisionReceipts, now time.Time) (int, error) {
+	st, ok := a.store.(interface {
+		StaleRevisionBatches(context.Context, time.Time, int) ([]uuid.UUID, error)
+		FinishNovelRevisions(context.Context, uuid.UUID, bool) error
+	})
+	if !ok {
+		return 0, errors.New("novel history store cannot be reconciled")
+	}
+	settled := 0
+	for {
+		batches, err := st.StaleRevisionBatches(ctx, now.Add(-revisionSettleAfter), revisionSettleBatch)
+		if err != nil {
+			return settled, err
+		}
+		if len(batches) == 0 {
+			break
+		}
+		ids := make([]string, len(batches))
+		for i, batch := range batches {
+			ids[i] = batch.String()
+		}
+		found, err := content.CommittedRevisions(ctx, ids)
+		if err != nil {
+			return settled, err
+		}
+		committed := make(map[uuid.UUID]bool, len(found))
+		for _, id := range found {
+			if parsed, err := uuid.Parse(id); err == nil {
+				committed[parsed] = true
+			}
+		}
+		for _, batch := range batches {
+			// Another settler or the late original completion may have won.
+			if err := st.FinishNovelRevisions(ctx, batch, committed[batch]); err != nil && !errors.Is(err, store.ErrNotFound) {
+				return settled, err
+			}
+			settled++
+		}
+		if len(batches) < revisionSettleBatch {
+			break
+		}
+	}
+	return settled, content.PruneRevisionReceipts(ctx, now.Add(-revisionReceiptLife))
 }
 
 func httpQuery(r *http.Request) (url.Values, error) {

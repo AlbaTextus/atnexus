@@ -82,5 +82,5 @@ func (a *API) uploadProfileOriginal(ctx context.Context, userID uuid.UUID, categ
 	if err != nil {
 		return "", err
 	}
-	return a.Images.Save(ctx, "user/"+category, userID.String(), "original."+format, http.DetectContentType(data), data)
+	return a.Images.Save(ctx, userID.String(), "user/"+category, userID.String(), "original."+format, http.DetectContentType(data), data)
 }

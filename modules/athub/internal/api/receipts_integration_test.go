@@ -67,7 +67,7 @@ func testReviewReceipts(t *testing.T, pool *pgxpool.Pool) {
 	}
 	// If content committed but finishing the host audit failed, replay must return
 	// the durable successful response rather than execute the mutation again.
-	st.RecordChanges = func(context.Context, []storage.RevisionDraft) (func(context.Context, bool) error, error) {
+	st.RecordChanges = func(context.Context, string, []storage.RevisionDraft) (func(context.Context, bool) error, error) {
 		return func(context.Context, bool) error { return errors.New("host completion temporarily unavailable") }, nil
 	}
 	body := fmt.Sprintf(`{"platformId":%d,"title":"receipt-novel","status":"ONGOING"}`, platform.ID)

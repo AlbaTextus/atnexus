@@ -240,6 +240,7 @@ func (p *Postgres) CheckSchema(ctx context.Context) error {
 	for _, query := range []string{
 		`SELECT "id", "platformId", "name" FROM "Author" LIMIT 0`,
 		`SELECT id,response FROM "MutationReceipt" LIMIT 0`,
+		`SELECT id,"createdAt" FROM "RevisionReceipt" LIMIT 0`,
 		`SELECT ` + illustrationColumns + ` FROM "Illustration" LIMIT 0`,
 		`SELECT "id", "name", "url" FROM "Platform" LIMIT 0`,
 		`SELECT "id", "name" FROM "Tag" LIMIT 0`,

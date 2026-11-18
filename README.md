@@ -4,7 +4,7 @@ atnexus 是 ALBATEXTUS 的统一服务：一个 Go 程序运行 OAuth、图床�
 
 Go 测试集中在 [`test/`](test/)，运行 `pnpm test:go` 执行测试套件。
 
-其余说明统一写在文档站 <https://docs.albatextus.com>（源码在 [AlbaTextus/docs](https://github.com/AlbaTextus/docs) 的 `content/`）。文档仓库以子模块挂在 `docs/`，运行 `pnpm docs:sync` 检出或更新其中的 Markdown。
+其余说明统一写在文档站 <https://docs.albatextus.com>（源码在 [AlbaTextus/docs](https://github.com/AlbaTextus/docs) 的 `content/`）。
 
 | 内容 | 文档 |
 | --- | --- |

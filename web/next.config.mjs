@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
-const backend = process.env.OAUTH_BACKEND_URL || "http://localhost:8001"
-const creatorBackend = process.env.CREATPLAT_BACKEND_URL || "http://localhost:8004"
+const backend = process.env.OAUTH_BACKEND_URL || "http://localhost:8010"
+const creatorBackend = process.env.CREATPLAT_BACKEND_URL || "http://localhost:8010"
 // Documentation lives in the standalone Wiki service; historic in-app addresses redirect there.
 const wiki = (process.env.NEXT_PUBLIC_WIKI_URL || "http://localhost:3200").replace(/\/+$/, "")
 

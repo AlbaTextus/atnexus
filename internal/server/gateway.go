@@ -30,7 +30,7 @@ func NewGateway(routes ...GatewayRoute) http.Handler {
 				continue
 			}
 			// The aggregate listener allows the longest module deadline; narrow
-			// it to the deadline this module's own listener would enforce.
+			// it to the current module's deadline.
 			if route.Timeout > 0 {
 				deadline := time.Now().Add(route.Timeout)
 				controller := http.NewResponseController(w)

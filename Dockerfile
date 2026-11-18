@@ -10,6 +10,6 @@ FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/atnexus /atnexus
 # Owned by the runtime user so a named volume mounted here is writable.
 COPY --from=build --chown=nonroot:nonroot /out/image-temp /var/lib/atnexus/image-temp
-EXPOSE 8001 8002 8004 8005 8288
+EXPOSE 8010
 USER nonroot:nonroot
 ENTRYPOINT ["/atnexus"]

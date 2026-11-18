@@ -232,14 +232,14 @@ func (a *API) beginReviewAudit(w http.ResponseWriter, r *http.Request, user, ses
 		a.PolicyError(w, errors.New("audit store unavailable"))
 		return nil, false
 	}
-	_, portText, err := net.SplitHostPort(a.Config.CreatplatHTTPAddr)
+	_, portText, err := net.SplitHostPort(a.Config.GatewayHTTPAddr)
 	if err != nil {
-		writeJSON(w, 503, map[string]string{"error": "invalid_creator_address"})
+		writeJSON(w, 503, map[string]string{"error": "invalid_gateway_address"})
 		return nil, false
 	}
 	port, err := strconv.Atoi(portText)
 	if err != nil || port < 1 || port > 65535 {
-		writeJSON(w, 503, map[string]string{"error": "invalid_creator_address"})
+		writeJSON(w, 503, map[string]string{"error": "invalid_gateway_address"})
 		return nil, false
 	}
 	// The existing admission adapter still uses its persisted review operation label.

@@ -61,7 +61,7 @@ func TestGatewayDispatchesByPrefix(t *testing.T) {
 	}
 }
 
-// Each module keeps its own listener deadline behind the shared port.
+// Each module keeps its own deadline on the shared port.
 func TestGatewayAppliesModuleDeadline(t *testing.T) {
 	slow := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(300 * time.Millisecond)

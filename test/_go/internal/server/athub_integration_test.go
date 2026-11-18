@@ -78,8 +78,8 @@ func TestATHubUserKeyContentFlowIntegration(t *testing.T) {
 	if accountDSN == "" || contentDSN == "" {
 		t.Skip("set OAUTH_TEST_DATABASE_URL and ATHUB_TEST_DATABASE_URL")
 	}
-	accountDSN = migratedSchema(t, accountDSN, "../../prisma/migrations/*/migration.sql")
-	contentDSN = migratedSchema(t, contentDSN, "../../modules/athub/prisma/migrations/*/migration.sql")
+	accountDSN = migratedSchema(t, accountDSN, "../../prisma/oauth/migrations/*/migration.sql")
+	contentDSN = migratedSchema(t, contentDSN, "../../prisma/athub/migrations/*/migration.sql")
 	ctx := context.Background()
 	st, err := store.NewPostgres(ctx, accountDSN)
 	if err != nil {

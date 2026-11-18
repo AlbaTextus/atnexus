@@ -15,7 +15,7 @@ import (
 func TestNovelHistoryIntegration(t *testing.T) {
 	st := athubTestStore(t)
 	ctx := context.Background()
-	migration, err := os.ReadFile("../../prisma/migrations/20261110050000_novel_history/migration.sql")
+	migration, err := os.ReadFile("../../prisma/oauth/migrations/20261110050000_novel_history/migration.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

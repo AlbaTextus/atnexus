@@ -7,7 +7,7 @@ import { defineConfig, env } from "prisma/config";
 config({ path: fileURLToPath(new URL("../../.env", import.meta.url)), quiet: true });
 
 export default defineConfig({
-  schema: "prisma/schema.prisma",
-  migrations: { path: "prisma/migrations" },
+  schema: "../../prisma/athub/schema.prisma",
+  migrations: { path: "../../prisma/athub/migrations" },
   datasource: { url: env("ATHUB_DATABASE_URL") },
 });

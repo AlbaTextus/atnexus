@@ -32,7 +32,7 @@ modules/creatplat/      创作流程、审核和历史
 modules/athub/          正式内容 API、执行和存储
 pkg/auth/               模块共享身份契约
 internal/server/        HTTP 传输规则和监听生命周期
-prisma/                 账户库迁移，含外部图床 Key
+prisma/                 四套数据库的 schema 与迁移：oauth/、athub/、creatplat/、image/
 temp/                   验证脚本、临时数据、日志及本地停写备份
 release/                编译和发布产物
 ```
@@ -51,10 +51,10 @@ OAuth 签发同一个 session Cookie。其他模块调用共享身份接口验�
 
 | 数据 | 数据库 | 迁移入口 |
 | --- | --- | --- |
-| 账户、session、OAuth、外部 Key | 原账户 PostgreSQL | 根 `prisma/` |
-| 书库与正式内容 | 原 ATHub PostgreSQL | `modules/athub/prisma/` |
-| 审核、待审变更、历史、修订 | 独立 creatplat PostgreSQL | `modules/creatplat/prisma/` |
-| 图片元数据、设置和分块会话 | 新建独立 image PostgreSQL | `modules/image/prisma/` |
+| 账户、session、OAuth、外部 Key | 原账户 PostgreSQL | `prisma/oauth/` |
+| 书库与正式内容 | 原 ATHub PostgreSQL | `prisma/athub/` |
+| 审核、待审变更、历史、修订 | 独立 creatplat PostgreSQL | `prisma/creatplat/` |
+| 图片元数据、设置和分块会话 | 新建独立 image PostgreSQL | `prisma/image/` |
 | 图片字节 | 原本地目录或原 S3 桶 | 保留文件 ID 和对象键 |
 
 独立数据库可以建立在现有同一 PostgreSQL 实例中，不以新建 schema 代替数据库隔离。配置、实际路径和秘密从环境读取，不在业务代码写死开发环境数据。

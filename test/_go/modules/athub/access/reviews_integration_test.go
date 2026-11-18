@@ -75,8 +75,8 @@ func TestModeratedContentIntegration(t *testing.T) {
 	if dsn == "" {
 		t.Skip("set OAUTH_TEST_DATABASE_URL for isolated moderation integration")
 	}
-	accountURL := moderationSchema(t, dsn, "account", "../../../prisma/migrations/*/migration.sql")
-	contentURL := moderationSchema(t, dsn, "content", "../prisma/migrations/*/migration.sql")
+	accountURL := moderationSchema(t, dsn, "account", "../../../prisma/oauth/migrations/*/migration.sql")
+	contentURL := moderationSchema(t, dsn, "content", "../../../prisma/athub/migrations/*/migration.sql")
 	ctx := context.Background()
 	p, err := store.NewPostgres(ctx, accountURL)
 	if err != nil {

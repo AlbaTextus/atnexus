@@ -30,7 +30,19 @@ func ModuleHTTP(next http.Handler, timeout time.Duration, logger *slog.Logger, o
 	// panic here, so the stack has to be taken where the panic happened.
 	next = tracePanics(next)
 	if timeout > 0 {
-		next = http.TimeoutHandler(next, timeout, `{"error":"server_timeout"}`)
+		timed := http.TimeoutHandler(next, timeout, timeoutBody)
+		next = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// The listener gives the connection this same deadline, counted from
+			// a moment earlier, and so would close it just before the timeout
+			// reply is written. Keep it open long enough for that reply.
+			deadline := time.Now().Add(timeout + timeoutReplyGrace)
+			controller := http.NewResponseController(w)
+			_ = controller.SetReadDeadline(deadline)
+			_ = controller.SetWriteDeadline(deadline)
+			reply := &timeoutReply{ResponseWriter: w}
+			defer reply.send()
+			timed.ServeHTTP(reply, r)
+		})
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Request-ID", uuid.NewString())
@@ -89,6 +101,46 @@ func ModuleHTTP(next http.Handler, timeout time.Duration, logger *slog.Logger, o
 		}()
 		next.ServeHTTP(w, r)
 	})
+}
+
+const timeoutBody = `{"error":"server_timeout"}`
+
+// timeoutReplyGrace is how long a connection outlives the request deadline, so
+// that the timeout reply can still be sent.
+const timeoutReplyGrace = 5 * time.Second
+
+// timeoutReply gives the timeout reply its Content-Type. http.TimeoutHandler
+// writes that body without one, so the server would label it text/plain and
+// clients would not read the error code. The status is held back until the
+// first write shows which reply this is.
+type timeoutReply struct {
+	http.ResponseWriter
+	status int
+	sent   bool
+}
+
+func (w *timeoutReply) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+	}
+}
+
+func (w *timeoutReply) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	if !w.sent && w.status == http.StatusServiceUnavailable && string(body) == timeoutBody && w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	}
+	w.send()
+	return w.ResponseWriter.Write(body)
+}
+
+func (w *timeoutReply) send() {
+	if !w.sent && w.status != 0 {
+		w.sent = true
+		w.ResponseWriter.WriteHeader(w.status)
+	}
 }
 
 // tracedPanic carries a panic together with the stack of the goroutine it

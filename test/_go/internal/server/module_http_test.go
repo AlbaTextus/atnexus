@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -54,6 +55,75 @@ func TestModulePanicIsLoggedWithTheHandlerStack(t *testing.T) {
 		}
 		if !strings.Contains(logged.String(), "handler broke") || !strings.Contains(logged.String(), "panicInTheHandler") {
 			t.Fatalf("timeout %s: log does not point at the failing handler: %s", timeout, logged.String())
+		}
+	}
+}
+
+// moduleReply serves the module the way the server does: behind the gateway,
+// whose connection deadline is the module's own request deadline.
+func moduleReply(t *testing.T, method string, timeout time.Duration, handler http.HandlerFunc) (*http.Response, string) {
+	t.Helper()
+	server := httptest.NewServer(NewGateway(GatewayRoute{Prefixes: []string{"/api/v4"}, Handler: ModuleHTTP(handler, timeout, nil), Timeout: timeout}))
+	defer server.Close()
+	var sent io.Reader
+	if method != http.MethodGet {
+		sent = strings.NewReader(`{"novelId":2}`)
+	}
+	request, err := http.NewRequest(method, server.URL+"/api/v4/history", sent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return response, string(body)
+}
+
+// Clients read the error code out of a JSON reply, and tell a JSON reply by its
+// Content-Type. The timeout reply is written by the module wrapper itself, at
+// the moment the listener would otherwise close the connection.
+func TestModuleTimeoutReplyIsJSON(t *testing.T) {
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		response, body := moduleReply(t, method, 20*time.Millisecond, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/csv")
+			_, _ = io.Copy(io.Discard, r.Body)
+			<-r.Context().Done()
+		})
+		if response.StatusCode != http.StatusServiceUnavailable || body != `{"error":"server_timeout"}` {
+			t.Fatalf("%s: status=%d body=%s", method, response.StatusCode, body)
+		}
+		if got := response.Header.Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+			t.Fatalf("%s: Content-Type = %q, want JSON", method, got)
+		}
+	}
+}
+
+func TestModuleTimeoutKeepsHandlerReplies(t *testing.T) {
+	for _, tc := range []struct {
+		name, contentType string
+		status            int
+		body, want        string
+	}{
+		{"typed body", "text/csv", 200, "a,b", "text/csv"},
+		{"untyped body", "", 200, "plain words", "text/plain; charset=utf-8"},
+		{"empty unavailable", "", 503, "", ""},
+		{"typed unavailable", "text/plain; charset=utf-8", 503, `{"error":"server_timeout"}`, "text/plain; charset=utf-8"},
+	} {
+		response, body := moduleReply(t, http.MethodGet, time.Second, func(w http.ResponseWriter, r *http.Request) {
+			if tc.contentType != "" {
+				w.Header().Set("Content-Type", tc.contentType)
+			}
+			w.WriteHeader(tc.status)
+			io.WriteString(w, tc.body)
+		})
+		if response.StatusCode != tc.status || body != tc.body || response.Header.Get("Content-Type") != tc.want {
+			t.Errorf("%s: status=%d body=%q Content-Type=%q", tc.name, response.StatusCode, body, response.Header.Get("Content-Type"))
 		}
 	}
 }

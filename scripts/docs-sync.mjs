@@ -2,9 +2,10 @@ import { spawnSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
 
 // Keeps the documentation submodule in step with this repository:
-// checks out only the Markdown, follows the tracked branch, and records the
-// submodule commit here. Pass -m "<message>" to commit pending doc edits first.
-// Nothing is pushed: pushing the docs branch publishes the site.
+// checks out only the Markdown, merges the tracked remote branch, and records
+// the submodule commit here. Pass -m "<message>" to commit pending doc edits first.
+// Nothing is pushed: pushing the docs branch publishes the site, which happens
+// only after the feature branch has been merged (see AGENTS.md).
 
 const repo = fileURLToPath(new URL("../", import.meta.url))
 const submodule = "docs"
@@ -58,8 +59,10 @@ function main() {
   if (!fetched.ok) {
     throw new Error("拉取文档仓库失败。连不上 GitHub 时先设置 HTTPS_PROXY 再运行。")
   }
-  if (!git(["merge", "--ff-only", remote], { cwd: dir, check: false }).ok) {
-    throw new Error(`${submodule}/ 的 ${branch} 与 ${remote} 已分叉，请在 ${submodule}/ 内手动 rebase 后重试。`)
+  // Merge rather than rebase: commits already recorded by this repository must stay reachable.
+  if (!git(["merge", "--no-edit", remote], { cwd: dir, check: false }).ok) {
+    git(["merge", "--abort"], { cwd: dir, check: false })
+    throw new Error(`${submodule}/ 的 ${branch} 与 ${remote} 合并有冲突，已撤销合并。请在 ${submodule}/ 内手动合并后重试。`)
   }
 
   const head = git(["rev-parse", "HEAD"], { cwd: dir }).out

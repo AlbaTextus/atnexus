@@ -1,0 +1,97 @@
+name: 同步文档到 docs 仓库
+
+# docs/ 下的 Markdown 是文档站正文的来源。main 上的 docs/ 有变化时，把它镜像到
+# 文档站仓库的 content/ 并推送；那次推送会发布文档站。
+# 需要仓库密钥 DOCS_DEPLOY_KEY：文档站仓库一把带写权限的部署密钥的私钥。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 排队而不是取消：正在推送的同步不能被打断。
+concurrency:
+  group: sync-docs
+  cancel-in-progress: false
+
+env:
+  SOURCE_DIR: docs
+  DOCS_REPOSITORY: AlbaTextus/docs
+  DOCS_BRANCH: main
+  DOCS_CONTENT_DIR: content
+
+jobs:
+  sync:
+    name: 同步
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检查部署密钥
+        env:
+          DOCS_DEPLOY_KEY: ${{ secrets.DOCS_DEPLOY_KEY }}
+        run: |
+          if [ -z "$DOCS_DEPLOY_KEY" ]; then
+            echo "::error::缺少仓库密钥 DOCS_DEPLOY_KEY，无法推送到 $DOCS_REPOSITORY。"
+            exit 1
+          fi
+
+      # 始终取默认分支的最新内容：手动触发时选了别的分支也不会把未合并的文档发布出去，
+      # 重跑旧的运行也不会把文档退回旧版本。
+      - name: 检出本仓库的文档
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: source
+          sparse-checkout: ${{ env.SOURCE_DIR }}
+          persist-credentials: false
+
+      - name: 检出文档站仓库
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.DOCS_REPOSITORY }}
+          ref: ${{ env.DOCS_BRANCH }}
+          ssh-key: ${{ secrets.DOCS_DEPLOY_KEY }}
+          path: target
+
+      - name: 镜像并推送
+        run: |
+          set -euo pipefail
+
+          source_dir="source/$SOURCE_DIR"
+          if [ -z "$(find "$source_dir" -type f -name '*.md' -print -quit 2>/dev/null)" ]; then
+            echo "::error::$SOURCE_DIR/ 下没有 Markdown，已停止，以免清空文档站。"
+            exit 1
+          fi
+          revision=$(git -C source rev-parse --short HEAD)
+
+          cd target
+          rm -rf -- "$DOCS_CONTENT_DIR"
+          mkdir -p -- "$DOCS_CONTENT_DIR"
+          cp -R "../$source_dir/." "$DOCS_CONTENT_DIR/"
+
+          git add -A -- "$DOCS_CONTENT_DIR"
+          if git diff --cached --quiet; then
+            echo "文档没有变化，无需同步。" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --quiet -m "同步 atnexus@$revision 的文档"
+
+          # 文档站仓库可能刚好有别的推送（站点代码），变基后重试。
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:$DOCS_BRANCH"; then
+              echo "已把 atnexus@$revision 的文档推送到 $DOCS_REPOSITORY。" | tee -a "$GITHUB_STEP_SUMMARY"
+              git show --stat --format= HEAD
+              exit 0
+            fi
+            git pull --rebase origin "$DOCS_BRANCH"
+          done
+          echo "::error::推送到 $DOCS_REPOSITORY 连续失败。"
+          exit 1

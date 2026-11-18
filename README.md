@@ -2,7 +2,9 @@
 
 atnexus 是 ALBATEXTUS 的统一服务：一个 Go 程序运行 OAuth、图床、创作者平台和 ATHub 四个模块，前端位于 `web/`。
 
-本文件不再维护，说明统一写在文档站 <https://docs.albatextus.com>（源码在 [AlbaTextus/docs](https://github.com/AlbaTextus/docs) 的 `content/`）。
+Go 测试集中在 [`test/`](test/)，运行 `pnpm test:go` 执行测试套件。
+
+其余说明统一写在文档站 <https://docs.albatextus.com>（源码在 [AlbaTextus/docs](https://github.com/AlbaTextus/docs) 的 `content/`）。
 
 | 内容 | 文档 |
 | --- | --- |

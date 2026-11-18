@@ -185,7 +185,10 @@ func (m *Module) authorize(permission string, next http.Handler) http.Handler {
 				return
 			}
 			who = actor{ID: "user:" + id.UserID.String(), Admin: id.Role == "ADMIN" || id.Role == "SUPER_ADMIN"}
-			if permission != "upload" && !who.Admin {
+			// Only administrators use this API with a session. Other accounts' images
+			// are validated by OAuth and creatplat and stored through Save, so those
+			// accounts never choose a folder or a content type.
+			if !who.Admin {
 				respondError(w, 403, "permission_denied")
 				return
 			}

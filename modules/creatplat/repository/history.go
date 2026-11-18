@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -65,13 +66,26 @@ func (p *History) PrepareNovelRevisions(ctx context.Context, batch uuid.UUID, re
 	return tx.Commit(ctx)
 }
 
+// StaleRevisionBatches lists batches still pending although they were prepared
+// before the given time, oldest first.
+func (p *History) StaleRevisionBatches(ctx context.Context, before time.Time, limit int) ([]uuid.UUID, error) {
+	rows, err := p.pool.Query(ctx, `SELECT batch_id FROM novel_revisions WHERE status='pending' AND created_at<$1
+		GROUP BY batch_id ORDER BY min(created_at) LIMIT $2`, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+}
+
 func (p *History) FinishNovelRevisions(ctx context.Context, batch uuid.UUID, committed bool) error {
 	status := "failed"
 	if committed {
 		status = "completed"
 	}
+	// A commit is authoritative: it also corrects a batch that was given up on
+	// while its content transaction was still running.
 	tag, err := p.pool.Exec(ctx, `UPDATE novel_revisions SET status=$2,completed_at=now()
-		WHERE batch_id=$1 AND status='pending'`, batch, status)
+		WHERE batch_id=$1 AND (status='pending' OR ($2='completed' AND status='failed'))`, batch, status)
 	if err == nil && tag.RowsAffected() == 0 {
 		return p.notFound
 	}

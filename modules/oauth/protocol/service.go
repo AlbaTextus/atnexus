@@ -65,7 +65,11 @@ func (s *Service) ValidateAuthorize(ctx context.Context, in AuthorizeRequest) (s
 		return store.Client{}, oauthError("invalid_request", "redirect_uri is invalid", 400)
 	}
 	client, err := s.store.ClientByID(ctx, in.ClientID)
-	if errors.Is(err, store.ErrNotFound) || err != nil || !client.IsActive {
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		// An outage must not tell the application that its client is invalid.
+		return store.Client{}, oauthError("server_error", "could not load client", 500)
+	}
+	if err != nil || !client.IsActive {
 		return store.Client{}, oauthError("unauthorized_client", "client is unknown or inactive", 400)
 	}
 	if !contains(client.RedirectURIs, in.RedirectURI) {
@@ -270,7 +274,8 @@ func (s *Service) Revoke(ctx context.Context, clientID, secret, tokenValue strin
 func (s *Service) Introspect(ctx context.Context, clientID, secret, tokenValue string) (map[string]any, *Error) {
 	// Introspection discloses token subjects and scopes, so a client_id alone
 	// (all a public client has) must not be enough to call it.
-	if _, authErr := s.authenticateClient(ctx, clientID, secret, true); authErr != nil {
+	client, authErr := s.authenticateClient(ctx, clientID, secret, true)
+	if authErr != nil {
 		return nil, authErr
 	}
 	result := map[string]any{"active": false}
@@ -283,6 +288,11 @@ func (s *Service) Introspect(ctx context.Context, clientID, secret, tokenValue s
 	}
 	if err != nil {
 		return nil, oauthError("server_error", "could not introspect token", 500)
+	}
+	// A client learns only about tokens issued to it. Another client's token is
+	// reported exactly like an unknown one, so its existence is not disclosed.
+	if t.ClientID != client.ID {
+		return result, nil
 	}
 	result["active"] = true
 	result["client_id"] = t.ClientID

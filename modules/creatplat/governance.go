@@ -129,6 +129,20 @@ func (a *Governance) QueueMutation(w http.ResponseWriter, r *http.Request, call 
 			return true
 		}
 	}
+	// A change the content API would refuse right now is answered at once
+	// instead of waiting for a reviewer to find out.
+	if refusal := a.rehearse(r, payload, actor); refusal != nil {
+		if refusal.status >= 500 {
+			apibase.WriteError(w, 503, "reviews_unavailable")
+			return true
+		}
+		for key, values := range refusal.header {
+			w.Header()[key] = values
+		}
+		w.WriteHeader(refusal.status)
+		_, _ = w.Write(refusal.body.Bytes())
+		return true
+	}
 	contributor, _ := json.Marshal(actor)
 	item, err := reviews.QueueATHubReview(r.Context(), store.ATHubReview{
 		ID: call.ID, UserID: call.UserID, Contributor: contributor, Operation: op, Method: r.Method, Path: r.URL.Path, Query: r.URL.RawQuery, Payload: payload,
@@ -145,6 +159,28 @@ func (a *Governance) QueueMutation(w http.ResponseWriter, r *http.Request, call 
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]any{"review_id": item.ID, "status": "pending", "message": "已提交审核，通过后生效。"})
 	return true
+}
+
+// rehearse runs the change against the content API and rolls it back. It
+// returns the reply when the change would fail, and nil when it would succeed
+// or no content executor is attached. Approval still applies the change to
+// whatever the content is then, so this only catches what is wrong already.
+func (a *Governance) rehearse(r *http.Request, payload []byte, actor athub.Contributor) *reviewResponse {
+	if a.content == nil {
+		return nil
+	}
+	ctx := athub.WithRehearsal(athub.WithContributor(r.Context(), actor))
+	request, err := http.NewRequestWithContext(ctx, r.Method, r.URL.RequestURI(), bytes.NewReader(payload))
+	if err != nil {
+		return &reviewResponse{status: 500}
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response := &reviewResponse{header: make(http.Header)}
+	a.content.ServeHTTP(response, request)
+	if response.status < 400 {
+		return nil
+	}
+	return response
 }
 
 type reviewResponse struct {

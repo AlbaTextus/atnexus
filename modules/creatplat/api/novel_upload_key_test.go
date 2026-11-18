@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/AlbaTextus/atnexus/internal/store"
+	"github.com/AlbaTextus/atnexus/modules/athub"
 	athubaccess "github.com/AlbaTextus/atnexus/modules/athub/access"
 	"github.com/google/uuid"
 )
@@ -68,14 +69,20 @@ func (s *reviewedUploadStore) QueueATHubReview(_ context.Context, item store.ATH
 
 // imageHost stands in for the built-in image host.
 type imageHost struct {
-	saved            int
-	category, entity string
+	saved                      int
+	uploader, category, entity string
+	removed                    []string
 }
 
-func (h *imageHost) Save(_ context.Context, category, entityID, _, _ string, _ []byte) (string, error) {
+func (h *imageHost) Save(_ context.Context, uploader, category, entityID, _, _ string, _ []byte) (string, error) {
 	h.saved++
-	h.category, h.entity = category, entityID
+	h.uploader, h.category, h.entity = uploader, category, entityID
 	return "https://images.test/" + category + "/" + entityID + "/1.jpg", nil
+}
+
+func (h *imageHost) Remove(_ context.Context, category, entityID, location string) error {
+	h.removed = append(h.removed, category+" "+entityID+" "+location)
+	return nil
 }
 
 type uploadFixture struct {
@@ -85,6 +92,11 @@ type uploadFixture struct {
 	// What the content API received, if the upload reached it.
 	content *http.Request
 	body    []byte
+	// What the content API answers; 201 unless a test says otherwise.
+	contentStatus int
+	// How often a change was rehearsed, and what a rehearsal answers (200).
+	rehearsed       int
+	rehearsalStatus int
 }
 
 func newUploadFixture(t *testing.T) *uploadFixture {
@@ -109,9 +121,26 @@ func (f *uploadFixture) wire(t *testing.T, st store.ATHubStore) {
 		t.Fatal(err)
 	}
 	access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A reviewed change is rehearsed first; only a real call is recorded.
+		if athub.Rehearsing(r.Context()) {
+			f.rehearsed++
+			status := 200
+			if f.rehearsalStatus != 0 {
+				status = f.rehearsalStatus
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(`{"error":"novel_not_found"}`))
+			return
+		}
 		f.content = r
 		f.body, _ = io.ReadAll(r.Body)
 		w.Header().Set("Content-Type", "application/json")
+		if f.contentStatus != 0 {
+			w.WriteHeader(f.contentStatus)
+			_, _ = w.Write([]byte(`{"error":"refused"}`))
+			return
+		}
 		w.WriteHeader(201)
 		_, _ = w.Write([]byte(`{"id":5}`))
 	}))
@@ -234,6 +263,39 @@ func TestIllustrationUploadAcceptsAPersonalKey(t *testing.T) {
 	if f.store.illustrationChecked != uuid.Nil {
 		t.Fatal("key upload took the session path")
 	}
+	if f.host.uploader != f.store.identity.UserID.String() || len(f.host.removed) != 0 {
+		t.Fatalf("uploader=%q removed=%v", f.host.uploader, f.host.removed)
+	}
+}
+
+// Only the content API knows whether the novel exists. When it refuses the
+// illustration, the image stored for it must not stay behind.
+func TestRefusedIllustrationIsRemovedFromTheImageHost(t *testing.T) {
+	const stored = "book/illustrations 17 https://images.test/book/illustrations/17/1.jpg"
+	for _, scenario := range []struct {
+		name    string
+		status  int
+		removed bool
+	}{
+		{"unknown novel", 404, true},
+		{"rejected content", 400, true},
+		// The outcome is unknown: the illustration may have been recorded.
+		{"content failure", 503, false},
+	} {
+		for name, authenticate := range map[string]func(*http.Request) *http.Request{"key": withKey, "session": withSession} {
+			t.Run(scenario.name+" with "+name, func(t *testing.T) {
+				f := newUploadFixture(t)
+				f.contentStatus = scenario.status
+				w := f.serve(authenticate(uploadRequest(t, illustrationTarget, picture(t))))
+				if w.Code != scenario.status || f.host.saved != 1 {
+					t.Fatalf("status=%d saved=%d body=%s", w.Code, f.host.saved, w.Body)
+				}
+				if scenario.removed != (len(f.host.removed) == 1 && f.host.removed[0] == stored) {
+					t.Fatalf("removed=%v", f.host.removed)
+				}
+			})
+		}
+	}
 }
 
 func TestKeyIllustrationUploadIsReviewed(t *testing.T) {
@@ -252,6 +314,28 @@ func TestKeyIllustrationUploadIsReviewed(t *testing.T) {
 		reviewed.queued.Path != "/api/v2/illustrations" || reviewed.queued.Query != "novelId=17" ||
 		stored.URL != "https://images.test/book/illustrations/17/1.jpg" {
 		t.Fatalf("review lost the novel or image: %+v", reviewed.queued)
+	}
+	if f.rehearsed != 1 || len(f.host.removed) != 0 {
+		t.Fatalf("rehearsed=%d removed=%v", f.rehearsed, f.host.removed)
+	}
+}
+
+// A change the content API would refuse today is answered at once: it is not
+// queued for a reviewer, and the image stored for it does not stay behind.
+func TestReviewedUploadIsRefusedBeforeItIsQueued(t *testing.T) {
+	f := newUploadFixture(t)
+	reviewed := &reviewedUploadStore{uploadStore: f.store}
+	f.wire(t, reviewed)
+	f.rehearsalStatus = 404
+	w := f.serve(withKey(uploadRequest(t, illustrationTarget, picture(t))))
+	if w.Code != 404 || !strings.Contains(w.Body.String(), "novel_not_found") {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body)
+	}
+	if reviewed.queued != nil || f.content != nil {
+		t.Fatal("a refused change was queued or applied")
+	}
+	if len(f.host.removed) != 1 {
+		t.Fatalf("removed=%v", f.host.removed)
 	}
 }
 

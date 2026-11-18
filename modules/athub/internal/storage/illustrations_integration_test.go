@@ -26,7 +26,7 @@ func testIllustrationDeletion(t *testing.T, ctx context.Context, st *Postgres) {
 		t.Fatal(err)
 	}
 	var changes []RevisionDraft
-	st.RecordChanges = func(_ context.Context, drafts []RevisionDraft) (func(context.Context, bool) error, error) {
+	st.RecordChanges = func(_ context.Context, _ string, drafts []RevisionDraft) (func(context.Context, bool) error, error) {
 		changes = append(changes, drafts...)
 		return func(_ context.Context, committed bool) error {
 			if !committed {

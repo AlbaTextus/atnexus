@@ -19,6 +19,15 @@ model MutationReceipt {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 }
 
+// Written by the content transaction of every recorded change. Its presence
+// proves that the revision batch with this ID was committed.
+model RevisionReceipt {
+  id String @id @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([createdAt])
+}
+
 model Platform {
   id      Int      @id @default(autoincrement())
   name    String

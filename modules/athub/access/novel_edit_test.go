@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/AlbaTextus/atnexus/internal/store"
+	"github.com/AlbaTextus/atnexus/modules/athub"
 	"github.com/google/uuid"
 )
 
@@ -49,6 +50,11 @@ func TestAccountNovelEditAdmissionAndReview(t *testing.T) {
 			dispatched := false
 			payload := `{"platformId":1,"title":"修改后的小说","status":"COMPLETED","tagIds":[2]}`
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// A reviewed change is rehearsed first; only a real call counts.
+				if athub.Rehearsing(r.Context()) {
+					w.WriteHeader(200)
+					return
+				}
 				dispatched = true
 				body, _ := io.ReadAll(r.Body)
 				if r.Method != "PUT" || r.URL.Path != "/api/v2/novelinfo" || r.URL.RawQuery != "id=17" ||

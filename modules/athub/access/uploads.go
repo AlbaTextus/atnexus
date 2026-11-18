@@ -30,10 +30,10 @@ func (a *Access) UploadCoverWithKey(w http.ResponseWriter, r *http.Request, save
 }
 
 // UploadIllustrationWithKey admits an illustration upload. Once admitted, save
-// stores the image and returns its novel with the JSON the content API expects,
+// stores the image for the key's user and returns its novel with the JSON the content API expects,
 // or false when it has already replied. Review and history then apply as they
 // do to every illustration.
-func (a *Access) UploadIllustrationWithKey(w http.ResponseWriter, r *http.Request, save func(http.ResponseWriter, *http.Request) (int32, []byte, bool)) {
+func (a *Access) UploadIllustrationWithKey(w http.ResponseWriter, r *http.Request, save func(http.ResponseWriter, *http.Request, uuid.UUID) (int32, []byte, bool)) {
 	if a.content == nil {
 		reply(w, 503, "illustrations_unavailable")
 		return
@@ -43,7 +43,7 @@ func (a *Access) UploadIllustrationWithKey(w http.ResponseWriter, r *http.Reques
 	request.URL = &url.URL{Path: "/api/v2/illustrations"}
 	request.RequestURI = request.URL.String()
 	a.admit(func(w http.ResponseWriter, r *http.Request, call store.ATHubCall) {
-		novelID, body, ok := save(w, r)
+		novelID, body, ok := save(w, r, *call.UserID)
 		if !ok {
 			return
 		}

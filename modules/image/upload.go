@@ -313,6 +313,10 @@ func (m *Module) saveUpload(ctx context.Context, fileName, fileType string, body
 	if receipt != "" {
 		metadata["UploadSession"] = receipt
 	}
+	// Who stored the file: "user:<id>" or "key:<id>". Absent on older files.
+	if who, _ := ctx.Value(actorKey{}).(actor); who.ID != "" {
+		metadata["Uploader"] = who.ID
+	}
 	if folder != "" {
 		metadata["Directory"] = folder + "/"
 	}
@@ -458,11 +462,15 @@ func (m *Module) uploadResult(id string, q url.Values) []map[string]string {
 }
 
 // Save stores an image for another module in this process, which has already
-// authenticated its user, and returns the public file URL.
-func (m *Module) Save(ctx context.Context, category, entityID, fileName, contentType string, data []byte) (string, error) {
+// authenticated its user, and returns the public file URL. uploader is that
+// user's account ID and is recorded with the file.
+func (m *Module) Save(ctx context.Context, uploader, category, entityID, fileName, contentType string, data []byte) (string, error) {
 	folder, err := categoryFolder(category, "", entityID)
 	if err != nil {
 		return "", err
+	}
+	if uploader != "" {
+		ctx = context.WithValue(ctx, actorKey{}, actor{ID: "user:" + uploader})
 	}
 	q := url.Values{"uploadFolder": {folder}, "returnFormat": {"full"}}
 	result, err := m.saveUpload(ctx, fileName, contentType, bytes.NewReader(data), int64(len(data)), q, "")
@@ -471,4 +479,27 @@ func (m *Module) Save(ctx context.Context, category, entityID, fileName, content
 		return "", err
 	}
 	return result[0]["src"], nil
+}
+
+// Remove deletes a file that Save returned for the same category and entity.
+// Any other location, including a file of another entity or one hosted
+// elsewhere, is left alone, and a file that is already gone is not an error.
+func (m *Module) Remove(ctx context.Context, category, entityID, location string) error {
+	folder, err := categoryFolder(category, "", entityID)
+	if err != nil {
+		return err
+	}
+	prefix := fileURL(m.cfg.PublicURL, "")
+	if !strings.HasPrefix(location, prefix) {
+		return nil
+	}
+	id, err := url.PathUnescape(strings.TrimPrefix(location, prefix))
+	if err != nil || !strings.HasPrefix(id, folder+"/") || !validKey(id) {
+		return nil
+	}
+	if err = m.deleteFile(ctx, id); err != nil && !errors.Is(err, ErrNotFound) {
+		m.deps.Logger.Error("image removal failed", "error", safeError(err))
+		return err
+	}
+	return nil
 }

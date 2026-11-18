@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/AlbaTextus/atnexus/internal/store"
+	"github.com/AlbaTextus/atnexus/modules/athub"
 	"github.com/AlbaTextus/atnexus/pkg/auth"
 	"github.com/google/uuid"
 )
@@ -130,6 +131,11 @@ func TestKeyIllustrationUploadFollowsPermissionsAndReview(t *testing.T) {
 			}
 			dispatched := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// A reviewed change is rehearsed first; only a real call counts.
+				if athub.Rehearsing(r.Context()) {
+					w.WriteHeader(200)
+					return
+				}
 				dispatched = true
 				body, _ := io.ReadAll(r.Body)
 				if r.Method != "POST" || r.URL.Path != "/api/v2/illustrations" || r.URL.RawQuery != "novelId=17" ||
@@ -143,7 +149,7 @@ func TestKeyIllustrationUploadFollowsPermissionsAndReview(t *testing.T) {
 			request.Header.Set("Authorization", "Bearer "+uploadKey)
 			request.Header.Set("Content-Type", "multipart/form-data; boundary=x")
 			response := httptest.NewRecorder()
-			access.UploadIllustrationWithKey(response, request, func(w http.ResponseWriter, r *http.Request) (int32, []byte, bool) {
+			access.UploadIllustrationWithKey(response, request, func(w http.ResponseWriter, r *http.Request, _ uuid.UUID) (int32, []byte, bool) {
 				saved = true
 				if base.call.ID == uuid.Nil {
 					t.Fatal("illustration stored before the call was admitted")
@@ -184,7 +190,7 @@ func TestKeyIllustrationUploadNeedsTheContentAPI(t *testing.T) {
 	request := httptest.NewRequest("POST", "/api/v4/account/athub/novels/17/illustrations", strings.NewReader("image"))
 	request.Header.Set("Authorization", "Bearer "+uploadKey)
 	response := httptest.NewRecorder()
-	accessFor(t, st).UploadIllustrationWithKey(response, request, func(http.ResponseWriter, *http.Request) (int32, []byte, bool) {
+	accessFor(t, st).UploadIllustrationWithKey(response, request, func(http.ResponseWriter, *http.Request, uuid.UUID) (int32, []byte, bool) {
 		t.Fatal("illustration stored without a content API to record it")
 		return 0, nil, false
 	})

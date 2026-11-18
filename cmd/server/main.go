@@ -190,6 +190,7 @@ func run(logger *slog.Logger) error {
 	defer background.Wait()
 	defer stop()
 	background.Go(func() { st.RunExpiryPurge(signalCtx, logger) })
+	background.Go(func() { access.ReconcileRevisions(signalCtx, hub) })
 	// Edited legacy rows mean the old service is still writing: stop serving,
 	// exactly as the startup check used to refuse to start.
 	var legacyMismatch error

@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "next-view-transitions";
 import { NovelCover } from "./novel-cover";
 import { MotionConfig } from "framer-motion";
-import { Archive, CircleCheck, CircleEllipsis, Tags, UserRound } from "lucide-react";
+import { Archive, BookOpenText, CircleCheck, CircleEllipsis, ListTree, Tags, UserRound } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -56,11 +56,11 @@ export function NovelDetailView({novel: savedNovel,catalogLoading=false,catalogE
   <ContributorsCard novelId={novel.id} creator={novel.contributions?.creator} contributors={novel.contributions?.contributors} actions={actions}/>
   </aside>
   <div className="main-column">
-    {(novel.synopsis.length > 0 || editor?.mode && editor.allowed) && <section className="panel introduction" aria-label="作品简介"><ContentSectionHeading>简介</ContentSectionHeading><div className="synopsis"><NovelEditable field="summary" block>{novel.synopsis.length ? novel.synopsis.map((p,i)=><p key={i}>{p}</p>) : "暂无简介"}</NovelEditable></div></section>}
+    {(novel.synopsis.length > 0 || editor?.mode && editor.allowed) && <section className="panel introduction" aria-label="作品简介"><ContentSectionHeading icon={BookOpenText}>简介</ContentSectionHeading><div className="synopsis"><NovelEditable field="summary" block>{novel.synopsis.length ? novel.synopsis.map((p,i)=><p key={i}>{p}</p>) : "暂无简介"}</NovelEditable></div></section>}
     <GallerySection novelId={Number(novel.id)}/>
   </div>
     {catalogLoading || catalogError ? <section className="panel novel-chapter-catalog" aria-labelledby="novel-catalog-heading">
-      <ContentSectionHeading id="novel-catalog-heading">目录</ContentSectionHeading>
+      <ContentSectionHeading id="novel-catalog-heading" icon={ListTree} className="catalog-heading">目录</ContentSectionHeading>
       {catalogLoading ? <div className="novel-page-loading" role="status">正在加载目录…</div> : <div role="alert">{catalogError}</div>}
     </section> : <ChapterTree volumes={novel.volumes} chapters={novel.chapters}/>}
     <AuthorSection key={`${novel.id}:${novel.authorId}`} novelId={novel.id} authorId={novel.authorId}/>

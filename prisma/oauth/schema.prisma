@@ -53,7 +53,7 @@ model User {
 }
 
 // Legacy migration source only after creator cutover. Runtime creator writes use
-// modules/creatplat/prisma and CREATPLAT_DATABASE_URL. Keep existing source rows.
+// prisma/creatplat and CREATPLAT_DATABASE_URL. Keep existing source rows.
 model NovelRevision {
   id String @id @db.Uuid
   batchId String @map("batch_id") @db.Uuid

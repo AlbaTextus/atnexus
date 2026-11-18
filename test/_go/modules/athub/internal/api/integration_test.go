@@ -49,7 +49,7 @@ func TestUploadIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	paths, err := filepath.Glob("../../prisma/migrations/*/migration.sql")
+	paths, err := filepath.Glob("../../../../prisma/athub/migrations/*/migration.sql")
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("migrations: %v", err)
 	}

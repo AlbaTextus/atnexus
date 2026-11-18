@@ -48,7 +48,7 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	migrations, err := filepath.Glob("../../prisma/migrations/*/migration.sql")
+	migrations, err := filepath.Glob("../../../../prisma/athub/migrations/*/migration.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

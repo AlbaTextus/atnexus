@@ -76,8 +76,8 @@ func splitFixture(t *testing.T) (*store.Postgres, *Postgres, *pgxpool.Pool, *pgx
 	if sourceURL == "" || targetURL == "" {
 		t.Skip("set OAUTH_TEST_DATABASE_URL and CREATPLAT_TEST_DATABASE_URL; tests use unique disposable schemas in separate databases")
 	}
-	sourceURL = testSchema(t, sourceURL, "../../../prisma/migrations/*/migration.sql")
-	targetURL = testSchema(t, targetURL, "../prisma/migrations/*/migration.sql")
+	sourceURL = testSchema(t, sourceURL, "../../../prisma/oauth/migrations/*/migration.sql")
+	targetURL = testSchema(t, targetURL, "../../../prisma/creatplat/migrations/*/migration.sql")
 	ctx := context.Background()
 	source, err := pgxpool.New(ctx, sourceURL)
 	if err != nil {

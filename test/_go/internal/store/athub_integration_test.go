@@ -59,7 +59,7 @@ func athubTestStore(t *testing.T) *Postgres {
 		t.Fatal(err)
 	}
 	for _, migration := range []string{"20261110000000_athub_user_keys", "20261110010000_athub_single_key", "20261110020000_athub_admin_disable", "20261111000000_athub_key_limits", "20261111010000_enable_level_2", "20261111020000_athub_permissions_reviews", "20261117000000_athub_key_call_counter"} {
-		sql, err := os.ReadFile("../../prisma/migrations/" + migration + "/migration.sql")
+		sql, err := os.ReadFile("../../prisma/oauth/migrations/" + migration + "/migration.sql")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -315,7 +315,7 @@ func TestATHubSingleKeyMigrationRetainsHistory(t *testing.T) {
 	if err := p.BeginATHubCall(ctx, call); err != nil {
 		t.Fatal(err)
 	}
-	sql, err := os.ReadFile("../../prisma/migrations/20261110010000_athub_single_key/migration.sql")
+	sql, err := os.ReadFile("../../prisma/oauth/migrations/20261110010000_athub_single_key/migration.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

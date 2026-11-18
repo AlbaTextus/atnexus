@@ -138,10 +138,10 @@ try {
     await copySource(path.join(repo, item), path.join(source, item))
   }
   await cp(path.join(repo, ".env.example"), path.join(bundle, ".env.example"))
-  await cp(path.join(source, "prisma"), path.join(bundle, "database/account"), { recursive: true })
-  await cp(path.join(source, "modules/athub/prisma"), path.join(bundle, "database/content"), { recursive: true })
-  await cp(path.join(source, "modules/creatplat/prisma"), path.join(bundle, "database/creator"), { recursive: true })
-  await cp(path.join(source, "modules/image/prisma"), path.join(bundle, "database/image"), { recursive: true })
+  await cp(path.join(source, "prisma/oauth"), path.join(bundle, "database/account"), { recursive: true })
+  await cp(path.join(source, "prisma/athub"), path.join(bundle, "database/content"), { recursive: true })
+  await cp(path.join(source, "prisma/creatplat"), path.join(bundle, "database/creator"), { recursive: true })
+  await cp(path.join(source, "prisma/image"), path.join(bundle, "database/image"), { recursive: true })
 
   console.log("[2/5] Cross-compiling Go server for linux/amd64")
   run("go", ["build", "-trimpath", "-ldflags=-s -w", "-o", path.join(bundle, "atnexus"), "./cmd/server"],

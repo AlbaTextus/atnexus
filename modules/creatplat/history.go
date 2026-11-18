@@ -20,8 +20,87 @@ import (
 // History owns contribution recording and revision queries. The current account
 // database remains the transitional persistence adapter.
 type History struct {
-	store  any
-	logger *slog.Logger
+	store   any
+	logger  *slog.Logger
+	avatars func(context.Context, []uuid.UUID) (map[uuid.UUID]string, error)
+}
+
+// ShowCurrentAvatars makes history and contributor replies carry each
+// account's present avatar in place of the one recorded with the revision.
+func (a *History) ShowCurrentAvatars(lookup func(context.Context, []uuid.UUID) (map[uuid.UUID]string, error)) {
+	a.avatars = lookup
+}
+
+// currentAvatars rewrites the avatar of every given contributor that has an
+// account. When the lookup fails the recorded avatars are served unchanged.
+func (a *History) currentAvatars(ctx context.Context, people []*json.RawMessage) {
+	if a.avatars == nil {
+		return
+	}
+	type slot struct {
+		raw    *json.RawMessage
+		person map[string]json.RawMessage
+		id     uuid.UUID
+	}
+	var slots []slot
+	var ids []uuid.UUID
+	seen := map[uuid.UUID]bool{}
+	for _, raw := range people {
+		var person map[string]json.RawMessage
+		var id uuid.UUID
+		if json.Unmarshal(*raw, &person) != nil || person == nil || json.Unmarshal(person["id"], &id) != nil || id == uuid.Nil {
+			continue
+		}
+		slots = append(slots, slot{raw, person, id})
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	avatars, err := a.avatars(ctx, ids)
+	if err != nil {
+		a.logger.Warn("history avatar lookup failed", "error", err)
+		return
+	}
+	for _, s := range slots {
+		if avatar, ok := avatars[s.id]; ok {
+			s.person["avatar"], _ = json.Marshal(avatar)
+			*s.raw, _ = json.Marshal(s.person)
+		}
+	}
+}
+
+func (a *History) refreshAvatars(ctx context.Context, result any) any {
+	switch value := result.(type) {
+	case repository.NovelHistory:
+		people := make([]*json.RawMessage, len(value.Revisions))
+		for i := range value.Revisions {
+			people[i] = &value.Revisions[i].Contributor
+		}
+		a.currentAvatars(ctx, people)
+		return value
+	case json.RawMessage:
+		var board struct {
+			Creator      json.RawMessage   `json:"creator"`
+			Contributors []json.RawMessage `json:"contributors"`
+		}
+		if a.avatars == nil || json.Unmarshal(value, &board) != nil {
+			return result
+		}
+		people := []*json.RawMessage{&board.Creator}
+		for i := range board.Contributors {
+			people = append(people, &board.Contributors[i])
+		}
+		a.currentAvatars(ctx, people)
+		if board.Contributors == nil {
+			board.Contributors = []json.RawMessage{}
+		}
+		return board
+	}
+	return result
 }
 
 func NewHistory(st any, logger *slog.Logger) *History {
@@ -238,5 +317,5 @@ func (a *History) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(result)
+	_ = json.NewEncoder(w).Encode(a.refreshAvatars(r.Context(), result))
 }

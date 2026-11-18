@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/AlbaTextus/atnexus/internal/config"
 	"github.com/AlbaTextus/atnexus/internal/store"
@@ -64,7 +65,11 @@ func (a *Base) RemoveReplacedImage(ctx context.Context, category, entityID, prev
 			return
 		}
 	}
-	if err := a.Images.Remove(context.WithoutCancel(ctx), category, entityID, previous); err != nil {
+	// The removal outlives a request that has ended, but the image database is
+	// not waited for without limit. The host finishes a removal it has begun.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := a.Images.Remove(ctx, category, entityID, previous); err != nil {
 		a.Log.Warn("replaced image was not removed", "category", category)
 	}
 }

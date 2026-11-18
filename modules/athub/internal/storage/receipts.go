@@ -68,3 +68,36 @@ func (p *Postgres) DeleteRevisionReceipts(ctx context.Context, before time.Time)
 	_, err := p.pool.Exec(ctx, `DELETE FROM "RevisionReceipt" WHERE "createdAt"<$1`, before)
 	return err
 }
+
+// A change that starts to point at a stored image and the removal of that
+// image take the same lock, so neither acts on an outdated view of the other.
+const imageLock = `SELECT pg_advisory_xact_lock(hashtextextended($1,118))`
+
+// HoldImage makes the change in progress wait for a removal of the image at
+// location that is under way, and makes later removals wait until the change
+// has ended. The caller then checks that the image is still stored.
+func (p *Postgres) HoldImage(ctx context.Context, location string) error {
+	_, err := p.db(ctx).Exec(ctx, imageLock, location)
+	return err
+}
+
+// ReleaseImage calls remove unless a novel cover or illustration points to
+// location, with or without a query or fragment after it. A change that would
+// start to point at it waits until remove has returned, and then finds the
+// image gone.
+func (p *Postgres) ReleaseImage(ctx context.Context, location string, remove func(context.Context) error) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.WithoutCancel(ctx))
+	if _, err := tx.Exec(ctx, imageLock, location); err != nil {
+		return err
+	}
+	var used bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM "Novel" WHERE starts_with("coverUrl",$1))
+		OR EXISTS(SELECT 1 FROM "Illustration" WHERE starts_with(url,$1))`, location).Scan(&used); err != nil || used {
+		return err
+	}
+	return remove(ctx)
+}

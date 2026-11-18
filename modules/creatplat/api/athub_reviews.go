@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +24,31 @@ func (a *API) SetATHubReviewExecutor(execute store.ATHubReviewExecutor) {
 // SetATHubReceiptForgetter releases the content replay receipt of a decided review.
 func (a *API) SetATHubReceiptForgetter(forget func(context.Context, string) error) {
 	a.athubReceiptForgetter = forget
+}
+
+// SetImageRelease supplies the host's way of deleting a stored image once
+// nothing refers to it. Without it, decided reviews leave their images.
+func (a *API) SetImageRelease(release func(ctx context.Context, category, entityID, location string)) {
+	a.releaseImage = release
+}
+
+// discardUnrecordedIllustration hands the image of a reviewed illustration
+// upload back to the host. An upload that became an illustration is referenced
+// and stays. One that was rejected, refused by the content API, or answered
+// with the same picture the novel already had under another address is
+// referenced by nothing, and is deleted.
+func (a *API) discardUnrecordedIllustration(ctx context.Context, item store.ATHubReview) {
+	if a.releaseImage == nil || item.Method != http.MethodPost || item.Path != "/api/v2/illustrations" || item.Status == "pending" {
+		return
+	}
+	var upload struct {
+		URL string `json:"url"`
+	}
+	query, err := url.ParseQuery(item.Query)
+	if err != nil || query.Get("novelId") == "" || json.Unmarshal(item.Payload, &upload) != nil || upload.URL == "" {
+		return
+	}
+	a.releaseImage(ctx, "book/illustrations", query.Get("novelId"), upload.URL)
 }
 
 func (a *API) athubReviews(w http.ResponseWriter, r *http.Request) {
@@ -105,6 +131,7 @@ func (a *API) athubReviews(w http.ResponseWriter, r *http.Request) {
 			}
 			cancel()
 		}
+		a.discardUnrecordedIllustration(r.Context(), item)
 		a.populateReviewAvatars(r.Context(), &item)
 		writeJSON(audit, 200, item)
 		return

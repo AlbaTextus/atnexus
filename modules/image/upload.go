@@ -484,17 +484,30 @@ func (m *Module) Save(ctx context.Context, uploader, category, entityID, fileNam
 // Remove deletes a file that Save returned for the same category and entity.
 // Any other location, including a file of another entity or one hosted
 // elsewhere, is left alone, and a file that is already gone is not an error.
+// An empty entity accepts that category's file of any entity, for callers that
+// know a file only by its address.
+//
+// The address must be written exactly as Save returned it. Callers decide that
+// a file is unused by comparing addresses, so another spelling of an address
+// that is still in use must never reach its file.
 func (m *Module) Remove(ctx context.Context, category, entityID, location string) error {
+	id, ok := m.hostedFile(location)
+	if !ok || fileURL(m.cfg.PublicURL, id) != location {
+		return nil
+	}
+	if entityID == "" {
+		// Stored as <root>/<entity>/<kind>/<file>.
+		segments := strings.Split(id, "/")
+		if len(segments) < 2 || !validEntity(segments[0], segments[1]) {
+			return nil
+		}
+		entityID = segments[1]
+	}
 	folder, err := categoryFolder(category, "", entityID)
 	if err != nil {
 		return err
 	}
-	prefix := fileURL(m.cfg.PublicURL, "")
-	if !strings.HasPrefix(location, prefix) {
-		return nil
-	}
-	id, err := url.PathUnescape(strings.TrimPrefix(location, prefix))
-	if err != nil || !strings.HasPrefix(id, folder+"/") || !validKey(id) {
+	if !strings.HasPrefix(id, folder+"/") {
 		return nil
 	}
 	if err = m.deleteFile(ctx, id); err != nil && !errors.Is(err, ErrNotFound) {
@@ -502,4 +515,44 @@ func (m *Module) Remove(ctx context.Context, category, entityID, location string
 		return err
 	}
 	return nil
+}
+
+// Address returns the address Save gave the file that location names, when
+// location is one of this host's file addresses in any spelling, and ""
+// otherwise. It is the address the file is removed under.
+func (m *Module) Address(location string) string {
+	id, ok := m.hostedFile(location)
+	if !ok {
+		return ""
+	}
+	return fileURL(m.cfg.PublicURL, id)
+}
+
+// Missing reports whether location names a file of this host that is not
+// stored here: it was deleted, or never existed. An address hosted elsewhere
+// is never missing.
+func (m *Module) Missing(ctx context.Context, location string) (bool, error) {
+	id, ok := m.hostedFile(location)
+	if !ok {
+		return false, nil
+	}
+	var stored bool
+	err := m.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM image_files WHERE id=$1 AND state='ready')`, id).Scan(&stored)
+	return !stored, err
+}
+
+// hostedFile resolves an address among this host's file addresses to the id of
+// the file it names, however the address is spelled.
+func (m *Module) hostedFile(location string) (string, bool) {
+	prefix := fileURL(m.cfg.PublicURL, "")
+	if !strings.HasPrefix(location, prefix) {
+		return "", false
+	}
+	rest, _, _ := strings.Cut(strings.TrimPrefix(location, prefix), "#")
+	rest, _, _ = strings.Cut(rest, "?")
+	id, err := url.PathUnescape(rest)
+	if err != nil || !validKey(id) {
+		return "", false
+	}
+	return id, true
 }

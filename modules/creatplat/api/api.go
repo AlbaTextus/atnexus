@@ -20,6 +20,7 @@ type API struct {
 	creatorPing                   func(context.Context) error
 	athubReviewExecutor           store.ATHubReviewExecutor
 	athubReceiptForgetter         func(context.Context, string) error
+	releaseImage                  func(ctx context.Context, category, entityID, location string)
 	athubSubmitter                func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID)
 	athubNovelEditor              func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32)
 	athubIllustrationReader       func(http.ResponseWriter, *http.Request, int32)

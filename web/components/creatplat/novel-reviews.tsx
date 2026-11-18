@@ -183,6 +183,7 @@ function failureReason(item: ReviewItem) {
   const reason = status === 404 ? "提交涉及的内容已不存在"
     : status === 409 ? "与书库中的现有内容冲突"
     : status === 413 ? "提交内容过大"
+    : status === 422 ? "提交引用的封面或插图已不在图床中"
     : status !== undefined && status >= 400 && status < 500 ? "内容校验或引用检查未通过"
     : "内容未能写入书库"
   return cause ? `${reason}（${cause}）。` : `${reason}，请核对提交内容后重新提交。`

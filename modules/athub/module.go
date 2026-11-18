@@ -23,7 +23,12 @@ type Config struct {
 
 type Contributor = storage.Contributor
 type RevisionDraft = storage.RevisionDraft
+type Change = storage.Change
 type ChangeRecorder = storage.ChangeRecorder
+
+// ErrImageMissing is what a change recorder returns to refuse a change whose
+// new cover or illustration is an image the image host no longer has.
+var ErrImageMissing = storage.ErrImageMissing
 
 // WithContributor is for host middleware, never for client-supplied identities.
 func WithContributor(ctx context.Context, contributor Contributor) context.Context {
@@ -115,6 +120,19 @@ func (m *Module) ForgetMutation(ctx context.Context, id string) error {
 // database, for settling revisions whose completion was lost.
 func (m *Module) CommittedRevisions(ctx context.Context, batches []string) ([]string, error) {
 	return m.store.CommittedRevisions(ctx, batches)
+}
+
+// HoldImage is called by the change recorder for an image address a change
+// starts to point at, before it checks that the image is still stored. The
+// image cannot be removed through ReleaseImage until that change has ended.
+func (m *Module) HoldImage(ctx context.Context, location string) error {
+	return m.store.HoldImage(ctx, location)
+}
+
+// ReleaseImage calls remove unless a novel cover or illustration points to the
+// given address, so the host can delete a stored image nothing needs any more.
+func (m *Module) ReleaseImage(ctx context.Context, location string, remove func(context.Context) error) error {
+	return m.store.ReleaseImage(ctx, location, remove)
 }
 
 // PruneRevisionReceipts drops receipts older than the given time. Call it only

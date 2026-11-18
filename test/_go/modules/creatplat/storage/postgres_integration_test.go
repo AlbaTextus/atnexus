@@ -200,6 +200,13 @@ func TestSplitReviewLifecycleAndHistory(t *testing.T) {
 	if _, err := creator.ListATHubReviews(ctx, author.ID, true, "", 0); !errors.Is(err, store.ErrUserForbidden) {
 		t.Fatal("author could access all reviews", err)
 	}
+	// An image a pending review carries must not be deleted meanwhile.
+	if mentioned, err := creator.PendingReviewMentions(ctx, "待审标签"); err != nil || !mentioned {
+		t.Fatalf("pending review was not found by its payload: %v %v", mentioned, err)
+	}
+	if mentioned, err := creator.PendingReviewMentions(ctx, "别的标签"); err != nil || mentioned {
+		t.Fatalf("a pending review mentions text it does not carry: %v %v", mentioned, err)
+	}
 	if _, err := creator.ATHubReview(ctx, reviewer.ID, item.ID, false); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("private review ownership bypassed", err)
 	}
@@ -226,6 +233,9 @@ func TestSplitReviewLifecycleAndHistory(t *testing.T) {
 	}
 	if _, err := creator.DecideATHubReview(ctx, reviewer.ID, item.ID, "approve", "", execute); !errors.Is(err, store.ErrConflict) || applied.Load() != 1 {
 		t.Fatal("repeat decision executed twice", err)
+	}
+	if mentioned, err := creator.PendingReviewMentions(ctx, "待审标签"); err != nil || mentioned {
+		t.Fatalf("a decided review still counts as pending: %v %v", mentioned, err)
 	}
 	batch := uuid.New()
 	if err := creator.PrepareNovelRevisions(ctx, batch, []repository.NovelRevision{{ID: uuid.New(), NovelID: 11, UserID: &author.ID, Contributor: contributor, Changes: json.RawMessage(`[]`)}}); err != nil {

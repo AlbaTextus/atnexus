@@ -356,6 +356,7 @@ func TestStorageErrors(t *testing.T) {
 		{storage.ErrNotFound, 404},
 		{storage.ErrInvalidReference, 400},
 		{storage.ErrConflict, 409},
+		{storage.ErrImageMissing, 422},
 		{context.DeadlineExceeded, 504},
 		{errors.New("secret connection details"), 500},
 	} {

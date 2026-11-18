@@ -128,8 +128,9 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 		a.ApplicationError(w, err)
 		return
 	}
-	// Only the uncropped original is dropped. The previous avatar itself stays:
-	// novel revisions keep the address their contributor had at the time.
+	// Reviews and novel history show an account's current avatar, so nothing in
+	// this service points at the replaced files any more.
+	a.RemoveReplacedImage(r.Context(), "user/avatars", user.ID.String(), user.CustomAvatarURL, location, originalURL)
 	a.RemoveReplacedImage(r.Context(), "user/avatars", user.ID.String(), user.AvatarOriginalURL, location, originalURL)
 	writeJSON(w, 200, userView(updated))
 }

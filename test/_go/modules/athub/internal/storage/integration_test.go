@@ -281,6 +281,7 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("upload authors", func(t *testing.T) { testUploadAuthors(t, ctx, store) })
 	t.Run("illustration deletion", func(t *testing.T) { testIllustrationDeletion(t, ctx, store) })
 	t.Run("illustration layout", func(t *testing.T) { testIllustrationLayout(t, ctx, store) })
+	t.Run("stored images", func(t *testing.T) { testStoredImages(t, ctx, store) })
 	t.Run("word count", func(t *testing.T) { testWordCount(t, ctx, store) })
 	t.Run("history", func(t *testing.T) { testHistoryIntegration(t, ctx, store) })
 	t.Run("novel reference names", func(t *testing.T) { testNovelReferenceNames(t, ctx, store) })

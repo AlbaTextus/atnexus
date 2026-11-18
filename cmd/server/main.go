@@ -139,6 +139,8 @@ func run(logger *slog.Logger) error {
 	creators.SetStorage(creatorDB)
 	creators.SetATHubReviewExecutor(access.ApplyReview)
 	creators.SetATHubReceiptForgetter(hub.ForgetMutation)
+	access.EnableImageCleanup(images, hub)
+	creators.SetImageRelease(access.ReleaseImage)
 	creators.SetATHubSubmitter(access.SubmitUpload)
 	creators.SetATHubNovelEditor(access.SubmitNovelEdit)
 	creators.SetATHubIllustrationReaders(access.ListIllustrations, access.ReadIllustrationLayout)

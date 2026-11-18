@@ -19,6 +19,8 @@ export function contentErrorMessage(reason: unknown, fallback: string, overrides
     : status === 404 ? "没有找到对应的内容，可能已被删除。"
     : status === 409 ? "内容已发生变化或与现有内容冲突，请刷新后重试。"
     : status === 413 ? "提交内容过大，请缩减后重试。"
+    // The cover or illustration it points at was replaced or removed meanwhile.
+    : status === 422 ? "引用的封面或插图已从图床删除，请重新上传图片后再提交。"
     : status === 429 ? "请求过于频繁，请稍后重试。"
     : status >= 500 ? "服务暂时不可用，请稍后重试。"
     : status >= 400 ? "请求内容未通过校验，请检查后重试。"

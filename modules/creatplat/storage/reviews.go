@@ -147,3 +147,12 @@ func (p *Postgres) DecideATHubReview(ctx context.Context, actor, id uuid.UUID, d
 	})
 	return r, err
 }
+
+// PendingReviewMentions reports whether a review still awaiting a decision
+// carries the given text in its payload. An approval would write it back.
+func (p *Postgres) PendingReviewMentions(ctx context.Context, text string) (bool, error) {
+	var found bool
+	err := p.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM athub_reviews
+		WHERE status='pending' AND position($1::text in payload::text)>0)`, text).Scan(&found)
+	return found, err
+}

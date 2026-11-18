@@ -130,9 +130,11 @@ func (a *API) uploadNovelIllustration(w http.ResponseWriter, r *http.Request) {
 // API answered the request that records it.
 type illustrationUpload struct {
 	http.ResponseWriter
-	novel    string
-	location string
-	status   int
+	novel     string
+	location  string
+	status    int
+	reply     []byte
+	oversized bool
 }
 
 func (s *illustrationUpload) WriteHeader(status int) {
@@ -146,6 +148,14 @@ func (s *illustrationUpload) Write(data []byte) (int, error) {
 	if s.status == 0 {
 		s.status = http.StatusOK
 	}
+	// A recorded illustration is a small JSON object; anything larger is not one.
+	if s.status == http.StatusOK || s.status == http.StatusCreated {
+		if len(s.reply)+len(data) <= 4096 {
+			s.reply = append(s.reply, data...)
+		} else {
+			s.oversized = true
+		}
+	}
 	return s.ResponseWriter.Write(data)
 }
 
@@ -155,9 +165,21 @@ func (s *illustrationUpload) Unwrap() http.ResponseWriter { return s.ResponseWri
 // that API knows whether the novel exists and accepts it. A refusal (4xx) is
 // final, so the stored file would never be referenced and is removed. After a
 // 5xx the outcome is unknown, and a file that may be recorded is kept.
+//
+// A novel holds each picture once. Uploading one it already has succeeds with
+// the existing illustration, whose address differs from the file just stored;
+// that file is then unused and removed as well.
 func (a *API) discardRefusedIllustration(ctx context.Context, stored *illustrationUpload) {
-	if stored.location == "" || stored.status < 400 || stored.status >= 500 {
+	if stored.location == "" || stored.status >= 500 {
 		return
+	}
+	if stored.status < 400 {
+		var recorded struct {
+			URL string `json:"url"`
+		}
+		if stored.oversized || json.Unmarshal(stored.reply, &recorded) != nil || recorded.URL == "" || recorded.URL == stored.location {
+			return
+		}
 	}
 	a.RemoveReplacedImage(ctx, "book/illustrations", stored.novel, stored.location)
 }

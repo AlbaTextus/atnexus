@@ -31,6 +31,31 @@ type Access struct {
 	keys           auth.APIKeyVerifier
 	creatorHistory store.NovelHistoryStore
 	creatorReviews store.ATHubReviewStore
+	images         imageHost
+	imageUse       imageUse
+}
+
+// imageHost is the image module: it deletes a file by the address it was
+// stored under, resolves any spelling of one of its addresses to that one, and
+// tells whether such an address names a file it does not have.
+type imageHost interface {
+	Remove(ctx context.Context, category, entityID, location string) error
+	Address(location string) string
+	Missing(ctx context.Context, location string) (bool, error)
+}
+
+// imageUse is the content database's knowledge of the images it points at;
+// see HoldImage and ReleaseImage of the content module.
+type imageUse interface {
+	HoldImage(ctx context.Context, location string) error
+	ReleaseImage(ctx context.Context, location string, remove func(context.Context) error) error
+}
+
+// EnableImageCleanup connects the image host with the content that points at
+// its files: an image content stops needing is deleted, and content cannot
+// start to point at an image the host no longer has.
+func (a *Access) EnableImageCleanup(images imageHost, content imageUse) {
+	a.images, a.imageUse = images, content
 }
 
 // EnableSessions injects the OAuth session authority without sharing credentials.

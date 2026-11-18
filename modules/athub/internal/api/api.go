@@ -565,6 +565,8 @@ func (a *API) respondError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusConflict, "record already exists")
 	case errors.Is(err, storage.ErrVolumeNotEmpty):
 		writeError(w, http.StatusConflict, "volume still contains chapters; move or delete them first")
+	case errors.Is(err, storage.ErrImageMissing):
+		writeError(w, http.StatusUnprocessableEntity, "cover or illustration image is no longer stored on the image host; upload it again")
 	case errors.Is(err, context.DeadlineExceeded):
 		writeError(w, http.StatusGatewayTimeout, "database request timed out")
 	default:

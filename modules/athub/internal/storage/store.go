@@ -12,6 +12,7 @@ var (
 	ErrConflict         = errors.New("record already exists")
 	ErrVolumeNotEmpty   = errors.New("volume still contains chapters")
 	ErrTagInUse         = errors.New("tag is still referenced by novels")
+	ErrImageMissing     = errors.New("image is no longer stored on the image host")
 )
 
 type PlatformInput struct {

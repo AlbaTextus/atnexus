@@ -1,5 +1,13 @@
 # atnexus 仓库约定
 
+## 说明文档
+
+- 说明文档在文档站仓库 [AlbaTextus/docs](https://github.com/AlbaTextus/docs)，以 Git 子模块挂在 `docs/`，只检出 `docs/content/` 下的 Markdown（按模块分目录：`athub`、`oauth`、`image`、`creatplat`、`deploy`）。本仓库只记录子模块的提交号，不保存文档副本。
+- 改动行为、环境变量、数据库迁移或部署方式时，同一次工作里更新 `docs/content/` 的对应说明，不要写回本仓库的 README。
+- 改完文档后在仓库根目录运行 `pnpm docs:sync -m "文档提交说明"`：先在子模块里提交文档，再跟上远端分支，最后在本仓库提交子模块指针。不带 `-m` 时只同步远端的新提交。新的检出或 worktree 里 `docs/` 是空的，运行一次 `pnpm docs:sync` 即可初始化。
+- 子模块里的提交必须位于 `main` 分支上，不要在游离 HEAD 上提交。
+- `pnpm docs:sync` 不推送。推送文档仓库的 `main` 会发布文档站，推送前先得到用户确认；推送本仓库前先推送文档仓库，否则别人拿到的指针指向不存在的提交。
+
 ## Go 测试
 
 - 纳入版本控制的 Go 测试（`*_test.go`）统一放在 `test/_go/`，按仓库根目录下原 Go 包路径组织。例如，`internal/security` 的测试放到 `test/_go/internal/security/`，保留原来的 `package` 声明。新增或合入测试时，不要在业务源码目录保留副本。

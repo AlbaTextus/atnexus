@@ -166,20 +166,34 @@ func TestNovelHistoryIntegration(t *testing.T) {
 			if err := json.Unmarshal(revision.Contributor, &actor); err != nil || actor["name"] != "更新后的姓名" {
 				t.Fatalf("latest contributor snapshot: %s, %v", revision.Contributor, err)
 			}
-			var changes []struct {
+			type mergedChange struct {
 				After    struct{ Order int } `json:"after"`
 				BodyDiff json.RawMessage     `json:"bodyDiff"`
 			}
-			if err := json.Unmarshal(revision.Changes, &changes); err != nil || len(changes) != 26 {
-				t.Fatalf("merged changes missing: %s, %v", revision.Changes, err)
+			// The list keeps the merged order but leaves the body diffs to the
+			// detail page of the same entry.
+			var listed []mergedChange
+			if err := json.Unmarshal(revision.Changes, &listed); err != nil || len(listed) != 26 || revision.ChangeCount != 26 {
+				t.Fatalf("merged changes missing: count=%d %s, %v", revision.ChangeCount, revision.Changes, err)
 			}
-			for i, change := range changes {
+			page, err := st.NovelRevisionChanges(ctx, 4, revision.ID, 100, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var detailed []mergedChange
+			if err := json.Unmarshal(page.Changes, &detailed); err != nil || page.Total != 26 || len(detailed) != 26 {
+				t.Fatalf("merged change details missing: total=%d %s, %v", page.Total, page.Changes, err)
+			}
+			for i := range listed {
 				order := i
 				if i == 25 {
 					order = 27
 				}
-				if change.After.Order != order || (i > 0 && len(change.BodyDiff) == 0) {
-					t.Fatalf("change order or body diff lost at %d: %+v", i, change)
+				if listed[i].After.Order != order || len(listed[i].BodyDiff) != 0 {
+					t.Fatalf("listed change order lost or body diff kept at %d: %+v", i, listed[i])
+				}
+				if detailed[i].After.Order != order || (i > 0 && len(detailed[i].BodyDiff) == 0) {
+					t.Fatalf("change order or body diff lost at %d: %+v", i, detailed[i])
 				}
 			}
 		}

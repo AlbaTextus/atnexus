@@ -8,7 +8,7 @@ import { profileSetupPath } from "@/lib/auth/profile-setup"
 
 const currentAccount = cache(async (): Promise<AccountUser | null> => {
   const cookieJar = await cookies()
-  const backend = process.env.OAUTH_BACKEND_URL || "http://localhost:8001"
+  const backend = process.env.OAUTH_BACKEND_URL || "http://localhost:8010"
   const response = await fetch(`${backend}/api/v1/user`, {
     headers: { Cookie: cookieJar.toString() }, cache: "no-store", redirect: "error",
     signal: AbortSignal.timeout(10000),

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -50,11 +51,11 @@ func (a *Access) EnableCreatorStorage(st interface {
 func New(st store.ATHubStore, addr string, logger *slog.Logger) (*Access, error) {
 	_, portText, err := net.SplitHostPort(addr)
 	if err != nil {
-		return nil, errors.New("invalid ATHUB_HTTP_ADDR")
+		return nil, fmt.Errorf("invalid ATHub audit address: %w", err)
 	}
 	port, err := strconv.Atoi(portText)
 	if err != nil || port < 1 || port > 65535 {
-		return nil, errors.New("ATHUB_HTTP_ADDR must specify a port between 1 and 65535")
+		return nil, errors.New("ATHub audit address must specify a port between 1 and 65535")
 	}
 	if logger == nil {
 		logger = slog.Default()

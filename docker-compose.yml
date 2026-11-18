@@ -53,11 +53,7 @@ services:
     build: .
     environment:
       APP_ENV: development
-      HTTP_ADDR: :8001
-      ATHUB_HTTP_ADDR: :8005
-      CREATPLAT_HTTP_ADDR: :8004
-      IMAGE_HTTP_ADDR: :8002
-      GATEWAY_HTTP_ADDR: :8288
+      GATEWAY_HTTP_ADDR: :8010
       IMAGE_DATABASE_URL: ${IMAGE_COMPOSE_DATABASE_URL:?Set IMAGE_COMPOSE_DATABASE_URL to the independent image database}
       IMAGE_LOCAL_ROOT: /data/images
       IMAGE_TEMP_ROOT: /var/lib/atnexus/image-temp
@@ -87,11 +83,7 @@ services:
       CUSTOM_OAUTH_EMAIL_VERIFIED_FIELD: ${CUSTOM_OAUTH_EMAIL_VERIFIED_FIELD:-email_verified}
       CUSTOM_OAUTH_NAME_FIELD: ${CUSTOM_OAUTH_NAME_FIELD:-name}
     ports:
-      - "8001:8001"
-      - "8002:8002"
-      - "8004:8004"
-      - "8005:8005"
-      - "8288:8288"
+      - "8010:8010"
     volumes:
       - type: bind
         source: ${IMAGE_COMPOSE_LOCAL_ROOT:?Set IMAGE_COMPOSE_LOCAL_ROOT to the existing image directory}
@@ -105,7 +97,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
-      # Listeners come up after the short startup checks. The full legacy creator
+      # The gateway comes up after the short startup checks. The full legacy creator
       # data check runs in the background and does not delay readiness.
       start_period: 30s
     depends_on:
@@ -121,14 +113,14 @@ services:
       context: .
       dockerfile: web/Dockerfile
       args:
-        OAUTH_BACKEND_URL: http://atnexus:8001
-        CREATPLAT_BACKEND_URL: http://atnexus:8004
+        OAUTH_BACKEND_URL: http://atnexus:8010
+        CREATPLAT_BACKEND_URL: http://atnexus:8010
         NEXT_PUBLIC_WIKI_URL: ${NEXT_PUBLIC_WIKI_URL:-http://localhost:3200}
-        NEXT_PUBLIC_ATHUB_API_URL: ${NEXT_PUBLIC_ATHUB_API_URL:-http://localhost:8005}
-        NEXT_PUBLIC_CREATPLAT_API_URL: ${NEXT_PUBLIC_CREATPLAT_API_URL:-http://localhost:8004}
+        NEXT_PUBLIC_ATHUB_API_URL: ${NEXT_PUBLIC_ATHUB_API_URL:-http://localhost:8010}
+        NEXT_PUBLIC_CREATPLAT_API_URL: ${NEXT_PUBLIC_CREATPLAT_API_URL:-http://localhost:8010}
     environment:
-      OAUTH_BACKEND_URL: http://atnexus:8001
-      CREATPLAT_BACKEND_URL: http://atnexus:8004
+      OAUTH_BACKEND_URL: http://atnexus:8010
+      CREATPLAT_BACKEND_URL: http://atnexus:8010
     ports:
       - "3288:3288"
     depends_on:

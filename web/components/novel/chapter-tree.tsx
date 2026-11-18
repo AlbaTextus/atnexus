@@ -1,7 +1,7 @@
 "use client"
 
 import { useId, useRef, useState } from "react"
-import { ChevronRight, FileText, Folder } from "lucide-react"
+import { ChevronRight, FileText, Folder, ListTree } from "lucide-react"
 import type { TableOfContents } from "@/lib/athub/athub-client"
 import { ContentSectionHeading } from "./content-section-heading"
 import { NovelAutoHeight } from "@/components/novel/novel-motion"
@@ -44,7 +44,7 @@ export function ChapterTree({ volumes, chapters }: Props) {
   if (!volumes.length && !chapters.length) return null
 
   return <section className="panel novel-chapter-catalog" aria-labelledby="novel-catalog-heading">
-    <ContentSectionHeading id="novel-catalog-heading">目录</ContentSectionHeading>
+    <ContentSectionHeading id="novel-catalog-heading" icon={ListTree} className="catalog-heading">目录</ContentSectionHeading>
     <div className={`novel-chapter-tree${volumeGroups.length ? " has-volumes" : ""}`}>
       {volumeGroups.length ? <>
         <div className="novel-chapter-volumes" role="group" aria-label="作品分卷" tabIndex={0}>

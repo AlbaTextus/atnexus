@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Trash2, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Images, Loader2, Trash2, Upload } from "lucide-react";
 import { useNovelAccess } from "@/components/novel/novel-access";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -137,7 +137,7 @@ export function GallerySection({ novelId }: { novelId: number }) {
       }
     }}>
       <div className="novel-illustration-heading">
-        <ContentSectionHeading className="illustrations-heading">插图</ContentSectionHeading>
+        <ContentSectionHeading icon={Images} className="illustrations-heading">插图</ContentSectionHeading>
         <input ref={input} type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" aria-label="选择插图"
           disabled={!editing || busy || !policy || !canUpload(policy)} onChange={event => { void upload(Array.from(event.target.files || [])); }} />
         {editing && (!policy || canUpload(policy)) && <Button type="button" variant="ghost" size="sm" disabled={busy || !policy} onClick={() => input.current?.click()}>

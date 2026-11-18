@@ -13,8 +13,13 @@ import (
 	"github.com/google/uuid"
 )
 
-func (a *Access) RecordChanges(ctx context.Context, drafts []athub.RevisionDraft) (func(context.Context, bool) error, error) {
-	return creatplat.NewHistory(a.historyStore(), a.logger).RecordChanges(ctx, drafts)
+func (a *Access) RecordChanges(ctx context.Context, batch string, drafts []athub.RevisionDraft) (func(context.Context, bool) error, error) {
+	return creatplat.NewHistory(a.historyStore(), a.logger).RecordChanges(ctx, batch, drafts)
+}
+
+// ReconcileRevisions settles revisions whose completion was lost, until ctx ends.
+func (a *Access) ReconcileRevisions(ctx context.Context, content creatplat.RevisionReceipts) {
+	creatplat.NewHistory(a.historyStore(), a.logger).RunReconciler(ctx, content)
 }
 
 func (a *Access) historyStore() any {

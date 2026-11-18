@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -34,8 +35,10 @@ type RevisionDraft struct {
 }
 
 // The host owns persistence. A pending revision is durable before content commit
-// and becomes visible only after completion.
-type ChangeRecorder func(context.Context, []RevisionDraft) (func(context.Context, bool) error, error)
+// and becomes visible only after completion. The content transaction writes
+// the same batch ID as a receipt, so a revision whose completion was lost can
+// be settled later by asking whether its content committed.
+type ChangeRecorder func(context.Context, string, []RevisionDraft) (func(context.Context, bool) error, error)
 
 type contributorKey struct{}
 type mutationKey struct{}
@@ -90,6 +93,10 @@ func (p *Postgres) Mutate(ctx context.Context, fn func(context.Context) error) e
 	if err := fn(ctx); err != nil {
 		return err
 	}
+	if Rehearsing(ctx) {
+		// The deferred rollback discards everything the change did.
+		return nil
+	}
 	drafts := make([]RevisionDraft, 0)
 	actor, _ := ctx.Value(contributorKey{}).(Contributor)
 	ids := make([]int, 0, len(m.before))
@@ -142,11 +149,6 @@ func (p *Postgres) Mutate(ctx context.Context, fn func(context.Context) error) e
 		}
 	}
 	var finish func(context.Context, bool) error
-	if len(drafts) > 0 && p.RecordChanges != nil {
-		if finish, err = p.RecordChanges(ctx, drafts); err != nil {
-			return err
-		}
-	}
 	// Prepared revisions must be settled on every path, or they stay pending.
 	abandon := func(err error) error {
 		if finish != nil {
@@ -155,6 +157,15 @@ func (p *Postgres) Mutate(ctx context.Context, fn func(context.Context) error) e
 			return errors.Join(err, finish(finalCtx, false))
 		}
 		return err
+	}
+	if len(drafts) > 0 && p.RecordChanges != nil {
+		batch := uuid.NewString()
+		if finish, err = p.RecordChanges(ctx, batch, drafts); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO "RevisionReceipt"(id) VALUES($1::uuid)`, batch); err != nil {
+			return abandon(err)
+		}
 	}
 	if receipt != nil {
 		raw, encodeErr := json.Marshal(receipt)
@@ -169,7 +180,10 @@ func (p *Postgres) Mutate(ctx context.Context, fn func(context.Context) error) e
 	if finish != nil {
 		finalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		if finishErr := finish(finalCtx, err == nil); finishErr != nil {
+		// Once the content is committed the request has succeeded. A lost
+		// completion leaves the revision pending; the recorder reports it and
+		// the host settles it from the receipt, so it is not the caller's error.
+		if finishErr := finish(finalCtx, err == nil); finishErr != nil && err != nil {
 			return errors.Join(err, finishErr)
 		}
 	}

@@ -30,7 +30,7 @@ type API struct {
 	// Personal-key uploads: the ATHub access pipeline admits the call, then runs
 	// the given step to store the file.
 	athubKeyCoverUploader        func(http.ResponseWriter, *http.Request, func(http.ResponseWriter, *http.Request, uuid.UUID))
-	athubKeyIllustrationUploader func(http.ResponseWriter, *http.Request, func(http.ResponseWriter, *http.Request) (int32, []byte, bool))
+	athubKeyIllustrationUploader func(http.ResponseWriter, *http.Request, func(http.ResponseWriter, *http.Request, uuid.UUID) (int32, []byte, bool))
 }
 
 func New(cfg config.Config, st store.Store, logger *slog.Logger) *API {

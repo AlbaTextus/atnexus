@@ -113,7 +113,7 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "invalid_background", "error_description": "请使用不超过 5 MB、1600 万像素的有效 PNG、JPEG 或 WebP 图片。"})
 		return
 	}
-	location, err := a.Images.Save(r.Context(), "user/backgrounds", user.ID.String(), "background.png", "image/png", data)
+	location, err := a.Images.Save(r.Context(), user.ID.String(), "user/backgrounds", user.ID.String(), "background.png", "image/png", data)
 	if err != nil {
 		backgroundUploadError(w)
 		return
@@ -128,6 +128,9 @@ func (a *API) uploadBackground(w http.ResponseWriter, r *http.Request) {
 		a.ApplicationError(w, err)
 		return
 	}
+	// Nothing else refers to a background, so the replaced files can go.
+	a.RemoveReplacedImage(r.Context(), "user/backgrounds", user.ID.String(), user.BackgroundURL, location, originalURL)
+	a.RemoveReplacedImage(r.Context(), "user/backgrounds", user.ID.String(), user.BackgroundOriginalURL, location, originalURL)
 	writeJSON(w, 200, userView(updated))
 }
 

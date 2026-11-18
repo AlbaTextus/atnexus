@@ -8,6 +8,7 @@ import (
 
 	"github.com/AlbaTextus/atnexus/internal/config"
 	"github.com/AlbaTextus/atnexus/internal/store"
+	"github.com/AlbaTextus/atnexus/modules/athub"
 	creatorapi "github.com/AlbaTextus/atnexus/modules/creatplat/api"
 	"github.com/AlbaTextus/atnexus/pkg/auth"
 	"github.com/google/uuid"
@@ -35,6 +36,11 @@ func TestCreatorIllustrationReadsReuseATHubAdmission(t *testing.T) {
 			access.EnableSessions(sessionVerifier{identity: identity})
 			dispatched := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// A reviewed change is rehearsed first; only a real call counts.
+				if athub.Rehearsing(r.Context()) {
+					w.WriteHeader(200)
+					return
+				}
 				dispatched = true
 				if r.Method != http.MethodGet || r.RequestURI != tc.internalURI {
 					t.Errorf("content received %s %s, want GET %s", r.Method, r.RequestURI, tc.internalURI)
@@ -92,6 +98,11 @@ func TestIllustrationDeleteUsesSessionPermissionsAndReview(t *testing.T) {
 			}
 			dispatched := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// A reviewed change is rehearsed first; only a real call counts.
+				if athub.Rehearsing(r.Context()) {
+					w.WriteHeader(200)
+					return
+				}
 				dispatched = true
 				if r.Method != "DELETE" || r.URL.Path != "/api/v2/illustrations" ||
 					r.URL.Query().Get("novelId") != "17" || r.URL.Query().Get("id") != "23" ||
@@ -141,6 +152,11 @@ func TestIllustrationLayoutUsesEditPermissionAndReview(t *testing.T) {
 			}
 			called := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// A reviewed change is rehearsed first; only a real call counts.
+				if athub.Rehearsing(r.Context()) {
+					w.WriteHeader(200)
+					return
+				}
 				called = true
 				if r.Method != "PUT" || r.URL.Path != "/api/v2/illustration-layout" || r.URL.Query().Get("novelId") != "17" || r.Header.Get("Authorization") != "" {
 					t.Fatal("layout escaped constrained endpoint")

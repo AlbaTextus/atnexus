@@ -45,7 +45,7 @@ func testIllustrationLayout(t *testing.T, ctx context.Context, st *Postgres) {
 		t.Fatalf("invalid resource accepted: %v", err)
 	}
 	var history []RevisionDraft
-	st.RecordChanges = func(_ context.Context, value []RevisionDraft) (func(context.Context, bool) error, error) {
+	st.RecordChanges = func(_ context.Context, _ string, value []RevisionDraft) (func(context.Context, bool) error, error) {
 		history = append(history, value...)
 		return func(context.Context, bool) error { return nil }, nil
 	}

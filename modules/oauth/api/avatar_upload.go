@@ -113,7 +113,7 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 	if bytes.HasPrefix(data, []byte("GIF")) {
 		filename, contentType = "avatar.gif", "image/gif"
 	}
-	location, err := a.Images.Save(r.Context(), "user/avatars", user.ID.String(), filename, contentType, data)
+	location, err := a.Images.Save(r.Context(), user.ID.String(), "user/avatars", user.ID.String(), filename, contentType, data)
 	if err != nil {
 		a.avatarUploadError(w)
 		return
@@ -128,6 +128,9 @@ func (a *API) uploadAvatar(w http.ResponseWriter, r *http.Request) {
 		a.ApplicationError(w, err)
 		return
 	}
+	// Only the uncropped original is dropped. The previous avatar itself stays:
+	// novel revisions keep the address their contributor had at the time.
+	a.RemoveReplacedImage(r.Context(), "user/avatars", user.ID.String(), user.AvatarOriginalURL, location, originalURL)
 	writeJSON(w, 200, userView(updated))
 }
 

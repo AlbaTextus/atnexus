@@ -64,19 +64,22 @@ func (p *Postgres) CompleteConsentRequest(ctx context.Context, request ConsentRe
 	defer tx.Rollback(ctx)
 	var role, minimum string
 	var active bool
-	if err := tx.QueryRow(ctx, `SELECT role,is_active FROM users WHERE id=$1 FOR SHARE`, request.UserID).Scan(&role, &active); err != nil || !active {
+	if err := tx.QueryRow(ctx, `SELECT role,is_active FROM users WHERE id=$1 FOR SHARE`, request.UserID).Scan(&role, &active); err != nil {
+		return missingAs(err, ErrNotFound)
+	}
+	if !active {
 		return ErrNotFound
 	}
 	var version time.Time
-	if err := tx.QueryRow(ctx, `SELECT updated_at,is_active,minimum_role FROM oauth_clients WHERE id=$1 FOR SHARE`, request.ClientID).Scan(&version, &active, &minimum); err != nil || !active {
-		return ErrConsentChanged
+	if err := tx.QueryRow(ctx, `SELECT updated_at,is_active,minimum_role FROM oauth_clients WHERE id=$1 FOR SHARE`, request.ClientID).Scan(&version, &active, &minimum); err != nil {
+		return missingAs(err, ErrConsentChanged)
 	}
-	if !version.Equal(request.ClientVersion) || !MeetsMinimumRole(role, minimum) {
+	if !active || !version.Equal(request.ClientVersion) || !MeetsMinimumRole(role, minimum) {
 		return ErrConsentChanged
 	}
 	var sessionID uuid.UUID
 	if err := tx.QueryRow(ctx, `SELECT id FROM user_sessions WHERE token_hash=$1 AND user_id=$2 AND revoked_at IS NULL AND expires_at>clock_timestamp() FOR SHARE`, request.SessionHash, request.UserID).Scan(&sessionID); err != nil {
-		return ErrNotFound
+		return missingAs(err, ErrNotFound)
 	}
 	result, err := tx.Exec(ctx, `DELETE FROM oauth_consent_requests WHERE token_hash=$1 AND user_id=$2 AND session_hash=$3 AND expires_at>clock_timestamp()`, request.TokenHash, request.UserID, request.SessionHash)
 	if err != nil {
@@ -95,4 +98,13 @@ func (p *Postgres) CompleteConsentRequest(ctx context.Context, request ConsentRe
 		}
 	}
 	return tx.Commit(ctx)
+}
+
+// missingAs reports an absent row as the given domain error and leaves every
+// other failure intact, so an outage is never presented as a refusal.
+func missingAs(err, absent error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return absent
+	}
+	return err
 }

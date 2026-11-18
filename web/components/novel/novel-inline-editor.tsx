@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { api, ApiError } from "@/lib/api"
+import { api } from "@/lib/api"
+import { contentErrorMessage } from "@/lib/athub/athub-errors"
 import { allowsEndpoint, type RolePolicy } from "@/lib/athub/athub-permissions"
 import { novelStatus, safeContentURL, type ContentAuthor, type ContentPlatform, type ContentTag, type Novel } from "@/lib/athub/athub-client"
 import { readAllContent, type NovelDetailModel } from "@/lib/novel/novel-view-models"
@@ -227,9 +228,11 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
       setNotice("review_id" in response || layoutPending ? "已提交审核，通过后生效。" : "作品资料已保存。")
       setMode(false); setActive(null); setDraft(null); setCatalog(null)
     } catch (reason) {
-      setError(reason instanceof ApiError && reason.status === 403 ? "当前账户没有编辑权限，或权限已发生变化。"
-        : reason instanceof ApiError && reason.status === 401 ? "登录已失效，请重新登录后再提交。"
-        : reason instanceof Error ? reason.message : "未能确认提交结果，请刷新查看后再操作。")
+      setError(contentErrorMessage(reason, "未能确认提交结果，请刷新查看后再操作。", {
+        400: "作品资料未通过校验，请检查后重试。",
+        401: "登录已失效，请重新登录后再提交。",
+        403: "当前账户没有编辑权限，或权限已发生变化。",
+      }))
     } finally {
       submitting.current = false; setBusy(false)
     }

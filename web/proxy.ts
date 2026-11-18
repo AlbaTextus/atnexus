@@ -5,7 +5,7 @@ import { maintenanceDestination } from "@/lib/maintenance/maintenance-navigation
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
   // Go applies the same rule to APIs and all OAuth protocol endpoints.
-  if (path.startsWith("/api/") || path.startsWith("/.well-known/") || path === "/healthz") return NextResponse.next()
+  if (path.startsWith("/api/") || path.startsWith("/.well-known/")) return NextResponse.next()
   if (path === "/maintenance" || path === "/maintenance/login") return NextResponse.next()
   const state = await readMaintenance(request.headers.get("cookie") || "")
   if (!state || (state.enabled && !state.bypass)) {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { usePathname } from "next/navigation"
 import { Link } from "next-view-transitions"
-import { ChevronDown, ClipboardCheck, FilePlus2, LibraryBig, PanelLeftClose, PanelLeftOpen, Search, SquarePen } from "lucide-react"
+import { ChevronDown, ClipboardCheck, FileClock, FilePlus2, LibraryBig, PanelLeftClose, PanelLeftOpen, Search, SquarePen } from "lucide-react"
 import type { AccountUser } from "@/components/account/account-shell"
 import { NovelUserMenu } from "@/components/novel/novel-user-menu"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ import { hasOperation, type RolePolicy } from "@/lib/athub/athub-permissions"
 
 const sections = [
   { href: "/creatplat/upload", title: "提交小说", icon: FilePlus2 },
+  { href: "/creatplat/submissions", title: "我的提交", icon: FileClock },
   { href: "/creatplat/reviews", title: "审核中心", icon: ClipboardCheck },
 ] as const
 

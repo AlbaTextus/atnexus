@@ -5,8 +5,9 @@ import { Loader2, Magnet, Plus, RotateCcw, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNovelAccess } from "@/components/novel/novel-access";
 import { useNovelEditor } from "@/components/novel/novel-inline-editor";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api";
 import type { IllustrationBlock, IllustrationLayout, NovelIllustration } from "@/lib/athub/athub-client";
+import { contentErrorMessage } from "@/lib/athub/athub-errors";
 import { allowsEndpoint, type RolePolicy } from "@/lib/athub/athub-permissions";
 import { createIllustrationBlock, fitIllustrationBlock, normalizeIllustrationBlock, transformIllustrationBlock, ILLUSTRATION_CANVAS_WIDTH as WIDTH, type BlockOperation, type LayoutGuides, type ResizeHandle } from "@/lib/novel/illustration-layout";
 import { IllustrationImage } from "./illustration-image";
@@ -97,9 +98,10 @@ export function IllustrationCanvas({ novelId, images, editing, policy, onPreview
       }
       setSaved(value); setBlocks(value.blocks); setNotice("插图布局已保存。"); return "saved";
     } catch (reason) {
-      setError(reason instanceof ApiError && reason.status === 409 ? "布局已被其他人修改，请重新加载布局后再调整。"
-        : reason instanceof ApiError && reason.status === 403 ? "当前账户没有调整插图布局的权限。"
-        : reason instanceof Error ? reason.message : "布局保存失败，请重试。");
+      setError(contentErrorMessage(reason, "布局保存失败，请重试。", {
+        403: "当前账户没有调整插图布局的权限。",
+        409: "布局已被其他人修改，请重新加载布局后再调整。",
+      }));
       return null;
     } finally { saving.current = false; setBusy(false); }
   }, [novelId, saved, blocks, dirty, normalizeBlocks]);

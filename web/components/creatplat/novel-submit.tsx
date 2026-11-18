@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { api, ApiError } from "@/lib/api"
+import { contentErrorMessage } from "@/lib/athub/athub-errors"
 import { allowsEndpoint, type RolePolicy } from "@/lib/athub/athub-permissions"
 import { novelStatus, safeContentURL, type ContentAuthor, type ContentPlatform, type ContentTag, type Novel } from "@/lib/athub/athub-client"
 import { readAllContent } from "@/lib/novel/novel-view-models"
@@ -152,6 +153,7 @@ function SubmissionForm() {
     if (authorId && authorId !== "none" && !authorOptions.some(author => author.id === Number(authorId))) { setError("请选择该平台下的作者。"); return }
     if (!authorId && Array.from(importedAuthor.trim()).length > 200) { setError("作者名称不能超过 200 个字符。"); setEditingDetails(true); return }
     if (coverUrl.trim() && !safeContentURL(coverUrl.trim())) { setError("封面地址需要使用有效的 HTTP 或 HTTPS 链接。"); return }
+    if (tagIds.length > 100) { setError("标签最多 100 个。"); setEditingDetails(true); return }
     const invalidChapter = chapters.findIndex(chapter => !chapter.title.trim() || !chapter.content.trim())
     if (invalidChapter >= 0) { setError(`第 ${invalidChapter + 1} 章缺少标题或正文，请在目录预览中编辑或移除。`); return }
     if ([title, summary, coverUrl, !authorId ? importedAuthor : "", ...chapters.flatMap(chapter => [chapter.title, chapter.content])].some(value => value.includes("\0"))) {
@@ -195,9 +197,9 @@ function SubmissionForm() {
             : reason.status === 400 ? "提交资料未通过校验，请检查小说资料和章节内容。"
               : reason.status === 409 ? "作品或章节已存在，请检查后再提交。"
                 : reason.status === 413 ? "提交内容过大，请减少章节后重试。"
-                  : reason.status >= 500 ? "提交服务暂时不可用，请稍后重试。" : reason.message
+                  : reason.status >= 500 ? "提交服务暂时不可用，请稍后重试。" : contentErrorMessage(reason, "提交失败，请稍后重试。")
         : uploadingCover ? "无法连接封面上传服务。书籍预览已保留，请重试。"
-          : "未能确认提交结果，请先在书库或审核记录中确认是否已提交，避免重复提交。")
+          : "未能确认提交结果，请先在书库或我的提交中确认是否已提交，避免重复提交。")
     } finally {
       submitting.current = false
       setBusy(false)
@@ -215,7 +217,8 @@ function SubmissionForm() {
         <h1>{pending ? "已提交审核" : "小说已入库"}</h1>
         <p>{pending ? `《${title.trim()}》审核通过后将在书库中展示。` : `《${title.trim()}》已成功提交${chapters.length ? `，共 ${chapters.length} 章` : ""}。`}</p>
         <div>
-          {!pending && "novel" in result && <Button nativeButton={false} render={<Link href={`/library/books/${result.novel.id}`} />}>查看作品</Button>}
+          {"novel" in result ? <Button nativeButton={false} render={<Link href={`/library/books/${result.novel.id}`} />}>查看作品</Button>
+            : <Button nativeButton={false} render={<Link href="/creatplat/submissions" />}>查看我的提交</Button>}
           <Button nativeButton={false} variant="outline" render={<Link href="/library" />}>返回书库</Button>
           <Button variant="ghost" onClick={() => {
             setResult(null); setTitle(""); setAuthorId(""); setSummary(""); setCoverUrl(""); setTagIds([]); setChapters([]); setVolumes([]); setEpubCover(null); setStatus("ONGOING"); setError(""); setImportError(""); setImportedAuthor(""); setFileName(""); setEditingDetails(false)

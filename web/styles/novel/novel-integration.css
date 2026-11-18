@@ -220,6 +220,8 @@
   --history-ins-fg: #1a7f37;
   --history-mod-bg: #ddf4ff;
   --history-mod-fg: #0969da;
+  --history-page-active-bg: #0969da;
+  --history-page-active-fg: #ffffff;
 }
 .dark .novel-history-view {
   --background: inherit;
@@ -261,6 +263,8 @@
   --history-ins-fg: #56d364;
   --history-mod-bg: rgb(56 139 253 / 16%);
   --history-mod-fg: #79c0ff;
+  --history-page-active-bg: #1f6feb;
+  --history-page-active-fg: #ffffff;
 }
 .dark .novel-history-view * { border-color: var(--border); }
 .dark .novel-history-view .panel { background: var(--card); border-color: var(--border); }
@@ -308,11 +312,24 @@ button.novel-history-sha:hover { background: var(--history-btn-hover); color: va
 .novel-history-icon-btn svg { width: 15px; height: 15px; stroke-width: 1.75; }
 .novel-history-icon-btn:hover, .novel-history-icon-btn[data-active] { background: var(--history-btn-hover); color: var(--history-fg); }
 .novel-history-icon-btn .novel-history-copied { color: var(--history-ins-fg); }
-.novel-demo :is(button.novel-history-title, .novel-history-more, .novel-history-sha, .novel-history-icon-btn, .novel-history-time, .novel-diff-header, .novel-diff-fold):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+.novel-demo :is(button.novel-history-title, .novel-history-more, .novel-history-sha, .novel-history-icon-btn, .novel-history-time, .novel-history-filter-pill, .novel-history-bulk-btn, .novel-history-page-btn, .novel-diff-header, .novel-diff-fold):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
 .novel-demo :is(.novel-diff-header, .novel-diff-fold):focus-visible { outline-offset: -2px; border-radius: 0; }
 
-/* Expanded unified line-diff cards */
+/* Expanded unified line-diff cards & inner toolbar */
 .novel-history-details { border-top: 1px solid var(--history-divider); background: var(--history-subtle); }
+.novel-history-details-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 8px 16px; border-bottom: 1px solid var(--history-divider); background: var(--history-subtle); }
+.novel-history-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.novel-history-view .novel-history-filter-pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--history-muted); font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1; cursor: pointer; transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, box-shadow 120ms ease; }
+.novel-history-view .novel-history-filter-pill:hover:not([data-active]) { background: var(--history-btn-hover); color: var(--history-fg); }
+.novel-history-view .novel-history-filter-pill[data-active] { background: var(--history-surface); border-color: var(--history-border); color: var(--history-fg); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / 5%); }
+.novel-history-filter-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 16px; padding: 0 5px; border-radius: 999px; background: var(--history-pill-bg); color: var(--history-muted); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.novel-history-filter-pill[data-active] .novel-history-filter-count { background: var(--history-mod-bg); color: var(--history-mod-fg); }
+.novel-history-details-summary { color: var(--history-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.novel-history-details-tools { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.novel-history-page-indicator { color: var(--history-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.novel-history-view .novel-history-bulk-btn { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border: 1px solid var(--history-border); border-radius: 6px; background: var(--history-surface); color: var(--history-muted); font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1; cursor: pointer; transition: background-color 120ms ease, color 120ms ease; }
+.novel-history-view .novel-history-bulk-btn:hover { background: var(--history-pill-bg); color: var(--history-fg); }
+.novel-history-bulk-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
 .novel-history-details-body { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 16px; }
 .novel-history-action-badge { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 1.5; background: var(--history-mod-bg); color: var(--history-mod-fg); }
 .novel-history-action-badge[data-action=INSERT] { background: var(--history-ins-bg); color: var(--history-ins-fg); }
@@ -349,7 +366,22 @@ button.novel-history-sha:hover { background: var(--history-btn-hover); color: va
 .novel-diff-code mark { padding: 1px 2px; border-radius: 3px; color: inherit; }
 .novel-diff-line[data-kind=del] > .novel-diff-code mark { background: var(--history-del-mark); }
 .novel-diff-line[data-kind=add] > .novel-diff-code mark { background: var(--history-ins-mark); }
-.novel-history-pagination { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 24px; color: var(--history-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* Inner diff pagination & outer timeline pagination */
+.novel-diff-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 16px; border-top: 1px solid var(--history-divider); background: var(--history-subtle); color: var(--history-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.novel-history-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin: 24px 0 0 32px; padding-top: 16px; border-top: 1px solid var(--history-divider); color: var(--history-muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.novel-history-pagination-info { color: var(--history-muted); line-height: 1.5; }
+.novel-history-pagination-controls { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+.novel-history-pagination-pages { display: inline-flex; align-items: center; gap: 3px; }
+.novel-history-pagination-compact-status { display: none; padding: 0 6px; color: var(--history-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.novel-history-view .novel-history-page-btn { display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 30px; height: 30px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--history-fg); font-family: inherit; font-size: 12.5px; font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease; }
+.novel-diff-pagination .novel-history-page-btn { min-width: 26px; height: 26px; padding: 0 7px; font-size: 12px; }
+.novel-history-view .novel-history-page-btn.is-nav { padding: 0 9px; color: var(--history-accent); }
+.novel-diff-pagination .novel-history-page-btn.is-nav { padding: 0 8px; }
+.novel-history-page-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+.novel-history-view .novel-history-page-btn:hover:not(:disabled):not([data-active]) { background: var(--history-btn-hover); border-color: var(--history-border); }
+.novel-history-view .novel-history-page-btn[data-active] { background: var(--history-page-active-bg); border-color: var(--history-page-active-bg); color: var(--history-page-active-fg); font-weight: 600; cursor: default; }
+.novel-history-view .novel-history-page-btn:disabled { color: var(--history-line-num); opacity: .5; cursor: not-allowed; }
+.novel-history-page-ellipsis { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 26px; color: var(--history-muted); font-size: 12px; user-select: none; }
 
 /* Loading skeleton */
 @keyframes novel-history-pulse { 0%, 100% { opacity: .55; } 50% { opacity: .95; } }
@@ -366,7 +398,12 @@ button.novel-history-sha:hover { background: var(--history-btn-hover); color: va
   .novel-history-row { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px; }
   .novel-history-title { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   .novel-history-actions { align-self: flex-end; }
+  .novel-history-details-toolbar { padding: 8px 12px; }
   .novel-history-details-body { padding: 10px 12px 12px; }
+  .novel-diff-pagination { padding: 8px 12px; }
+  .novel-history-pagination { margin-left: 24px; }
+  .novel-history-pagination-pages { display: none; }
+  .novel-history-pagination-compact-status { display: inline-flex; align-items: center; }
   .novel-diff-line { grid-template-columns: 3px 38px minmax(0, 1fr); }
   .novel-history-view .novel-diff-num { padding-inline: 4px 8px; font-size: 11px; }
   .novel-diff-code { padding-inline: 10px 12px; font-size: 12px; }

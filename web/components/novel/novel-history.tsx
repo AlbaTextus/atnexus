@@ -1,13 +1,16 @@
 "use client"
 
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react"
+import { Fragment, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { diffArrays, diffChars } from "diff"
+import { usePathname, useSearchParams } from "next/navigation"
 import { Link } from "next-view-transitions"
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Code, Copy, GitCommitHorizontal, History, MoreHorizontal } from "lucide-react"
+import {
+  ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsDownUp, ChevronsUpDown, ChevronUp,
+  Code, Copy, GitCommitHorizontal, History, MoreHorizontal,
+} from "lucide-react"
 import { ContentFailure, NovelAccessGate, useNovelAccess } from "@/components/novel/novel-access"
 import { ContributorAvatar } from "@/components/novel/contributors-card"
 import { NovelAutoHeight } from "@/components/novel/novel-motion"
-import { Button } from "@/components/novel/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { ChapterBodyHunk, Novel, NovelChange, NovelHistory, NovelRevision } from "@/lib/athub/athub-client"
 
@@ -481,8 +484,31 @@ function buildBodyHunksModel(hunks: ChapterBodyHunk[]): UnifiedDiffModel {
   return { blocks, added: totalAdded, removed: totalRemoved }
 }
 
+const HISTORY_PAGE_SIZE = 20
+const DIFF_CARDS_PAGE_SIZE = 10
+
+type DiffCardCategory = "Novel" | "Volume" | "Chapter" | "Illustration" | "Other"
+
+const categoryLabels: Record<DiffCardCategory, string> = {
+  Novel: "小说资料",
+  Volume: "分卷",
+  Chapter: "章节",
+  Illustration: "插图",
+  Other: "其他",
+}
+const categoryOrder: DiffCardCategory[] = ["Novel", "Volume", "Chapter", "Illustration", "Other"]
+
+function entityCategory(entity: string): DiffCardCategory {
+  if (entity === "Novel") return "Novel"
+  if (entity === "Volume") return "Volume"
+  if (entity === "Chapter") return "Chapter"
+  if (entity === "Illustration" || entity === "IllustrationLayout") return "Illustration"
+  return "Other"
+}
+
 type DiffCardSpec = {
   key: string
+  category: DiffCardCategory
   title: string
   subtitle: string
   action?: string
@@ -498,6 +524,7 @@ function buildChangeCards(change: NovelChange, changeIndex: number): DiffCardSpe
   const changed = rawChanged.filter(key =>
     !redundantIdPairs.some(([idKey, nameKey]) => key === idKey && changedSet.has(nameKey)))
 
+  const category = entityCategory(change.entity)
   const entityName = entities[change.entity] || change.entity
   const itemTitle = (change.entity === "Volume" || change.entity === "Chapter") ? titleOf(after, before) : ""
   const contextPath = itemTitle ? `${entityName} · ${itemTitle}` : entityName
@@ -511,6 +538,7 @@ function buildChangeCards(change: NovelChange, changeIndex: number): DiffCardSpe
     if (scalarKeys.length > 0 || (bodyChanged && !change.bodyDiff?.length)) {
       cards.push({
         key: `${changeIndex}-entity`,
+        category,
         title: itemTitle || entityName,
         subtitle: itemTitle ? entityName : (actions[change.action] || change.action),
         action: change.action,
@@ -530,6 +558,7 @@ function buildChangeCards(change: NovelChange, changeIndex: number): DiffCardSpe
         if (text) {
           cards.push({
             key: `${changeIndex}-${richKey}`,
+            category,
             title: fields[richKey] || richKey,
             subtitle: contextPath,
             action: change.action,
@@ -542,6 +571,7 @@ function buildChangeCards(change: NovelChange, changeIndex: number): DiffCardSpe
       const bodyDiff = change.bodyDiff
       cards.push({
         key: `${changeIndex}-body`,
+        category,
         title: "章节正文",
         subtitle: contextPath,
         action: change.action,
@@ -554,6 +584,7 @@ function buildChangeCards(change: NovelChange, changeIndex: number): DiffCardSpe
   for (const key of changed) {
     cards.push({
       key: `${changeIndex}-${key}`,
+      category,
       title: fields[key] || key,
       subtitle: contextPath,
       build: () => buildTextDiffModel(diffFieldText(before[key]), diffFieldText(after[key])),
@@ -563,6 +594,7 @@ function buildChangeCards(change: NovelChange, changeIndex: number): DiffCardSpe
   if (bodyChanged) {
     cards.push({
       key: `${changeIndex}-body`,
+      category,
       title: "章节正文",
       subtitle: contextPath,
       build: () => change.bodyDiff?.length
@@ -572,6 +604,83 @@ function buildChangeCards(change: NovelChange, changeIndex: number): DiffCardSpe
   }
 
   return cards
+}
+
+type PageItem = number | "ellipsis-start" | "ellipsis-end"
+
+function buildPageItems(current: number, total: number): PageItem[] {
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1)
+  if (current <= 4) return [1, 2, 3, 4, 5, "ellipsis-end", total]
+  if (current >= total - 3) return [1, "ellipsis-start", total - 4, total - 3, total - 2, total - 1, total]
+  return [1, "ellipsis-start", current - 1, current, current + 1, "ellipsis-end", total]
+}
+
+function scrollAnchorIntoView(element: HTMLElement | null) {
+  if (!element) return
+  const top = element.getBoundingClientRect().top
+  if (top < 76) {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    window.scrollBy({ top: top - 84, behavior: reduced ? "auto" : "smooth" })
+  }
+}
+
+function HistoryPagination({
+  label,
+  page,
+  pageSize,
+  total,
+  itemLabel,
+  totalLabel,
+  compact = false,
+  disabled = false,
+  onPageChange,
+}: {
+  label: string
+  page: number
+  pageSize: number
+  total: number
+  itemLabel: string
+  totalLabel: string
+  compact?: boolean
+  disabled?: boolean
+  onPageChange: (page: number) => void
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  if (totalPages <= 1 && page <= 1) return null
+  const start = total === 0 ? 0 : Math.min(total, (page - 1) * pageSize + 1)
+  const end = Math.min(total, page * pageSize)
+  const items = buildPageItems(page, totalPages)
+
+  return <nav className={compact ? "novel-diff-pagination" : "novel-history-pagination"} aria-label={label}>
+    <span className="novel-history-pagination-info" aria-live="polite">
+      {compact ? `第 ${start}–${end} ${itemLabel}` : `显示第 ${start}–${end} ${itemLabel}`}，共 {total} {totalLabel}
+    </span>
+    <div className="novel-history-pagination-controls">
+      <button type="button" className="novel-history-page-btn is-nav"
+        disabled={disabled || page <= 1} aria-label="上一页" onClick={() => onPageChange(page - 1)}>
+        <ChevronLeft aria-hidden="true"/>
+        <span>上一页</span>
+      </button>
+      <div className="novel-history-pagination-pages">
+        {items.map(entry => typeof entry === "number"
+          ? <button key={entry} type="button" className="novel-history-page-btn"
+              data-active={entry === page || undefined}
+              aria-current={entry === page ? "page" : undefined}
+              aria-label={`第 ${entry} 页`}
+              disabled={disabled}
+              onClick={() => { if (entry !== page) onPageChange(entry) }}>
+              {entry}
+            </button>
+          : <span key={entry} className="novel-history-page-ellipsis" aria-hidden="true">…</span>)}
+      </div>
+      <span className="novel-history-pagination-compact-status" aria-hidden="true">{page} / {totalPages}</span>
+      <button type="button" className="novel-history-page-btn is-nav"
+        disabled={disabled || page >= totalPages} aria-label="下一页" onClick={() => onPageChange(page + 1)}>
+        <span>下一页</span>
+        <ChevronRight aria-hidden="true"/>
+      </button>
+    </div>
+  </nav>
 }
 
 function DiffLineRow({ line }: { line: DiffLine }) {
@@ -587,9 +696,16 @@ function DiffLineRow({ line }: { line: DiffLine }) {
   </div>
 }
 
-function UnifiedDiffCard({ spec, defaultOpen }: { spec: DiffCardSpec; defaultOpen: boolean }) {
+function UnifiedDiffCard({
+  spec,
+  open,
+  onOpenChange,
+}: {
+  spec: DiffCardSpec
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const bodyId = useId()
-  const [open, setOpen] = useState(defaultOpen)
   const [expandedFolds, setExpandedFolds] = useState<Record<string, boolean>>({})
   const model = useMemo(() => spec.build(), [spec])
 
@@ -598,7 +714,7 @@ function UnifiedDiffCard({ spec, defaultOpen }: { spec: DiffCardSpec; defaultOpe
   }
 
   return <section className="novel-diff-card" data-collapsed={!open || undefined}>
-    <button type="button" className="novel-diff-header" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(value => !value)}>
+    <button type="button" className="novel-diff-header" aria-expanded={open} aria-controls={bodyId} onClick={() => onOpenChange(!open)}>
       <span className="novel-diff-header-main">
         <ChevronDown className="novel-diff-chevron" aria-hidden="true"/>
         <Code className="novel-diff-file-icon" aria-hidden="true"/>
@@ -634,20 +750,55 @@ function UnifiedDiffCard({ spec, defaultOpen }: { spec: DiffCardSpec; defaultOpe
 }
 
 export function NovelHistoryPage({ id }: { id: number }) {
-  return <div className="novel-demo novel-history-view"><NovelAccessGate><HistoryData key={id} id={id}/></NovelAccessGate></div>
+  return <div className="novel-demo novel-history-view">
+    <NovelAccessGate>
+      <Suspense fallback={<div className="novel-loading" role="status">正在加载…</div>}>
+        <HistoryData key={id} id={id}/>
+      </Suspense>
+    </NovelAccessGate>
+  </div>
 }
 
 function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
   const detailId = useId()
+  const itemRef = useRef<HTMLLIElement>(null)
   const [opened, setOpened] = useState(false)
   const [rendered, setRendered] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [activeCategory, setActiveCategory] = useState<"ALL" | DiffCardCategory>("ALL")
+  const [cardPage, setCardPage] = useState(1)
+  const [defaultCardOpen, setDefaultCardOpen] = useState(true)
+  const [cardOpenOverrides, setCardOpenOverrides] = useState<Record<string, boolean>>({})
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => () => clearTimeout(copyTimer.current), [])
 
   const summary = useMemo(() => summarizeRevision(item), [item])
   const cards = useMemo(() => rendered ? item.changes.flatMap((change, index) => buildChangeCards(change, index)) : [], [item.changes, rendered])
+  const categoryTabs = useMemo(() => {
+    const counts = new Map<DiffCardCategory, number>()
+    for (const card of cards) counts.set(card.category, (counts.get(card.category) || 0) + 1)
+    return categoryOrder
+      .filter(category => (counts.get(category) || 0) > 0)
+      .map(category => ({ category, count: counts.get(category)! }))
+  }, [cards])
+
+  const effectiveCategory = activeCategory !== "ALL" && categoryTabs.some(tab => tab.category === activeCategory)
+    ? activeCategory
+    : "ALL"
+  const filteredCards = useMemo(
+    () => effectiveCategory === "ALL" ? cards : cards.filter(card => card.category === effectiveCategory),
+    [cards, effectiveCategory],
+  )
+  const totalCardPages = Math.max(1, Math.ceil(filteredCards.length / DIFF_CARDS_PAGE_SIZE))
+  const safeCardPage = Math.min(cardPage, totalCardPages)
+  const visibleCards = useMemo(
+    () => filteredCards.slice((safeCardPage - 1) * DIFF_CARDS_PAGE_SIZE, safeCardPage * DIFF_CARDS_PAGE_SIZE),
+    [filteredCards, safeCardPage],
+  )
+  const openVisibleCount = visibleCards.reduce((sum, spec) => sum + ((cardOpenOverrides[spec.key] ?? defaultCardOpen) ? 1 : 0), 0)
+  const shouldCollapseAll = visibleCards.length > 0 && openVisibleCount >= Math.ceil(visibleCards.length / 2)
+
   const hasChanges = item.changes.length > 0
   const shortId = item.id.slice(0, 7)
   const fullTimestamp = item.startedAt && item.startedAt !== item.createdAt
@@ -658,6 +809,26 @@ function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
     if (!hasChanges) return
     if (!opened) setRendered(true)
     setOpened(value => !value)
+  }
+
+  function selectCategory(next: "ALL" | DiffCardCategory) {
+    setActiveCategory(next)
+    setCardPage(1)
+  }
+
+  function toggleAllCards() {
+    const nextOpen = !shouldCollapseAll
+    setDefaultCardOpen(nextOpen)
+    setCardOpenOverrides({})
+  }
+
+  function setCardOpen(key: string, nextOpen: boolean) {
+    setCardOpenOverrides(current => ({ ...current, [key]: nextOpen }))
+  }
+
+  function changeCardPage(nextPage: number) {
+    setCardPage(nextPage)
+    scrollAnchorIntoView(itemRef.current)
   }
 
   async function copyRevisionId() {
@@ -671,7 +842,7 @@ function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
     }
   }
 
-  return <li className="novel-history-item" data-open={opened || undefined}>
+  return <li ref={itemRef} className="novel-history-item" data-open={opened || undefined}>
     <div className="novel-history-row">
       <div className="novel-history-main">
         <div className="novel-history-title-row">
@@ -737,11 +908,59 @@ function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
 
     {hasChanges && <NovelAutoHeight open={opened}>
       <div id={detailId} className="novel-history-details">
-        {rendered && <div className="novel-history-details-body">
-          {cards.length > 0
-            ? cards.map((spec, index) => <UnifiedDiffCard key={spec.key} spec={spec} defaultOpen={index < 6}/>)
-            : <div className="novel-diff-card"><div className="novel-diff-note">此记录未包含可展示的字段差异</div></div>}
-        </div>}
+        {rendered && (cards.length > 0 ? <>
+          {cards.length > 1 && <div className="novel-history-details-toolbar">
+            {categoryTabs.length > 1 ? <div className="novel-history-filters" role="group" aria-label="按变更类型筛选">
+              <button type="button" className="novel-history-filter-pill"
+                data-active={effectiveCategory === "ALL" || undefined}
+                aria-pressed={effectiveCategory === "ALL"}
+                onClick={() => selectCategory("ALL")}>
+                <span>全部</span>
+                <span className="novel-history-filter-count">{cards.length}</span>
+              </button>
+              {categoryTabs.map(({ category, count }) => <button key={category} type="button"
+                className="novel-history-filter-pill"
+                data-active={effectiveCategory === category || undefined}
+                aria-pressed={effectiveCategory === category}
+                onClick={() => selectCategory(category)}>
+                <span>{categoryLabels[category]}</span>
+                <span className="novel-history-filter-count">{count}</span>
+              </button>)}
+            </div> : <span className="novel-history-details-summary">
+              共 {cards.length} 项{categoryTabs[0] ? categoryLabels[categoryTabs[0].category] : ""}变更
+            </span>}
+
+            <div className="novel-history-details-tools">
+              {totalCardPages > 1 && <span className="novel-history-page-indicator">第 {safeCardPage} / {totalCardPages} 页</span>}
+              <button type="button" className="novel-history-bulk-btn" onClick={toggleAllCards}>
+                {shouldCollapseAll ? <ChevronsDownUp aria-hidden="true"/> : <ChevronsUpDown aria-hidden="true"/>}
+                <span>{shouldCollapseAll ? "全部折叠" : "全部展开"}</span>
+              </button>
+            </div>
+          </div>}
+
+          <div className="novel-history-details-body">
+            {visibleCards.map(spec => <UnifiedDiffCard
+              key={spec.key}
+              spec={spec}
+              open={cardOpenOverrides[spec.key] ?? defaultCardOpen}
+              onOpenChange={nextOpen => setCardOpen(spec.key, nextOpen)}
+            />)}
+          </div>
+
+          {totalCardPages > 1 && <HistoryPagination
+            compact
+            label="提交内变更差异分页"
+            page={safeCardPage}
+            pageSize={DIFF_CARDS_PAGE_SIZE}
+            total={filteredCards.length}
+            itemLabel="项"
+            totalLabel={effectiveCategory === "ALL" ? "项变更" : `项${categoryLabels[effectiveCategory]}变更`}
+            onPageChange={changeCardPage}
+          />}
+        </> : <div className="novel-history-details-body">
+          <div className="novel-diff-card"><div className="novel-diff-note">此记录未包含可展示的字段差异</div></div>
+        </div>)}
       </div>
     </NovelAutoHeight>}
   </li>
@@ -774,13 +993,27 @@ function HistorySkeleton() {
 
 function HistoryData({ id }: { id: number }) {
   const { request } = useNovelAccess()
-  const [page, setPage] = useState(0)
+  const params = useSearchParams()
+  const pathname = usePathname()
+  const listTopRef = useRef<HTMLOListElement>(null)
+
+  const rawPage = Number(params.get("page") || 1)
+  const currentPage = Number.isSafeInteger(rawPage) && rawPage > 0 && rawPage <= 1_000_000 ? rawPage : 1
+
   const [book, setBook] = useState<Novel | null>(null)
   const [history, setHistory] = useState<NovelHistory | null>(null)
   const [pending, setPending] = useState(true)
   const [error, setError] = useState("")
   const [revision, setRevision] = useState(0)
   const [now, setNow] = useState(() => Date.now())
+
+  const queryString = params.toString()
+  const updatePage = useCallback((nextPage: number) => {
+    const next = new URLSearchParams(queryString)
+    if (nextPage <= 1) next.delete("page")
+    else next.set("page", String(nextPage))
+    window.history.replaceState(null, "", `${pathname}${next.size ? `?${next}` : ""}`)
+  }, [pathname, queryString])
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60_000)
@@ -789,23 +1022,41 @@ function HistoryData({ id }: { id: number }) {
 
   useEffect(() => {
     const controller = new AbortController()
+    void request<Novel>(`/api/v5/novelinfo?id=${id}`, controller.signal)
+      .then(novelInfo => { if (!controller.signal.aborted) setBook(novelInfo) })
+      .catch(() => { /* History error state is driven by the history endpoint below. */ })
+    return () => controller.abort()
+  }, [request, id, revision])
+
+  useEffect(() => {
+    const controller = new AbortController()
     setPending(true); setError("")
-    void Promise.all([
-      request<Novel>(`/api/v5/novelinfo?id=${id}`, controller.signal),
-      request<NovelHistory>(`/api/v4/history?novelId=${id}&limit=20&offset=${page * 20}`, controller.signal),
-    ]).then(([novelInfo, historyPage]) => {
-      if (!controller.signal.aborted) {
-        setBook(novelInfo)
+    const offset = (currentPage - 1) * HISTORY_PAGE_SIZE
+    void request<NovelHistory>(`/api/v4/history?novelId=${id}&limit=${HISTORY_PAGE_SIZE}&offset=${offset}`, controller.signal)
+      .then(historyPage => {
+        if (controller.signal.aborted) return
+        const lastPage = Math.max(1, Math.ceil(historyPage.total / HISTORY_PAGE_SIZE))
+        if (currentPage > lastPage) {
+          updatePage(lastPage)
+          return
+        }
         setHistory(historyPage)
         setNow(Date.now())
-      }
-    }).catch(reason => {
-      if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "加载失败。")
-    }).finally(() => {
-      if (!controller.signal.aborted) setPending(false)
-    })
+        setPending(false)
+      })
+      .catch(reason => {
+        if (!controller.signal.aborted) {
+          setError(reason instanceof Error ? reason.message : "加载失败。")
+          setPending(false)
+        }
+      })
     return () => controller.abort()
-  }, [request, id, page, revision])
+  }, [request, id, currentPage, revision, updatePage])
+
+  function handlePageChange(nextPage: number) {
+    updatePage(nextPage)
+    scrollAnchorIntoView(listTopRef.current)
+  }
 
   const groups = useMemo(() => history ? groupRevisionsByDate(history.revisions) : [], [history])
 
@@ -822,7 +1073,7 @@ function HistoryData({ id }: { id: number }) {
       pending && !history ? <HistorySkeleton/> :
       !history || history.revisions.length === 0 ? <section className="panel novel-history-empty" role="status">暂无变更记录</section> :
       <>
-        <ol className="novel-history-list novel-content-ready" aria-busy={pending || undefined}>
+        <ol ref={listTopRef} className="novel-history-list novel-content-ready" aria-busy={pending || undefined}>
           {groups.map(group => <li className="novel-history-group" key={group.key}>
             <div className="novel-history-group-header">
               <span className="novel-history-node" aria-hidden="true"><GitCommitHorizontal/></span>
@@ -833,11 +1084,16 @@ function HistoryData({ id }: { id: number }) {
             </ol>
           </li>)}
         </ol>
-        {(history.total > 20 || page > 0) && <nav className="novel-history-pagination" aria-label="变更历史分页">
-          <Button variant="outline" disabled={pending || page === 0} onClick={() => setPage(value => value - 1)}>上一页</Button>
-          <span>{page + 1} / {Math.max(1, Math.ceil(history.total / 20))}</span>
-          <Button variant="outline" disabled={pending || (page + 1) * 20 >= history.total} onClick={() => setPage(value => value + 1)}>下一页</Button>
-        </nav>}
+        <HistoryPagination
+          label="变更历史分页"
+          page={currentPage}
+          pageSize={HISTORY_PAGE_SIZE}
+          total={history.total}
+          itemLabel="条"
+          totalLabel="次提交"
+          disabled={pending}
+          onPageChange={handlePageChange}
+        />
       </>}
   </main>
 }

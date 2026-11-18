@@ -5,7 +5,7 @@
   "scripts": {
     "build:linux-amd64": "node scripts/build-linux-amd64.mjs",
     "server:dev": "go run ./cmd/server",
-    "test:go": "go test ./cmd/... ./internal/... ./modules/... ./pkg/...",
+    "test:go": "node scripts/test-go.mjs",
     "db:athub:install": "npm --prefix modules/athub ci",
     "db:athub:validate": "npm --prefix modules/athub run db:validate",
     "db:athub:deploy": "npm --prefix modules/athub run db:deploy",

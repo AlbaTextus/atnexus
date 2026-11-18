@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { safeContentURL, type NovelIllustration } from "@/lib/athub/athub-client";
 
-export function IllustrationImage({ image, label, preview = false }: { image: NovelIllustration; label: string; preview?: boolean }) {
+export function IllustrationImage({ image, label, preview = false }: { image: Pick<NovelIllustration, "url" | "width" | "height">; label: string; preview?: boolean }) {
   const [failed, setFailed] = useState(false);
   const source = safeContentURL(image.url);
   return failed || !source ? <span className="novel-illustration-unavailable">图片加载失败</span>

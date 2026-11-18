@@ -59,7 +59,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     if (payload?.error === "maintenance" && typeof window !== "undefined" && !window.location.pathname.startsWith("/maintenance")) {
       window.location.replace(maintenancePath(window.location.pathname + window.location.search + window.location.hash))
     }
-    const message = payload?.error_description || payload?.error || "请求失败"
+    // A request that outlives the server's deadline is answered by the shared
+    // module wrapper, which has no description to give.
+    const message = payload?.error_description || (payload?.error === "server_timeout" ? "服务器处理超时，请稍后重试。" : payload?.error) || "请求失败"
     throw new ApiError(response.status, payload?.error || "request_failed", message)
   }
   if (init?.method === "DELETE" && path === "/api/v1/sessions/current") clearStoredContent()

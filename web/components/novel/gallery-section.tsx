@@ -5,8 +5,9 @@ import { ChevronLeft, ChevronRight, Loader2, Trash2, Upload } from "lucide-react
 import { useNovelAccess } from "@/components/novel/novel-access";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { safeContentURL, type NovelIllustration } from "@/lib/athub/athub-client";
+import { contentErrorMessage } from "@/lib/athub/athub-errors";
 import { allowsEndpoint, type RolePolicy } from "@/lib/athub/athub-permissions";
 import { readAllContent } from "@/lib/novel/novel-view-models";
 import { ContentSectionHeading } from "./content-section-heading";
@@ -85,16 +86,15 @@ export function GallerySection({ novelId }: { novelId: number }) {
           else if ("id" in result && result.novelId === novelId && safeContentURL(result.url)) saved++;
           else throw new Error("未能确认保存结果，请刷新查看后再重试。");
         } catch (reason) {
-          const message = reason instanceof ApiError && reason.status === 401 ? "登录已失效，请重新登录。"
-            : reason instanceof Error ? reason.message : "未能确认上传结果，请刷新查看后重试。";
-          failed.push({ file, message });
+          failed.push({ file, message: contentErrorMessage(reason, "未能确认上传结果，请刷新查看后重试。", { 401: "登录已失效，请重新登录。" }) });
         }
       }
       setFailures(failed);
       setMessage([saved ? `${saved} 张插图已保存。` : "", pending ? `${pending} 张插图已提交审核，通过后显示。` : ""].filter(Boolean).join(" "));
       if (saved) setRevision(value => value + 1);
     } catch (reason) {
-      setFailures(files.map(file => ({ file, message: reason instanceof Error ? reason.message : "上传失败，请重试。" })));
+      const message = contentErrorMessage(reason, "上传失败，请重试。");
+      setFailures(files.map(file => ({ file, message })));
     } finally {
       uploading.current = false; setBusy(false); setProgress("");
       if (input.current) input.current.value = "";
@@ -120,7 +120,7 @@ export function GallerySection({ novelId }: { novelId: number }) {
       } else throw new Error("未能确认删除结果，请刷新查看后再操作。");
       setConfirmDelete(null);
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "删除失败，请重试。");
+      setMessage(contentErrorMessage(reason, "删除失败，请重试。"));
     } finally {
       uploading.current = false; setBusy(false);
     }

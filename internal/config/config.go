@@ -30,25 +30,27 @@ type Config struct {
 	ATHubDatabaseURL               string
 	CreatplatDatabaseURL           string
 	CreatplatMigrationCheckTimeout time.Duration
-	IssuerURL                      string
-	AuthUIURL                      string
-	CookieSecure                   bool
-	SessionTTL                     time.Duration
-	LoginFailureLimit              int
-	LoginFailureWindow             time.Duration
-	AuthorizationCodeTTL           time.Duration
-	HTTPRequestTimeout             time.Duration
-	HTTPShutdownTimeout            time.Duration
-	BCryptCost                     int
-	SessionCookieName              string
-	WebAuthnRPID                   string
-	WebAuthnRPName                 string
-	WebAuthnRPOrigins              []string
-	PasskeyChallengeTTL            time.Duration
-	ClientSecretEncryptionKey      string
-	LoginProviders                 []LoginProvider
-	Turnstile                      Turnstile
-	SMTP                           SMTP
+	// How long ATHub call records made without a personal key are kept. Zero keeps them forever.
+	ATHubCallLogRetention     time.Duration
+	IssuerURL                 string
+	AuthUIURL                 string
+	CookieSecure              bool
+	SessionTTL                time.Duration
+	LoginFailureLimit         int
+	LoginFailureWindow        time.Duration
+	AuthorizationCodeTTL      time.Duration
+	HTTPRequestTimeout        time.Duration
+	HTTPShutdownTimeout       time.Duration
+	BCryptCost                int
+	SessionCookieName         string
+	WebAuthnRPID              string
+	WebAuthnRPName            string
+	WebAuthnRPOrigins         []string
+	PasskeyChallengeTTL       time.Duration
+	ClientSecretEncryptionKey string
+	LoginProviders            []LoginProvider
+	Turnstile                 Turnstile
+	SMTP                      SMTP
 }
 
 func Load() (Config, error) {
@@ -72,6 +74,7 @@ func Load() (Config, error) {
 		ATHubDatabaseURL:               os.Getenv("ATHUB_DATABASE_URL"),
 		CreatplatDatabaseURL:           strings.TrimSpace(os.Getenv("CREATPLAT_DATABASE_URL")),
 		CreatplatMigrationCheckTimeout: env.duration("CREATPLAT_MIGRATION_CHECK_TIMEOUT", 10*time.Minute),
+		ATHubCallLogRetention:          env.duration("ATHUB_CALL_LOG_RETENTION", 30*24*time.Hour),
 		IssuerURL:                      strings.TrimRight(getenv("ISSUER_URL", "http://localhost:3288"), "/"),
 		AuthUIURL:                      strings.TrimRight(getenv("AUTH_UI_URL", "http://localhost:3288"), "/"),
 		SessionTTL:                     env.duration("SESSION_TTL", 24*time.Hour),
@@ -119,6 +122,9 @@ func Load() (Config, error) {
 	}
 	if c.CreatplatDatabaseURL == "" {
 		return Config{}, errors.New("CREATPLAT_DATABASE_URL is required; creator data must use a separate database")
+	}
+	if c.ATHubCallLogRetention < 0 {
+		return Config{}, errors.New("ATHUB_CALL_LOG_RETENTION must not be negative")
 	}
 	if c.CreatplatMigrationCheckTimeout <= 0 {
 		return Config{}, errors.New("CREATPLAT_MIGRATION_CHECK_TIMEOUT must be positive")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -60,5 +61,38 @@ func TestATHubSessionAccountingIntegration(t *testing.T) {
 				t.Fatalf("session traffic in API key history: %+v err=%v", calls, err)
 			}
 		})
+	}
+}
+
+func TestPurgeATHubCallLogKeepsKeyCallsIntegration(t *testing.T) {
+	st := athubTestStore(t)
+	ctx := context.Background()
+	user := uuid.New()
+	if _, err := st.pool.Exec(ctx, `INSERT INTO users(id) VALUES($1)`, user); err != nil {
+		t.Fatal(err)
+	}
+	key, err := st.CreateATHubKey(ctx, ATHubKey{ID: uuid.New(), UserID: user, Name: "ATHub", TokenHash: uuid.NewString(), Prefix: "ath_test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	insert := func(keyID *uuid.UUID, userID *uuid.UUID, age string) {
+		t.Helper()
+		if _, err := st.pool.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,port,authenticated,started_at)
+			VALUES($1,$2,$3,$4,'GET','/api/v2/content',8003,true,now()-$5::interval)`, uuid.New(), userID, keyID, uuid.New(), age); err != nil {
+			t.Fatal(err)
+		}
+	}
+	insert(nil, nil, "40 days")       // anonymous, old
+	insert(nil, &user, "40 days")     // browser session, old
+	insert(nil, &user, "1 day")       // browser session, recent
+	insert(&key.ID, &user, "40 days") // personal key, old
+	removed, err := st.PurgeATHubCallLog(ctx, time.Now().Add(-30*24*time.Hour))
+	if err != nil || removed != 2 {
+		t.Fatalf("removed=%d err=%v", removed, err)
+	}
+	var keyless, keyed int
+	if err := st.pool.QueryRow(ctx, `SELECT COUNT(*) FILTER(WHERE key_id IS NULL),COUNT(*) FILTER(WHERE key_id IS NOT NULL)
+		FROM athub_api_calls`).Scan(&keyless, &keyed); err != nil || keyless != 1 || keyed != 1 {
+		t.Fatalf("keyless=%d keyed=%d err=%v", keyless, keyed, err)
 	}
 }

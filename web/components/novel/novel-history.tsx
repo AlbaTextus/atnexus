@@ -12,7 +12,7 @@ import { ContentFailure, NovelAccessGate, useNovelAccess } from "@/components/no
 import { ContributorAvatar } from "@/components/novel/contributors-card"
 import { NovelAutoHeight } from "@/components/novel/novel-motion"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import type { ChapterBodyHunk, Novel, NovelChange, NovelHistory, NovelRevision } from "@/lib/athub/athub-client"
+import type { ChapterBodyHunk, Novel, NovelChange, NovelHistory, NovelRevision, NovelRevisionChanges } from "@/lib/athub/athub-client"
 
 const fields: Record<string, string> = {
   title: "标题", summary: "简介", coverUrl: "封面", status: "连载状态",
@@ -95,14 +95,15 @@ function summarizeNovelUpdates(updates: NovelChange[]): string {
   return `修改小说${labels.slice(0, 3).join("、")}等 ${labels.length} 项资料`
 }
 
-function summarizeNamedBatch(items: NovelChange[], unit: string, verb: string): string {
+// total is the real number of such changes; items may be only a sample of them.
+function summarizeNamedBatch(items: NovelChange[], unit: string, verb: string, total = items.length): string {
   const first = titleOf(items[0]?.after, items[0]?.before)
-  if (items.length === 1) return first ? `${verb}${unit}「${first}」` : `${verb}${unit}`
-  return first ? `${verb}「${first}」等 ${items.length} 个${unit}` : `${verb} ${items.length} 个${unit}`
+  if (total === 1) return first ? `${verb}${unit}「${first}」` : `${verb}${unit}`
+  return first ? `${verb}「${first}」等 ${total} 个${unit}` : `${verb} ${total} 个${unit}`
 }
 
-function summarizeChapterUpdates(updates: NovelChange[]): string {
-  if (updates.length === 1) {
+function summarizeChapterUpdates(updates: NovelChange[], total = updates.length): string {
+  if (total === 1 && updates.length === 1) {
     const before = updates[0].before || {}, after = updates[0].after || {}
     const title = titleOf(after, before)
     const target = title ? `章节「${title}」` : "章节"
@@ -119,13 +120,19 @@ function summarizeChapterUpdates(updates: NovelChange[]): string {
     const orderChanged = before.order !== after.order || before.volumeId !== after.volumeId
     return orderChanged && before.contentHash === after.contentHash && before.title === after.title
   })
-  if (onlyOrder) return `调整 ${updates.length} 个章节的目录顺序`
-  return summarizeNamedBatch(updates, "章节", "修改")
+  if (onlyOrder && total === updates.length) return `调整 ${total} 个章节的目录顺序`
+  return summarizeNamedBatch(updates, "章节", "修改", total)
 }
 
 function summarizeRevision(item: NovelRevision): string {
   const { changes } = item
   if (!changes.length) return "提交变更"
+  // Counts come from the server when it sent them, since changes may be a sample.
+  const stats = item.changeStats
+  const count = (entity: string, action: string, sample: NovelChange[]) => stats
+    ? stats.find(stat => stat.entity === entity && stat.action === action)?.count ?? 0
+    : sample.length
+  const novelInsertCount = count("Novel", "INSERT", []) || 0
 
   const novelInserts = changes.filter(c => c.entity === "Novel" && c.action === "INSERT")
   const novelDeletes = changes.filter(c => c.entity === "Novel" && c.action === "DELETE")
@@ -143,30 +150,33 @@ function summarizeRevision(item: NovelRevision): string {
   const others = changes.filter(c => !knownEntities.has(c.entity))
 
   const clauses: string[] = []
-  const createdNovel = novelInserts.length > 0
+  const createdNovel = novelInserts.length > 0 || novelInsertCount > 0
+  const volInsertN = count("Volume", "INSERT", volInserts), volUpdateN = count("Volume", "UPDATE", volUpdates), volDeleteN = count("Volume", "DELETE", volDeletes)
+  const chapInsertN = count("Chapter", "INSERT", chapInserts), chapUpdateN = count("Chapter", "UPDATE", chapUpdates), chapDeleteN = count("Chapter", "DELETE", chapDeletes)
+  const illInsertN = count("Illustration", "INSERT", illInserts), illUpdateN = count("Illustration", "UPDATE", illUpdates), illDeleteN = count("Illustration", "DELETE", illDeletes)
 
   if (createdNovel) {
     const imported: string[] = []
-    if (volInserts.length > 0) imported.push(`${volInserts.length} 卷`)
-    if (chapInserts.length > 0) imported.push(`${chapInserts.length} 章`)
-    if (illInserts.length > 0) imported.push(`${illInserts.length} 张插图`)
+    if (volInsertN > 0) imported.push(`${volInsertN} 卷`)
+    if (chapInsertN > 0) imported.push(`${chapInsertN} 章`)
+    if (illInsertN > 0) imported.push(`${illInsertN} 张插图`)
     clauses.push(imported.length ? `创建小说条目，收录 ${imported.join("、")}` : "创建小说条目")
   }
 
   if (novelDeletes.length > 0) clauses.push("删除小说条目")
   else if (novelUpdates.length > 0) clauses.push(summarizeNovelUpdates(novelUpdates))
 
-  if (!createdNovel && volInserts.length > 0) clauses.push(summarizeNamedBatch(volInserts, "分卷", "新增"))
-  if (volUpdates.length > 0) clauses.push(summarizeNamedBatch(volUpdates, "分卷", "修改"))
-  if (volDeletes.length > 0) clauses.push(summarizeNamedBatch(volDeletes, "分卷", "删除"))
+  if (!createdNovel && volInsertN > 0) clauses.push(summarizeNamedBatch(volInserts, "分卷", "新增", volInsertN))
+  if (volUpdateN > 0) clauses.push(summarizeNamedBatch(volUpdates, "分卷", "修改", volUpdateN))
+  if (volDeleteN > 0) clauses.push(summarizeNamedBatch(volDeletes, "分卷", "删除", volDeleteN))
 
-  if (!createdNovel && chapInserts.length > 0) clauses.push(summarizeNamedBatch(chapInserts, "章节", "新增"))
-  if (chapUpdates.length > 0) clauses.push(summarizeChapterUpdates(chapUpdates))
-  if (chapDeletes.length > 0) clauses.push(summarizeNamedBatch(chapDeletes, "章节", "删除"))
+  if (!createdNovel && chapInsertN > 0) clauses.push(summarizeNamedBatch(chapInserts, "章节", "新增", chapInsertN))
+  if (chapUpdateN > 0) clauses.push(summarizeChapterUpdates(chapUpdates, chapUpdateN))
+  if (chapDeleteN > 0) clauses.push(summarizeNamedBatch(chapDeletes, "章节", "删除", chapDeleteN))
 
-  if (!createdNovel && illInserts.length > 0) clauses.push(illInserts.length === 1 ? "上传插图" : `上传 ${illInserts.length} 张插图`)
-  if (illUpdates.length > 0) clauses.push("更新插图信息")
-  if (illDeletes.length > 0) clauses.push(illDeletes.length === 1 ? "删除插图" : `删除 ${illDeletes.length} 张插图`)
+  if (!createdNovel && illInsertN > 0) clauses.push(illInsertN === 1 ? "上传插图" : `上传 ${illInsertN} 张插图`)
+  if (illUpdateN > 0) clauses.push("更新插图信息")
+  if (illDeleteN > 0) clauses.push(illDeleteN === 1 ? "删除插图" : `删除 ${illDeleteN} 张插图`)
 
   if (layoutChanges.length > 0) {
     const lastLayout = layoutChanges[layoutChanges.length - 1]
@@ -485,6 +495,8 @@ function buildBodyHunksModel(hunks: ChapterBodyHunk[]): UnifiedDiffModel {
 }
 
 const HISTORY_PAGE_SIZE = 20
+// Changes of one entry are read this many at a time once it is opened.
+const REVISION_CHANGES_PAGE_SIZE = 100
 const DIFF_CARDS_PAGE_SIZE = 10
 
 type DiffCardCategory = "Novel" | "Volume" | "Chapter" | "Illustration" | "Other"
@@ -770,11 +782,44 @@ function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
   const [defaultCardOpen, setDefaultCardOpen] = useState(true)
   const [cardOpenOverrides, setCardOpenOverrides] = useState<Record<string, boolean>>({})
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const { request } = useNovelAccess()
+  const changeTotal = item.changeCount ?? item.changes.length
+  // The list omits chapter body diffs and everything past its first changes.
+  // An entry it describes completely is shown as is; others are read in pages.
+  const listedCompletely = changeTotal <= item.changes.length && !item.changes.some(change =>
+    change.entity === "Chapter" && change.action === "UPDATE" && change.before?.contentHash !== change.after?.contentHash)
+  const [loaded, setLoaded] = useState<NovelChange[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState("")
+  const details = listedCompletely ? item.changes : loaded
+  const loader = useRef<AbortController | null>(null)
 
-  useEffect(() => () => clearTimeout(copyTimer.current), [])
+  useEffect(() => () => { clearTimeout(copyTimer.current); loader.current?.abort() }, [])
+
+  function loadChanges() {
+    if (loading || listedCompletely) return
+    const offset = loaded?.length ?? 0
+    if (loaded && offset >= changeTotal) return
+    const controller = new AbortController()
+    loader.current = controller
+    setLoading(true); setLoadError("")
+    void request<NovelRevisionChanges>(
+      `/api/v4/history?novelId=${item.novelId}&revision=${item.id}&limit=${REVISION_CHANGES_PAGE_SIZE}&offset=${offset}`, controller.signal)
+      .then(page => {
+        if (controller.signal.aborted) return
+        setLoaded(current => [...(current ?? []), ...page.changes])
+        setLoading(false)
+      })
+      .catch(reason => {
+        if (controller.signal.aborted) return
+        setLoadError(reason instanceof Error ? reason.message : "加载失败。")
+        setLoading(false)
+      })
+  }
 
   const summary = useMemo(() => summarizeRevision(item), [item])
-  const cards = useMemo(() => rendered ? item.changes.flatMap((change, index) => buildChangeCards(change, index)) : [], [item.changes, rendered])
+  const cards = useMemo(() => rendered && details ? details.flatMap((change, index) => buildChangeCards(change, index)) : [], [details, rendered])
+  const remaining = details ? Math.max(0, changeTotal - details.length) : 0
   const categoryTabs = useMemo(() => {
     const counts = new Map<DiffCardCategory, number>()
     for (const card of cards) counts.set(card.category, (counts.get(card.category) || 0) + 1)
@@ -807,7 +852,10 @@ function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
 
   function toggle() {
     if (!hasChanges) return
-    if (!opened) setRendered(true)
+    if (!opened) {
+      setRendered(true)
+      if (!details) loadChanges()
+    }
     setOpened(value => !value)
   }
 
@@ -854,11 +902,11 @@ function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
             <Tooltip>
               <TooltipTrigger render={<button type="button" className="novel-history-more" data-open={opened || undefined}
                 aria-expanded={opened} aria-controls={detailId}
-                aria-label={opened ? "收起变更详情" : `展开 ${item.changes.length} 处变更详情`}
+                aria-label={opened ? "收起变更详情" : `展开 ${changeTotal} 处变更详情`}
                 onClick={toggle} />}>
                 <MoreHorizontal aria-hidden="true"/>
               </TooltipTrigger>
-              <TooltipContent>{opened ? "收起变更详情" : `展开 ${item.changes.length} 处变更详情`}</TooltipContent>
+              <TooltipContent>{opened ? "收起变更详情" : `展开 ${changeTotal} 处变更详情`}</TooltipContent>
             </Tooltip>
           </> : <span className="novel-history-title is-static" title={summary}>{summary}</span>}
         </div>
@@ -908,7 +956,12 @@ function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
 
     {hasChanges && <NovelAutoHeight open={opened}>
       <div id={detailId} className="novel-history-details">
-        {rendered && (cards.length > 0 ? <>
+        {rendered && !details && <div className="novel-history-details-body">
+          <div className="novel-diff-card"><div className="novel-diff-note" role="status">
+            {loadError ? <>{loadError} <button type="button" className="novel-history-bulk-btn" onClick={loadChanges}>重试</button></> : "正在加载变更详情…"}
+          </div></div>
+        </div>}
+        {rendered && details && (cards.length > 0 ? <>
           {cards.length > 1 && <div className="novel-history-details-toolbar">
             {categoryTabs.length > 1 ? <div className="novel-history-filters" role="group" aria-label="按变更类型筛选">
               <button type="button" className="novel-history-filter-pill"
@@ -958,6 +1011,16 @@ function HistoryRevision({ item, now }: { item: NovelRevision; now: number }) {
             totalLabel={effectiveCategory === "ALL" ? "项变更" : `项${categoryLabels[effectiveCategory]}变更`}
             onPageChange={changeCardPage}
           />}
+          {remaining > 0 && <div className="novel-history-details-toolbar">
+            <span className="novel-history-details-summary" role="status">
+              {loadError || `已加载 ${details.length} / ${changeTotal} 处变更`}
+            </span>
+            <div className="novel-history-details-tools">
+              <button type="button" className="novel-history-bulk-btn" disabled={loading} onClick={loadChanges}>
+                <span>{loading ? "正在加载…" : loadError ? "重试" : "加载更多变更"}</span>
+              </button>
+            </div>
+          </div>}
         </> : <div className="novel-history-details-body">
           <div className="novel-diff-card"><div className="novel-diff-note">此记录未包含可展示的字段差异</div></div>
         </div>)}

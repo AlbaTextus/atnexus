@@ -13,6 +13,7 @@ import (
 	"github.com/AlbaTextus/atnexus/internal/apibase"
 	"github.com/AlbaTextus/atnexus/internal/store"
 	"github.com/AlbaTextus/atnexus/modules/athub"
+	"github.com/AlbaTextus/atnexus/modules/creatplat/repository"
 	"github.com/google/uuid"
 )
 
@@ -159,7 +160,7 @@ func httpQuery(r *http.Request) (url.Values, error) {
 		return nil, err
 	}
 	for key, values := range query {
-		if len(values) != 1 || (key != "novelId" && (r.URL.Path == "/api/v3/contributors" || (key != "limit" && key != "offset"))) {
+		if len(values) != 1 || (key != "novelId" && (r.URL.Path == "/api/v3/contributors" || (key != "limit" && key != "offset" && key != "revision"))) {
 			return nil, errors.New("unknown or repeated parameter")
 		}
 	}
@@ -207,7 +208,26 @@ func (a *History) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var result any
-	if r.URL.Path == "/api/v3/contributors" {
+	if query.Has("revision") {
+		// One entry's changes, page by page; the list only samples them.
+		revision, parseErr := uuid.Parse(query.Get("revision"))
+		if parseErr != nil {
+			apibase.WriteError(w, 400, "invalid_revision")
+			return
+		}
+		details, ok := a.store.(interface {
+			NovelRevisionChanges(context.Context, int32, uuid.UUID, int, int) (repository.RevisionChanges, error)
+		})
+		if !ok {
+			apibase.WriteError(w, 503, "history_unavailable")
+			return
+		}
+		result, err = details.NovelRevisionChanges(r.Context(), int32(id), revision, limit, offset)
+		if errors.Is(err, store.ErrNotFound) {
+			apibase.WriteError(w, 404, "revision_not_found")
+			return
+		}
+	} else if r.URL.Path == "/api/v3/contributors" {
 		result, err = st.NovelContributors(r.Context(), int32(id))
 	} else {
 		result, err = st.NovelHistory(r.Context(), int32(id), limit, offset)

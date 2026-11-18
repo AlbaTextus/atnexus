@@ -29,3 +29,6 @@ func (p *Postgres) NovelHistory(ctx context.Context, id int32, limit, offset int
 func (p *Postgres) NovelContributors(ctx context.Context, id int32) (json.RawMessage, error) {
 	return repository.NewHistory(p.pool, ErrNotFound).NovelContributors(ctx, id)
 }
+func (p *Postgres) NovelRevisionChanges(ctx context.Context, id int32, revision uuid.UUID, limit, offset int) (repository.RevisionChanges, error) {
+	return repository.NewHistory(p.pool, ErrNotFound).NovelRevisionChanges(ctx, id, revision, limit, offset)
+}

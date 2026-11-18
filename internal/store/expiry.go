@@ -49,8 +49,29 @@ func (p *Postgres) PurgeExpired(ctx context.Context) (map[string]int64, error) {
 	return removed, nil
 }
 
+// PurgeATHubCallLog deletes ATHub call records made without a personal key
+// that started before the given time: anonymous requests and browser-session
+// traffic. They are an audit trail only. Calls made with a key are kept, since
+// usage statistics and per-key totals are counted from them.
+func (p *Postgres) PurgeATHubCallLog(ctx context.Context, before time.Time) (int64, error) {
+	var removed int64
+	for {
+		tag, err := p.pool.Exec(ctx, `DELETE FROM athub_api_calls WHERE id IN (
+			SELECT id FROM athub_api_calls WHERE key_id IS NULL AND started_at<$1 LIMIT $2)`, before, expiryPurgeBatch)
+		if err != nil {
+			return removed, err
+		}
+		removed += tag.RowsAffected()
+		if tag.RowsAffected() < expiryPurgeBatch {
+			return removed, nil
+		}
+	}
+}
+
 // RunExpiryPurge purges once at startup and then periodically until ctx ends.
-func (p *Postgres) RunExpiryPurge(ctx context.Context, logger *slog.Logger) {
+// Keyless ATHub call records older than callLogRetention are purged as well;
+// zero keeps them forever.
+func (p *Postgres) RunExpiryPurge(ctx context.Context, logger *slog.Logger, callLogRetention time.Duration) {
 	ticker := time.NewTicker(expiryPurgeInterval)
 	defer ticker.Stop()
 	for {
@@ -64,6 +85,18 @@ func (p *Postgres) RunExpiryPurge(ctx context.Context, logger *slog.Logger) {
 		for table, count := range removed {
 			if count > 0 {
 				logger.Info("purged expired credentials", "table", table, "rows", count)
+			}
+		}
+		if callLogRetention > 0 {
+			count, err := p.PurgeATHubCallLog(ctx, time.Now().Add(-callLogRetention))
+			if ctx.Err() != nil {
+				return
+			}
+			if err != nil {
+				logger.Error("purge ATHub call log", "error", err)
+			}
+			if count > 0 {
+				logger.Info("purged ATHub call log", "rows", count)
 			}
 		}
 		select {

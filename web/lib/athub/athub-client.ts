@@ -26,8 +26,14 @@ export type NovelChange = { entity: string; action: string; before: Record<strin
 export type NovelRevision = {
   id: string; novelId: number
   contributor: { id: string; name: string; avatar: string }
-  createdAt: string; startedAt?: string; revisionCount?: number; changes: NovelChange[]
+  createdAt: string; startedAt?: string; revisionCount?: number
+  // The list carries at most the first 100 changes, without chapter body diffs.
+  // changeCount and changeStats cover all of them; the rest is read on demand.
+  changes: NovelChange[]
+  changeCount?: number
+  changeStats?: { entity: string; action: string; count: number }[]
 }
+export type NovelRevisionChanges = { changes: NovelChange[]; total: number }
 export type NovelHistory = { revisions: NovelRevision[]; total: number }
 export type ChapterSummary = { id: number; novelId: number; volumeId: number | null; order: number; title: string; updatedAt: string }
 export type Chapter = ChapterSummary & { content: string }

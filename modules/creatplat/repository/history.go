@@ -19,6 +19,57 @@ type NovelRevision struct {
 	CreatedAt     time.Time       `json:"createdAt"`
 	StartedAt     time.Time       `json:"startedAt"`
 	RevisionCount int64           `json:"revisionCount"`
+	// Changes holds at most HistoryListChanges entries, without chapter body
+	// diffs. ChangeCount and ChangeStats describe all of them.
+	ChangeCount int64           `json:"changeCount"`
+	ChangeStats json.RawMessage `json:"changeStats"`
+}
+
+// RevisionChanges is one page of the complete changes of a history entry.
+type RevisionChanges struct {
+	Changes json.RawMessage `json:"changes"`
+	Total   int64           `json:"total"`
+}
+
+// HistoryListChanges bounds the changes listed per history entry. The rest is
+// read page by page with NovelRevisionChanges.
+const HistoryListChanges = 100
+
+// Consecutive revisions by one account form one entry. Both the list and the
+// detail query group the same way, so an entry's ID finds the same changes.
+const groupedRevisions = `WITH visible AS (
+		SELECT *,COALESCE(NULLIF(contributor->>'id',''),user_id::text,id::text) AS actor
+		FROM novel_revisions WHERE novel_id=$1 AND status='completed'
+	), boundaries AS (
+		SELECT *,CASE WHEN actor=LAG(actor) OVER (ORDER BY created_at DESC,id DESC)
+			THEN 0 ELSE 1 END AS boundary FROM visible
+	), grouped AS (
+		SELECT *,SUM(boundary) OVER (ORDER BY created_at DESC,id DESC ROWS UNBOUNDED PRECEDING) AS group_id
+		FROM boundaries
+	)`
+
+// NovelRevisionChanges returns a page of the changes of the history entry that
+// contains the given revision, in the order they were made.
+func (p *History) NovelRevisionChanges(ctx context.Context, novelID int32, revision uuid.UUID, limit, offset int) (RevisionChanges, error) {
+	var found bool
+	var result RevisionChanges
+	var changes []byte
+	err := p.pool.QueryRow(ctx, groupedRevisions+`, items AS (
+		SELECT c.value,ROW_NUMBER() OVER (ORDER BY g.created_at,g.id,c.ordinality) AS n
+		FROM grouped g CROSS JOIN LATERAL jsonb_array_elements(g.changes) WITH ORDINALITY c(value,ordinality)
+		WHERE g.group_id=(SELECT group_id FROM grouped WHERE id=$2)
+	)
+	SELECT EXISTS(SELECT 1 FROM grouped WHERE id=$2),(SELECT COUNT(*) FROM items),
+		COALESCE((SELECT jsonb_agg(value ORDER BY n) FROM items WHERE n>$4 AND n<=$4::bigint+$3),'[]'::jsonb)`,
+		novelID, revision, limit, offset).Scan(&found, &result.Total, &changes)
+	if err != nil {
+		return result, err
+	}
+	if !found {
+		return result, p.notFound
+	}
+	result.Changes = changes
+	return result, nil
 }
 
 type NovelHistory struct {
@@ -97,16 +148,9 @@ func (p *History) NovelHistory(ctx context.Context, novelID int32, limit, offset
 	// Group consecutive submissions by stable account identity before pagination.
 	// Keep the stored revisions intact; old imports benefit from the same view.
 	// Missing identities are unique per revision and must never merge strangers.
-	rows, err := p.pool.Query(ctx, `WITH visible AS (
-		SELECT *,COALESCE(NULLIF(contributor->>'id',''),user_id::text,id::text) AS actor
-		FROM novel_revisions WHERE novel_id=$1 AND status='completed'
-	), boundaries AS (
-		SELECT *,CASE WHEN actor=LAG(actor) OVER (ORDER BY created_at DESC,id DESC)
-			THEN 0 ELSE 1 END AS boundary FROM visible
-	), grouped AS (
-		SELECT *,SUM(boundary) OVER (ORDER BY created_at DESC,id DESC ROWS UNBOUNDED PRECEDING) AS group_id
-		FROM boundaries
-	), groups AS (
+	// An entry may hold thousands of changes with whole chapter diffs. The
+	// list carries a bounded, diff-free sample plus counts of everything.
+	rows, err := p.pool.Query(ctx, groupedRevisions+`, groups AS (
 		SELECT group_id,(ARRAY_AGG(id ORDER BY created_at DESC,id DESC))[1] AS id,
 			(ARRAY_AGG(contributor ORDER BY created_at DESC,id DESC))[1] AS contributor,
 			MAX(created_at) AS created_at,MIN(created_at) AS started_at,COUNT(*) AS revision_count
@@ -114,30 +158,40 @@ func (p *History) NovelHistory(ctx context.Context, novelID int32, limit, offset
 	), page AS (
 		SELECT * FROM groups ORDER BY group_id LIMIT $2 OFFSET $3
 	)
-	SELECT p.id,p.contributor,COALESCE(c.changes,'[]'::jsonb),p.created_at,p.started_at,p.revision_count,t.total
+	SELECT p.id,p.contributor,COALESCE(c.changes,'[]'::jsonb),p.created_at,p.started_at,p.revision_count,t.total,
+		COALESCE(c.change_count,0),COALESCE(s.stats,'[]'::jsonb)
 	FROM (SELECT COUNT(*) AS total FROM groups) t LEFT JOIN page p ON true
 	LEFT JOIN LATERAL (
-		SELECT jsonb_agg(c.value ORDER BY g.created_at,g.id,c.ordinality) AS changes
-		FROM grouped g CROSS JOIN LATERAL jsonb_array_elements(g.changes) WITH ORDINALITY c(value,ordinality)
-		WHERE g.group_id=p.group_id
+		SELECT COUNT(*) AS change_count,jsonb_agg(x.value - 'bodyDiff' ORDER BY x.n) FILTER (WHERE x.n<=$4) AS changes
+		FROM (SELECT c.value,ROW_NUMBER() OVER (ORDER BY g.created_at,g.id,c.ordinality) AS n
+			FROM grouped g CROSS JOIN LATERAL jsonb_array_elements(g.changes) WITH ORDINALITY c(value,ordinality)
+			WHERE g.group_id=p.group_id) x
 	) c ON true
-	ORDER BY p.group_id`, novelID, limit, offset)
+	LEFT JOIN LATERAL (
+		SELECT jsonb_agg(jsonb_build_object('entity',k.entity,'action',k.action,'count',k.total) ORDER BY k.entity,k.action) AS stats
+		FROM (SELECT c.value->>'entity' AS entity,c.value->>'action' AS action,COUNT(*) AS total
+			FROM grouped g CROSS JOIN LATERAL jsonb_array_elements(g.changes) c(value)
+			WHERE g.group_id=p.group_id GROUP BY 1,2) k
+	) s ON true
+	ORDER BY p.group_id`, novelID, limit, offset, HistoryListChanges)
 	if err != nil {
 		return result, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var id *uuid.UUID
-		var actor, changes []byte
+		var actor, changes, stats []byte
 		var created, started *time.Time
 		var count *int64
-		if err := rows.Scan(&id, &actor, &changes, &created, &started, &count, &result.Total); err != nil {
+		var changeCount int64
+		if err := rows.Scan(&id, &actor, &changes, &created, &started, &count, &result.Total, &changeCount, &stats); err != nil {
 			return result, err
 		}
 		if id != nil {
 			result.Revisions = append(result.Revisions, NovelRevision{
 				ID: *id, NovelID: novelID, Contributor: actor, Changes: changes,
 				CreatedAt: *created, StartedAt: *started, RevisionCount: *count,
+				ChangeCount: changeCount, ChangeStats: stats,
 			})
 		}
 	}

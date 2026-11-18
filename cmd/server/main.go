@@ -180,7 +180,7 @@ func run(logger *slog.Logger) error {
 	var background sync.WaitGroup
 	defer background.Wait()
 	defer stop()
-	background.Go(func() { st.RunExpiryPurge(signalCtx, logger) })
+	background.Go(func() { st.RunExpiryPurge(signalCtx, logger, cfg.ATHubCallLogRetention) })
 	background.Go(func() { access.ReconcileRevisions(signalCtx, hub) })
 	// Edited legacy rows mean the old service is still writing: stop serving,
 	// exactly as the startup check used to refuse to start.

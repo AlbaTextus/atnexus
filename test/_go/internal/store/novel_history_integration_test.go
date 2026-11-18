@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -207,6 +208,79 @@ func TestNovelHistoryIntegration(t *testing.T) {
 		}
 		if history.Revisions[0].ID.String() != "00000000-0000-0000-0000-000000000002" {
 			t.Fatal("equal timestamp ordering is not deterministic")
+		}
+	})
+
+	t.Run("large entries are listed bounded and read by page", func(t *testing.T) {
+		author := uuid.New()
+		if _, err := st.pool.Exec(ctx, `INSERT INTO users(id) VALUES($1)`, author); err != nil {
+			t.Fatal(err)
+		}
+		actor, _ := json.Marshal(map[string]string{"id": author.String(), "name": "作者", "avatar": ""})
+		var newest uuid.UUID
+		// Two consecutive revisions by one account: 150 chapter edits, then 30 more.
+		for round, size := range []int{150, 30} {
+			changes := make([]map[string]any, size)
+			for i := range changes {
+				changes[i] = map[string]any{"entity": "Chapter", "action": "UPDATE", "bodyDiff": []int{round, i},
+					"after": map[string]any{"title": "章", "round": round, "index": i}}
+			}
+			if round == 1 {
+				changes[0]["entity"], changes[0]["action"] = "Volume", "INSERT"
+			}
+			raw, _ := json.Marshal(changes)
+			batch, revision := uuid.New(), NovelRevision{ID: uuid.New(), NovelID: 8, UserID: &author, Contributor: actor, Changes: raw}
+			if err := st.PrepareNovelRevisions(ctx, batch, []NovelRevision{revision}); err != nil {
+				t.Fatal(err)
+			}
+			if err := st.FinishNovelRevisions(ctx, batch, true); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := st.pool.Exec(ctx, `UPDATE novel_revisions SET created_at=$2 WHERE id=$1`, revision.ID,
+				time.Date(2026, 11, 2, 0, round, 0, 0, time.UTC)); err != nil {
+				t.Fatal(err)
+			}
+			newest = revision.ID
+		}
+		history, err := st.NovelHistory(ctx, 8, 20, 0)
+		if err != nil || history.Total != 1 || len(history.Revisions) != 1 {
+			t.Fatalf("history=%+v err=%v", history, err)
+		}
+		entry := history.Revisions[0]
+		var listed []map[string]any
+		var stats []struct {
+			Entity, Action string
+			Count          int64
+		}
+		if json.Unmarshal(entry.Changes, &listed) != nil || json.Unmarshal(entry.ChangeStats, &stats) != nil {
+			t.Fatal("entry is not JSON")
+		}
+		if entry.ID != newest || entry.ChangeCount != 180 || len(listed) != 100 {
+			t.Fatalf("id=%s count=%d listed=%d", entry.ID, entry.ChangeCount, len(listed))
+		}
+		for _, change := range listed {
+			if _, kept := change["bodyDiff"]; kept {
+				t.Fatal("list carries a chapter body diff")
+			}
+		}
+		if len(stats) != 2 || stats[0].Entity != "Chapter" || stats[0].Count != 179 || stats[1].Entity != "Volume" || stats[1].Count != 1 {
+			t.Fatalf("stats=%+v", stats)
+		}
+		page, err := st.NovelRevisionChanges(ctx, 8, newest, 100, 100)
+		var rest []map[string]any
+		if err != nil || page.Total != 180 || json.Unmarshal(page.Changes, &rest) != nil || len(rest) != 80 {
+			t.Fatalf("page total=%d rest=%d err=%v", page.Total, len(rest), err)
+		}
+		// Oldest first: the page starts inside the first revision and keeps diffs.
+		first := rest[0]["after"].(map[string]any)
+		if first["round"] != float64(0) || first["index"] != float64(100) || rest[0]["bodyDiff"] == nil || rest[50]["entity"] != "Volume" {
+			t.Fatalf("page starts at %+v", rest[0])
+		}
+		if _, err := st.NovelRevisionChanges(ctx, 8, uuid.New(), 100, 0); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("unknown revision: %v", err)
+		}
+		if _, err := st.NovelRevisionChanges(ctx, 9, newest, 100, 0); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("revision of another novel: %v", err)
 		}
 	})
 }

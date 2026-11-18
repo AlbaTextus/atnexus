@@ -59,7 +59,7 @@ export function IllustrationCanvas({ novelId, images, editing, policy, onPreview
   useEffect(() => {
     const abort = new AbortController();
     setLoading(true);
-    request<IllustrationLayout>(`/api/v5/illustration-layout?novelId=${novelId}`, abort.signal)
+    request<IllustrationLayout>(`/api/v4/account/athub/novels/${novelId}/illustration-layout`, abort.signal)
       .then(value => {
         if (abort.signal.aborted) return;
         if (value.novelId !== novelId || !Array.isArray(value.blocks) || !Number.isInteger(value.revision)) throw new Error("插图布局数据无效。");

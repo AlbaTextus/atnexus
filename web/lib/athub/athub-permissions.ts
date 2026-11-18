@@ -9,8 +9,13 @@ export const endpointNames: Record<string, string> = {
   "/api/v2/platforms": "平台", "/api/v2/authors": "作者", "/api/v2/tags": "标签",
   "/api/v2/novelinfo": "小说资料", "/api/v2/content": "章节正文", "/api/v2/toc": "目录",
   "/api/v2/volumes": "分卷", "/api/v2/upload": "批量上传", "/api/v2/illustrations": "插图", "/api/v2/illustration-layout": "插图布局", "/api/v3/history": "变更历史", "/api/v3/contributors": "贡献者",
+  "/api/v4/account/athub/cover": "封面",
 }
-export function publicEndpointPath(path: string) {
+export function publicEndpointPath(path: string, method: string) {
+  if (path === "/api/v2/illustrations") {
+    return "/api/v4/account/athub/novels/{id}/illustrations" + (method === "DELETE" ? "/{illustrationId}" : "")
+  }
+  if (path === "/api/v2/illustration-layout") return "/api/v4/account/athub/novels/{id}/illustration-layout"
   if (path.startsWith("/api/v2/")) return path.replace("/api/v2/", "/api/v5/")
   if (/^\/api\/v3\/(history|contributors)$/.test(path)) return path.replace("/api/v3/", "/api/v4/")
   return path

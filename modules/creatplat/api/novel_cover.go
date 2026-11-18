@@ -56,9 +56,23 @@ func normalizeNovelImage(ctx context.Context, data []byte, maxSide int) ([]byte,
 	return output.Bytes(), nil
 }
 
+func (a *API) SetATHubKeyCoverUploader(upload func(http.ResponseWriter, *http.Request, func(http.ResponseWriter, *http.Request, uuid.UUID))) {
+	a.athubKeyCoverUploader = upload
+}
+
 func (a *API) uploadNovelCover(w http.ResponseWriter, r *http.Request) {
 	originalBody := r.Body
 	defer func() { _, _ = io.Copy(io.Discard, io.LimitReader(originalBody, maxNovelCoverBytes+(64<<10)+1)) }()
+	if r.Header.Get("Authorization") != "" {
+		// A personal key is checked, counted and recorded by the ATHub access
+		// pipeline before the image is read. Cookies play no part in this path.
+		if a.athubKeyCoverUploader == nil || a.Images == nil {
+			a.novelCoverUnavailable(w)
+			return
+		}
+		a.athubKeyCoverUploader(w, r, a.saveNovelCover)
+		return
+	}
 	user, ok := a.AccountActor(w, r)
 	if !ok {
 		return
@@ -67,13 +81,19 @@ func (a *API) uploadNovelCover(w http.ResponseWriter, r *http.Request) {
 		CheckATHubCoverUpload(context.Context, uuid.UUID) error
 	})
 	if !ok || a.Images == nil {
-		writeJSON(w, 503, map[string]string{"error": "cover_upload_unavailable", "error_description": "封面上传暂时不可用，请稍后重试。"})
+		a.novelCoverUnavailable(w)
 		return
 	}
 	if err := st.CheckATHubCoverUpload(r.Context(), user.ID); err != nil {
 		a.PolicyError(w, err)
 		return
 	}
+	a.saveNovelCover(w, r, user.ID)
+}
+
+// saveNovelCover stores the cover of a caller whose permission was already
+// checked, under that user's cover folder.
+func (a *API) saveNovelCover(w http.ResponseWriter, r *http.Request, user uuid.UUID) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxNovelCoverBytes+(64<<10))
 	if err := r.ParseMultipartForm(maxNovelCoverBytes + (64 << 10)); err != nil {
 		if r.MultipartForm != nil {
@@ -98,14 +118,16 @@ func (a *API) uploadNovelCover(w http.ResponseWriter, r *http.Request) {
 		data, err = normalizeNovelCover(r.Context(), data)
 	}
 	if r.Context().Err() != nil {
-		// The reply was already taken over by the timeout, or nobody is waiting.
+		// The timeout already answered, or nobody is waiting. Reply anyway, so a
+		// recorded key call never ends up looking successful.
+		writeJSON(w, 503, map[string]string{"error": "server_timeout"})
 		return
 	}
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "cover_invalid", "error_description": "EPUB 封面不是有效图片，或图片尺寸过大。请更换或移除封面后重试。"})
 		return
 	}
-	location, err := a.uploadNovelImage(r.Context(), data, "covers", user.ID.String())
+	location, err := a.uploadNovelImage(r.Context(), data, "covers", user.String())
 	if err != nil {
 		a.novelCoverUploadError(w)
 		return
@@ -115,6 +137,10 @@ func (a *API) uploadNovelCover(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) uploadNovelImage(ctx context.Context, data []byte, category, entityID string) (string, error) {
 	return a.Images.Save(ctx, "book/"+category, entityID, "cover.jpg", "image/jpeg", data)
+}
+
+func (a *API) novelCoverUnavailable(w http.ResponseWriter) {
+	writeJSON(w, 503, map[string]string{"error": "cover_upload_unavailable", "error_description": "封面上传暂时不可用，请稍后重试。"})
 }
 
 func (a *API) novelCoverUploadError(w http.ResponseWriter) {

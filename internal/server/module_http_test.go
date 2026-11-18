@@ -58,6 +58,27 @@ func TestModulePanicIsLoggedWithTheHandlerStack(t *testing.T) {
 	}
 }
 
+func TestATHubV5DoesNotExposeIllustrations(t *testing.T) {
+	handler := NewATHubHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("removed endpoint reached content handler: %s %s", r.Method, r.URL.Path)
+	}), nil)
+	for _, tc := range []struct{ method, path string }{
+		{"GET", "/api/v5/illustrations?novelId=7"},
+		{"POST", "/api/v5/illustrations?novelId=7"},
+		{"DELETE", "/api/v5/illustrations?novelId=7&id=4"},
+		{"GET", "/api/v5/illustration-layout?novelId=7"},
+		{"PUT", "/api/v5/illustration-layout?novelId=7"},
+		{"POST", "/api/v5//illustrations/"},
+		{"POST", "/api/v5/%69llustrations"},
+	} {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
+		if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), `"error":"not_found"`) {
+			t.Errorf("%s %s: status=%d body=%s", tc.method, tc.path, w.Code, w.Body)
+		}
+	}
+}
+
 func TestATHubV5Boundary(t *testing.T) {
 	seen := ""
 	content := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

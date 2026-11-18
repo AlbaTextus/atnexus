@@ -47,7 +47,7 @@ export function GallerySection({ novelId }: { novelId: number }) {
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true); setLoadError("");
-    readAllContent<NovelIllustration>(request, `/api/v5/illustrations?novelId=${novelId}`, controller.signal)
+    readAllContent<NovelIllustration>(request, `/api/v4/account/athub/novels/${novelId}/illustrations`, controller.signal)
       .then(value => { if (!controller.signal.aborted) setImages(value); })
       .catch(reason => { if (!controller.signal.aborted) setLoadError(reason instanceof Error ? reason.message : "插图加载失败。"); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });

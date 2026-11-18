@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"path"
 	"strings"
 
 	"github.com/AlbaTextus/atnexus/internal/apibase"
@@ -26,8 +27,16 @@ func NewATHubHandler(content http.Handler, ping func(context.Context) error) htt
 			apibase.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "not_found"})
 			return
 		}
+		contentPath := "/api/v2" + strings.TrimPrefix(r.URL.Path, "/api/v5")
+		// Illustration operations are public only through CreatPlat. Its internal
+		// calls still use the existing content engine and policy labels.
+		switch path.Clean(contentPath) {
+		case "/api/v2/illustrations", "/api/v2/illustration-layout":
+			apibase.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "not_found"})
+			return
+		}
 		request := r.Clone(r.Context())
-		request.URL.Path = "/api/v2" + strings.TrimPrefix(r.URL.Path, "/api/v5")
+		request.URL.Path = contentPath
 		request.URL.RawPath = ""
 		request.RequestURI = request.URL.RequestURI()
 		legacy.ServeHTTP(&contentLocationWriter{ResponseWriter: w}, request)

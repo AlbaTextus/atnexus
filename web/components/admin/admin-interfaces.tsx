@@ -124,7 +124,7 @@ export function AdminInterfaces() {
     const override = draft.rules.find(rule => ruleKey(rule) === ruleKey(endpoint))
     const inheritedAllowed = Boolean(draft.rules.find(rule => rule.operation === endpoint.operation && rule.method === "")?.allowed)
     const level = permissionLevels.find(item => item.role === role)?.label ?? role
-    return <EndpointPermissionSelect label={`${level} ${endpoint.method} ${publicEndpointPath(endpoint.path)}权限`}
+    return <EndpointPermissionSelect label={`${level} ${endpoint.method} ${publicEndpointPath(endpoint.path, endpoint.method)}权限`}
       disabled={disabled || !privileged(role, endpoint.operation)} inheritedAllowed={inheritedAllowed}
       value={override ? override.allowed ? "allow" : "deny" : "inherit"}
       onValueChange={value => value === "inherit" ? inherit(role, endpoint) : changeRule(role, { ...endpoint, allowed: value === "allow" })} />
@@ -181,7 +181,7 @@ export function AdminInterfaces() {
               {columns()}
               <thead className="bg-muted/45"><tr className="border-b border-border"><th scope="col" className="px-4 py-3 font-medium">接口</th>{permissionLevels.map(level => <th key={level.role} scope="col" className="px-2 py-3 text-center font-medium">{level.label}</th>)}</tr></thead>
               <tbody>{operations.flatMap(operation => endpoints.filter(endpoint => endpoint.operation === operation && ruleKey(endpoint) !== ruleKey(novelEditEndpoint)).map(endpoint => <tr key={ruleKey(endpoint)} className="border-b border-border/60 last:border-0 hover:bg-muted/20">
-                <th scope="row" className="px-4 py-3 font-normal"><p>{operationNames[endpoint.operation]} · {endpointNames[endpoint.path] ?? publicEndpointPath(endpoint.path)}</p><code className="break-all text-xs text-muted-foreground">{endpoint.method} {publicEndpointPath(endpoint.path)}</code></th>
+                <th scope="row" className="px-4 py-3 font-normal"><p>{operationNames[endpoint.operation]} · {endpointNames[endpoint.path] ?? publicEndpointPath(endpoint.path, endpoint.method)}</p><code className="break-all text-xs text-muted-foreground">{endpoint.method} {publicEndpointPath(endpoint.path, endpoint.method)}</code></th>
                 {permissionLevels.map(level => <td key={level.role} className="px-2 py-3 text-center">{permissionSelect(level.role, endpoint)}</td>)}
               </tr>))}</tbody>
             </table>

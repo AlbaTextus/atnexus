@@ -141,9 +141,12 @@ func run(logger *slog.Logger) error {
 	creators.SetATHubReceiptForgetter(hub.ForgetMutation)
 	creators.SetATHubSubmitter(access.SubmitUpload)
 	creators.SetATHubNovelEditor(access.SubmitNovelEdit)
+	creators.SetATHubIllustrationReaders(access.ListIllustrations, access.ReadIllustrationLayout)
 	creators.SetATHubIllustrationSubmitter(access.SubmitIllustration)
 	creators.SetATHubIllustrationDeleter(access.DeleteIllustration)
 	creators.SetATHubIllustrationLayoutEditor(access.SubmitIllustrationLayout)
+	creators.SetATHubKeyCoverUploader(access.UploadCoverWithKey)
+	creators.SetATHubKeyIllustrationUploader(access.UploadIllustrationWithKey)
 	creators.SetHistoryHandler(http.HandlerFunc(access.ServeHistory))
 	// ATHub owns its 15s database deadline and accepts uploads up to 8 MiB.
 	requestTimeout := max(cfg.HTTPRequestTimeout, 30*time.Second)

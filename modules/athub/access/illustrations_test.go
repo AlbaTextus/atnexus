@@ -6,9 +6,68 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/AlbaTextus/atnexus/internal/config"
 	"github.com/AlbaTextus/atnexus/internal/store"
+	creatorapi "github.com/AlbaTextus/atnexus/modules/creatplat/api"
+	"github.com/AlbaTextus/atnexus/pkg/auth"
 	"github.com/google/uuid"
 )
+
+func TestCreatorIllustrationReadsReuseATHubAdmission(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, internalURI string
+		key                     bool
+		beginErr                error
+		want                    int
+	}{
+		{"list with browser session", "17/illustrations?limit=100&offset=20", "/api/v2/illustrations?novelId=17&limit=100&offset=20", false, nil, 200},
+		{"layout with personal key", "17/illustration-layout", "/api/v2/illustration-layout?novelId=17", true, nil, 200},
+		{"no read permission", "17/illustrations", "/api/v2/illustrations?novelId=17", true, store.ErrATHubPermissionDenied, 403},
+		{"invalid novel id", "0/illustrations", "", false, nil, 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			identity := auth.Identity{UserID: uuid.New(), SessionID: uuid.New()}
+			st := &accessStore{
+				identity: store.ATHubIdentity{KeyID: uuid.New(), UserID: identity.UserID, Active: true},
+				beginErr: tc.beginErr,
+			}
+			access := accessFor(t, st)
+			access.EnableSessions(sessionVerifier{identity: identity})
+			dispatched := false
+			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				dispatched = true
+				if r.Method != http.MethodGet || r.RequestURI != tc.internalURI {
+					t.Errorf("content received %s %s, want GET %s", r.Method, r.RequestURI, tc.internalURI)
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			api := creatorapi.New(config.Config{}, nil, nil)
+			api.SetATHubIllustrationReaders(access.ListIllustrations, access.ReadIllustrationLayout)
+			r := httptest.NewRequest(http.MethodGet, "/api/v4/account/athub/novels/"+tc.path, nil)
+			if tc.key {
+				r.Header.Set("Authorization", "Bearer ath_"+strings.Repeat("a", 43))
+			}
+			w := httptest.NewRecorder()
+			api.Router().ServeHTTP(w, r)
+			if w.Code != tc.want || dispatched != (tc.want == 200) {
+				t.Fatalf("status=%d dispatched=%v body=%s", w.Code, dispatched, w.Body)
+			}
+			if tc.internalURI == "" {
+				if st.call.ID != uuid.Nil {
+					t.Fatal("invalid novel id reached admission")
+				}
+				return
+			}
+			if st.call.Path != strings.SplitN(tc.internalURI, "?", 2)[0] || st.call.Method != http.MethodGet || !st.finished || st.status != tc.want {
+				t.Fatalf("unexpected audit: call=%+v status=%d finished=%v", st.call, st.status, st.finished)
+			}
+			if tc.key && (st.call.KeyID == nil || *st.call.KeyID != st.identity.KeyID || st.call.SessionID != nil) ||
+				!tc.key && (st.call.SessionID == nil || *st.call.SessionID != identity.SessionID || st.call.KeyID != nil) {
+				t.Fatalf("wrong audit identity: %+v", st.call)
+			}
+		})
+	}
+}
 
 func TestIllustrationDeleteUsesSessionPermissionsAndReview(t *testing.T) {
 	for _, scenario := range []struct {

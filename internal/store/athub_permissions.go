@@ -50,6 +50,12 @@ type ATHubEndpoint struct {
 	Operation string `json:"operation"`
 }
 
+// ATHubCoverPath is the creator platform's cover upload. It stores a file and
+// changes no content, so it has a permission rule and an audit label of its
+// own but is never reviewed. The content listener only serves /api/v2, so this
+// label cannot be reached there.
+const ATHubCoverPath = "/api/v4/account/athub/cover"
+
 // athubRoutes is the single description of the content API surface. Permission
 // rules, audit labels, creator submissions and review queueing all derive from
 // it, so a new endpoint is declared here once.
@@ -78,6 +84,7 @@ var athubRoutes = []struct {
 	{ATHubEndpoint{"POST", "/api/v2/novelinfo", "upload"}, false, nil},
 	{ATHubEndpoint{"POST", "/api/v2/upload", "upload"}, true, nil},
 	{ATHubEndpoint{"POST", "/api/v2/illustrations", "upload"}, true, []string{"novelId"}},
+	{ATHubEndpoint{"POST", ATHubCoverPath, "upload"}, false, nil},
 
 	{ATHubEndpoint{"PUT", "/api/v2/authors", "edit"}, false, []string{"id"}},
 	{ATHubEndpoint{"PUT", "/api/v2/tags", "edit"}, false, []string{"id"}},

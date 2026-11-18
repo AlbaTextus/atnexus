@@ -189,6 +189,7 @@ function SubmissionForm() {
     } catch (reason) {
       setError(reason instanceof ApiError
         ? reason.code.startsWith("cover_") ? reason.message
+          : reason.status === 403 && uploadingCover ? "当前账户没有上传封面的权限。书籍预览已保留，请填写封面链接或移除封面后再提交。"
           : reason.status === 403 ? "当前账户没有提交权限，或权限已发生变化。"
           : reason.status === 401 ? "登录已失效，请重新登录后再提交。"
             : reason.status === 400 ? "提交资料未通过校验，请检查小说资料和章节内容。"

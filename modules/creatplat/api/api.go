@@ -22,9 +22,15 @@ type API struct {
 	athubReceiptForgetter         func(context.Context, string) error
 	athubSubmitter                func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID)
 	athubNovelEditor              func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32)
+	athubIllustrationReader       func(http.ResponseWriter, *http.Request, int32)
+	athubIllustrationLayoutReader func(http.ResponseWriter, *http.Request, int32)
 	athubIllustrationSubmitter    func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32)
 	athubIllustrationDeleter      func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32, int32)
 	athubIllustrationLayoutEditor func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32)
+	// Personal-key uploads: the ATHub access pipeline admits the call, then runs
+	// the given step to store the file.
+	athubKeyCoverUploader        func(http.ResponseWriter, *http.Request, func(http.ResponseWriter, *http.Request, uuid.UUID))
+	athubKeyIllustrationUploader func(http.ResponseWriter, *http.Request, func(http.ResponseWriter, *http.Request) (int32, []byte, bool))
 }
 
 func New(cfg config.Config, st store.Store, logger *slog.Logger) *API {
@@ -59,8 +65,10 @@ func (a *API) Router() http.Handler {
 	r.Get("/api/v4/account/athub/submissions", a.athubReviews)
 	r.Post("/api/v4/account/athub/submissions", a.athubSubmit)
 	r.Put("/api/v4/account/athub/novels/{id}", a.athubEditNovel)
+	r.Get("/api/v4/account/athub/novels/{id}/illustrations", a.listNovelIllustrations)
 	r.Post("/api/v4/account/athub/novels/{id}/illustrations", a.uploadNovelIllustration)
 	r.Delete("/api/v4/account/athub/novels/{id}/illustrations/{illustrationId}", a.deleteNovelIllustration)
+	r.Get("/api/v4/account/athub/novels/{id}/illustration-layout", a.readNovelIllustrationLayout)
 	r.Put("/api/v4/account/athub/novels/{id}/illustration-layout", a.editNovelIllustrationLayout)
 	r.Post("/api/v4/account/athub/cover", a.uploadNovelCover)
 	r.Get("/api/v4/account/athub/submissions/{id}", a.athubReviews)

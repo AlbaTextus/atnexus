@@ -130,7 +130,16 @@ func (w *responseCapture) Write(data []byte) (int, error) {
 
 func (a *Access) Wrap(next http.Handler) http.Handler {
 	a.content = next
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	a.wrapped = a.admit(func(w http.ResponseWriter, r *http.Request, call store.ATHubCall) {
+		a.dispatch(w, r, call, next)
+	})
+	return a.wrapped
+}
+
+// admit authenticates a call and records it before serve answers it, so every
+// way into the pipeline shares one admission, audit and completion path.
+func (a *Access) admit(serve func(http.ResponseWriter, *http.Request, store.ATHubCall)) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -238,23 +247,27 @@ func (a *Access) Wrap(next http.Handler) http.Handler {
 			reply(capture, 401, "invalid_api_key")
 			return
 		}
-		if r.URL.Path == "/api/v3/history" || r.URL.Path == "/api/v3/contributors" {
-			a.history(capture, r)
+		serve(capture, r, call)
+	})
+}
+
+// dispatch answers an admitted call: history directly, content writes behind
+// the contributor lookup and the review queue.
+func (a *Access) dispatch(w http.ResponseWriter, r *http.Request, call store.ATHubCall, next http.Handler) {
+	if r.URL.Path == "/api/v3/history" || r.URL.Path == "/api/v3/contributors" {
+		a.history(w, r)
+		return
+	}
+	if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete || r.Method == http.MethodPatch {
+		actor, err := a.contributor(r.Context(), *call.UserID)
+		if err != nil {
+			reply(w, 503, "contributor_unavailable")
 			return
 		}
-		if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete || r.Method == http.MethodPatch {
-			actor, err := a.contributor(r.Context(), *call.UserID)
-			if err != nil {
-				reply(capture, 503, "contributor_unavailable")
-				return
-			}
-			r = r.WithContext(athub.WithContributor(r.Context(), actor))
-			if a.queueMutation(capture, r, call, actor) {
-				return
-			}
+		r = r.WithContext(athub.WithContributor(r.Context(), actor))
+		if a.queueMutation(w, r, call, actor) {
+			return
 		}
-		next.ServeHTTP(capture, r)
-	})
-	a.wrapped = handler
-	return handler
+	}
+	next.ServeHTTP(w, r)
 }

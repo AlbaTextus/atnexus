@@ -65,19 +65,33 @@ func testReviewReceipts(t *testing.T, pool *pgxpool.Pool) {
 	if err := pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM "Platform" WHERE name='concurrent-receipt'`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("concurrent mutations=%d err=%v", count, err)
 	}
-	// If content committed but finishing the host audit failed, replay must return
-	// the durable successful response rather than execute the mutation again.
-	st.RecordChanges = func(context.Context, string, []storage.RevisionDraft) (func(context.Context, bool) error, error) {
-		return func(context.Context, bool) error { return errors.New("host completion temporarily unavailable") }, nil
+	// Once content committed the request has succeeded, even if finishing the
+	// host audit failed: the caller gets the response, the replay returns the
+	// same durable response without executing again, and the revision receipt
+	// lets the host settle the audit it could not finish.
+	var batches []string
+	var outcomes []bool
+	st.RecordChanges = func(_ context.Context, batch string, _ []storage.RevisionDraft) (func(context.Context, bool) error, error) {
+		batches = append(batches, batch)
+		return func(_ context.Context, committed bool) error {
+			outcomes = append(outcomes, committed)
+			return errors.New("host completion temporarily unavailable")
+		}, nil
 	}
 	body := fmt.Sprintf(`{"platformId":%d,"title":"receipt-novel","status":"ONGOING"}`, platform.ID)
-	failed := submit("a6786c53-6c18-41cf-bdc6-a453b2a2fa12", body, "/api/v2/novelinfo")
+	committed := submit("a6786c53-6c18-41cf-bdc6-a453b2a2fa12", body, "/api/v2/novelinfo")
 	retry := submit("a6786c53-6c18-41cf-bdc6-a453b2a2fa12", body, "/api/v2/novelinfo")
-	if failed.Code != 500 || retry.Code != 201 {
-		t.Fatalf("post-commit recovery: %d/%d %s", failed.Code, retry.Code, retry.Body)
+	if committed.Code != 201 || retry.Code != 201 || committed.Body.String() != retry.Body.String() {
+		t.Fatalf("post-commit recovery: %d/%d %s/%s", committed.Code, retry.Code, committed.Body, retry.Body)
 	}
 	if err := pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM "Novel" WHERE title='receipt-novel'`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("post-commit duplicated content=%d err=%v", count, err)
+	}
+	if len(batches) != 1 || len(outcomes) != 1 || !outcomes[0] {
+		t.Fatalf("replay recorded again or commit reported as failed: batches=%v outcomes=%v", batches, outcomes)
+	}
+	if settled, err := st.CommittedRevisions(context.Background(), batches); err != nil || len(settled) != 1 || settled[0] != batches[0] {
+		t.Fatalf("unfinished revision cannot be settled: %v err=%v", settled, err)
 	}
 	// Once the host has recorded the outcome it releases the receipt; forgetting
 	// an already released receipt stays harmless.

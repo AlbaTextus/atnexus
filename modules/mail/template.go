@@ -41,9 +41,9 @@ func RenderVerification(code, purpose string) (string, error) {
 	if len(code) != 6 || strings.Trim(code, "0123456789") != "" {
 		return "", errors.New("invalid verification code")
 	}
-	purposeText := "你正在验证或绑定 ALBATEXTUS 账户邮箱。"
+	purposeText := "你正在验证或绑定 ALBATEXTUS 账户邮箱"
 	if purpose == "register" {
-		purposeText = "你正在注册 ALBATEXTUS 账户。"
+		purposeText = "你正在注册 ALBATEXTUS 账户"
 	}
-	return renderTemplate(templateData{Subject: "ALBATEXTUS 邮箱验证码", Preview: "请验证你的邮箱，验证码 5 分钟内有效。", BrandNote: "账户服务", Eyebrow: "VERIFY YOUR EMAIL", Heading: "验证你的邮箱", PurposeText: purposeText, Code: code})
+	return renderTemplate(templateData{Subject: "ALBATEXTUS 邮箱验证码", Preview: "请验证你的邮箱，验证码 5 分钟内有效", BrandNote: "账户服务", Eyebrow: "VERIFY YOUR EMAIL", Heading: "验证你的邮箱", PurposeText: purposeText, Code: code})
 }

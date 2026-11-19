@@ -17,10 +17,13 @@ func TestVerificationTemplate(t *testing.T) {
 					t.Errorf("verification template is missing %q", text)
 				}
 			}
-			for _, removed := range []string{"返回刚才的页面", "每一次连接，都有归处", "此邮件由系统自动发送"} {
+			for _, removed := range []string{"返回刚才的页面", "每一次连接，都有归处", "此邮件由系统自动发送", "请在页面中输入下方验证码，完成邮箱验证", "。"} {
 				if strings.Contains(html, removed) {
 					t.Errorf("verification template still contains %q", removed)
 				}
+			}
+			if idxNotice, idxCode := strings.Index(html, "保护好你的账户"), strings.Index(html, "012345"); idxNotice == -1 || idxCode == -1 || idxNotice > idxCode {
+				t.Errorf("expected security notice before verification code (notice=%d, code=%d)", idxNotice, idxCode)
 			}
 		})
 	}

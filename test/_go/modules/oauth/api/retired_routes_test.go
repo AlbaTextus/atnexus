@@ -21,14 +21,17 @@ func TestRetiredMessageRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !routes["POST /api/v1/users"] {
+		t.Error("registration route was removed: POST /api/v1/users")
+	}
+	// Verification codes moved to the mail module under /api/v3.
 	for _, route := range []string{
-		"POST /api/v1/users",
 		"POST /api/v1/auth/email/code",
 		"POST /api/v1/account/email/code",
 		"POST /api/v1/account/email",
 	} {
-		if !routes[route] {
-			t.Errorf("email verification route was removed: %s", route)
+		if routes[route] {
+			t.Errorf("retired email route remains registered: %s", route)
 		}
 	}
 }

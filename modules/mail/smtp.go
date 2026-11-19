@@ -1,4 +1,5 @@
-package email
+// Package mail sends ALBATEXTUS account mail over SMTP.
+package mail
 
 import (
 	"bytes"

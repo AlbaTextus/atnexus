@@ -22,6 +22,7 @@ func TestGatewayDispatchesByPrefix(t *testing.T) {
 	handler := NewGateway(
 		GatewayRoute{Prefixes: []string{"/api/v1", "/oauth", "/.well-known"}, Handler: gatewayModule("oauth")},
 		GatewayRoute{Prefixes: []string{"/api/v2", "/file"}, Handler: gatewayModule("image")},
+		GatewayRoute{Prefixes: []string{"/api/v3"}, Handler: gatewayModule("mail")},
 		GatewayRoute{Prefixes: []string{"/api/v4"}, Handler: gatewayModule("creatplat")},
 		GatewayRoute{Prefixes: []string{"/api/v5"}, Handler: gatewayModule("athub")},
 	)
@@ -35,9 +36,10 @@ func TestGatewayDispatchesByPrefix(t *testing.T) {
 		{"/api/v4/history?novelId=2", "creatplat"},
 		{"/api/v5/content?novelId=7&order=1", "athub"}, {"/api/v5/", "athub"},
 		{"/api/v1/healthz", "oauth"}, {"/api/v2/healthz", "image"},
+		{"/api/v3/auth/email/code", "mail"}, {"/api/v3/healthz", "mail"},
 		{"/api/v4/healthz", "creatplat"}, {"/api/v5/healthz", "athub"},
-		{"/healthz", ""}, {"/api/healthz", ""}, {"/api/v3/healthz", ""},
-		{"/api/v3/history", ""}, {"/api/v10/user", ""}, {"/api/v50", ""},
+		{"/healthz", ""}, {"/api/healthz", ""}, {"/api/v6/healthz", ""},
+		{"/api/v30/history", ""}, {"/api/v10/user", ""}, {"/api/v50", ""},
 		{"/api", ""}, {"/", ""}, {"/files/a.webp", ""}, {"/oauthx", ""},
 	} {
 		t.Run(tc.path, func(t *testing.T) {

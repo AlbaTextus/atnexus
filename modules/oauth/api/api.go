@@ -18,7 +18,7 @@ import (
 	"github.com/AlbaTextus/atnexus/internal/config"
 	"github.com/AlbaTextus/atnexus/internal/security"
 	"github.com/AlbaTextus/atnexus/internal/store"
-	"github.com/AlbaTextus/atnexus/modules/oauth/email"
+	mailapi "github.com/AlbaTextus/atnexus/modules/mail/api"
 	"github.com/AlbaTextus/atnexus/modules/oauth/federation"
 	"github.com/AlbaTextus/atnexus/modules/oauth/passkey"
 	"github.com/AlbaTextus/atnexus/modules/oauth/protocol"
@@ -34,7 +34,6 @@ type API struct {
 	clientSecrets *security.SecretCipher
 	federation    *federation.Service
 	turnstile     *turnstile.Service
-	mailer        email.Sender
 	imageKeys     http.Handler
 	decoyOnce     sync.Once
 	decoyHash     string
@@ -62,7 +61,7 @@ func New(cfg config.Config, st store.Store, logger *slog.Logger) (*API, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &API{Base: &apibase.Base{Config: cfg, Store: st, Log: logger}, oauth: oauth.NewService(st, cfg), passkey: passkeyService, clientSecrets: clientSecrets, federation: federatedLogin, turnstile: humanVerification, mailer: email.New(cfg.SMTP)}, nil
+	return &API{Base: &apibase.Base{Config: cfg, Store: st, Log: logger}, oauth: oauth.NewService(st, cfg), passkey: passkeyService, clientSecrets: clientSecrets, federation: federatedLogin, turnstile: humanVerification}, nil
 }
 
 func (a *API) Router() http.Handler {
@@ -83,9 +82,6 @@ func (a *API) Router() http.Handler {
 	r.Get("/api/v1/healthz", a.health)
 	r.Get("/.well-known/oauth-authorization-server", a.metadata)
 	r.Post("/api/v1/users", a.register)
-	r.Post("/api/v1/auth/email/code", a.sendRegistrationCode)
-	r.Post("/api/v1/account/email/code", a.sendAccountEmailCode)
-	r.Post("/api/v1/account/email", a.confirmAccountEmail)
 	r.Post("/api/v1/sessions", a.login)
 	r.Delete("/api/v1/sessions/current", a.logout)
 	r.Get("/api/v1/user", a.me)
@@ -252,13 +248,14 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"error": "invalid_request", "error_description": "email and a password of 12-72 characters are required"})
 		return
 	}
-	st, ok := a.emailStore(w)
+	// Codes are issued by the mail module (/api/v3); registration spends one.
+	st, ok := mailapi.VerificationStore(w, a.Store, a.Config.SMTP)
 	if !ok {
 		return
 	}
 	id, err := uuid.Parse(in.ChallengeID)
 	if err != nil {
-		a.emailError(w, store.ErrEmailCode)
+		mailapi.WriteError(w, a.Log, store.ErrEmailCode)
 		return
 	}
 	hash, err := security.HashPassword(password, a.Config.BCryptCost)
@@ -271,7 +268,7 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		PasswordHash:   hash,
 	})
 	if err != nil {
-		a.emailError(w, err)
+		mailapi.WriteError(w, a.Log, err)
 		return
 	}
 	if !a.allowMaintenanceLogin(w, r, u) {
@@ -666,7 +663,6 @@ func validateUserInput(in userInput) (string, string, *string, bool) {
 	}
 	return email, in.Password, display, true
 }
-func normalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
 func oauthErr(code, description string, status int) *oauth.Error {
 	return &oauth.Error{Code: code, Description: description, Status: status}
 }

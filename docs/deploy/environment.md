@@ -8,7 +8,7 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 | `ATHUB_DATABASE_URL` | 内容库 PostgreSQL 连接地址，必填，与账户库分开 |
 | `CLIENT_SECRET_ENCRYPTION_KEY` | 客户端密钥与 PKCE verifier 加密密钥，必填并保持稳定 |
 | `APP_ENV` | 本地为 `development`，生产为 `production` |
-| `GATEWAY_HTTP_ADDR` | 唯一的后端 HTTP 监听地址，默认 `:8010`；按路径前缀分发到四个模块，见[聚合端口](/deploy/production) |
+| `GATEWAY_HTTP_ADDR` | 唯一的后端 HTTP 监听地址，默认 `:8010`；按路径前缀分发到五个模块，见[聚合端口](/deploy/production) |
 | `IMAGE_DATABASE_URL` | 必填，独立图床 PostgreSQL 数据库 |
 | `IMAGE_LOCAL_ROOT` | 必填，已有图床文件目录 |
 | `IMAGE_PUBLIC_URL` | 图床公开根地址，本地默认 `http://localhost:8010` |
@@ -22,7 +22,7 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 | `WEBAUTHN_RP_ID` | Passkey 所属域名，不带协议和端口 |
 | `WEBAUTHN_RP_ORIGINS` | 允许的完整前端 Origin，逗号分隔 |
 | `PASSKEY_CHALLENGE_TTL` | Passkey 挑战有效期，默认 `5m` |
-| `OAUTH_BACKEND_URL` | Next.js 转发账户和 OAuth 请求的后端地址，默认 `http://localhost:8010` |
+| `OAUTH_BACKEND_URL` | Next.js 转发账户、OAuth 和邮件（`/api/v3`）请求的后端地址，默认 `http://localhost:8010` |
 | `CREATPLAT_BACKEND_URL` | Next.js 转发创作者操作的后端地址，默认 `http://localhost:8010` |
 | `NEXT_PUBLIC_ATHUB_API_URL` | 浏览器直连内容接口的公开地址，本地填写 `http://localhost:8010`；前端构建前配置 |
 | `NEXT_PUBLIC_CREATPLAT_API_URL` | 浏览器直连历史查询的公开地址，本地填写 `http://localhost:8010`；前端构建前配置 |
@@ -51,7 +51,7 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 
 按功能分组的变量在对应文档中说明：
 
-- `SMTP_*`：见[邮箱认证](/oauth/email)。
+- `SMTP_*`：见[邮件模块](/mail/overview)。
 - `TURNSTILE_*`、`GITHUB_*`、`LINUXDO_*`、`CUSTOM_OAUTH_*`：见[登录与账户](/oauth/login)。
 - `IMAGE_*`：见[图床配置](/image/config)。
 - 仅 Docker Compose 使用的变量：见 [Docker Compose](/deploy/docker)。

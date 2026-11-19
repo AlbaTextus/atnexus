@@ -25,15 +25,11 @@ var messageTemplate = template.Must(template.New("message").Funcs(template.FuncM
 
 type templateData struct {
 	Subject, Preview, BrandNote, Eyebrow, Heading, PurposeText, Code string
-	FooterText                                                       string
 	Year                                                             int
 }
 
 func renderTemplate(data templateData) (string, error) {
 	data.Year = time.Now().Year()
-	if data.FooterText == "" {
-		data.FooterText = "此邮件由系统自动发送，请勿直接回复。"
-	}
 	var output bytes.Buffer
 	if err := messageTemplate.Execute(&output, data); err != nil {
 		return "", err

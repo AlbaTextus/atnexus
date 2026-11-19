@@ -62,12 +62,12 @@
                     <td class="card-padding" style="padding:44px 44px 40px;">
                       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:0;">
                         <tr>
-                          <td style="padding-bottom:20px;">
+                          <td align="center" style="padding-bottom:20px;text-align:center;">
                             <p style="margin:0;font-size:10px;line-height:16px;font-weight:700;letter-spacing:2.4px;color:#0b57d0;">{{.Eyebrow}}</p>
                           </td>
                         </tr>
                         <tr>
-                          <td style="padding-bottom:16px;">
+                          <td align="center" style="padding-bottom:16px;text-align:center;">
                             <h1 class="email-heading" style="margin:0;font-size:32px;line-height:44px;font-weight:600;letter-spacing:-0.8px;color:#141413;overflow-wrap:anywhere;word-break:break-word;">{{.Heading}}</h1>
                           </td>
                         </tr>
@@ -77,25 +77,26 @@
                           </td>
                         </tr>
                         <tr>
-                          <td bgcolor="#edf3fe" style="background-color:#edf3fe;border:1px solid #dce7fb;border-radius:12px;">
-                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                          <td style="padding-bottom:28px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:0;">
                               <tr>
-                                <td align="center" style="padding:23px 16px 9px;font-size:12px;line-height:20px;color:#475c7a;">你的邮箱验证码</td>
-                              </tr>
-                              <tr>
-                                <td align="center" style="padding:0 12px;">
-                                  <p class="code-digits" style="margin:0;padding-left:12px;font-family:Consolas,'Courier New',monospace;font-size:42px;line-height:58px;font-weight:700;letter-spacing:12px;color:#0b57d0;white-space:nowrap;">{{.Code}}</p>
+                                <td bgcolor="#edf3fe" style="background-color:#edf3fe;border:1px solid #dce7fb;border-radius:12px;">
+                                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                    <tr>
+                                      <td align="center" style="padding:23px 16px 9px;font-size:12px;line-height:20px;color:#475c7a;">你的邮箱验证码</td>
+                                    </tr>
+                                    <tr>
+                                      <td align="center" style="padding:0 12px;">
+                                        <p class="code-digits" style="margin:0;padding-left:12px;font-family:Consolas,'Courier New',monospace;font-size:42px;line-height:58px;font-weight:700;letter-spacing:12px;color:#0b57d0;white-space:nowrap;">{{.Code}}</p>
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td align="center" style="padding:10px 16px 23px;font-size:12px;line-height:20px;color:#475c7a;">此验证码 <strong style="font-weight:600;color:#0b57d0;">5 分钟</strong> 内有效</td>
+                                    </tr>
+                                  </table>
                                 </td>
                               </tr>
-                              <tr>
-                                <td align="center" style="padding:10px 16px 23px;font-size:12px;line-height:20px;color:#475c7a;">此验证码 <strong style="font-weight:600;color:#0b57d0;">5 分钟</strong> 内有效</td>
-                              </tr>
                             </table>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td style="padding-top:18px;padding-bottom:30px;">
-                            <p style="margin:0;font-size:12px;line-height:22px;color:#687386;">返回刚才的页面，输入验证码即可继续。<br />如果验证码已过期，请在页面中重新获取。</p>
                           </td>
                         </tr>
                         <tr>
@@ -112,8 +113,7 @@
             </tr>
             <tr>
               <td class="footer-padding" align="center" style="padding:28px 20px 0;">
-                <p style="margin:0 0 10px;font-size:12px;line-height:22px;letter-spacing:1.5px;color:#687386;">每一次连接，都有归处。</p>
-                <p style="margin:0;font-size:11px;line-height:21px;color:#7d8694;">{{.FooterText}}<br />© {{.Year}} ALBATEXTUS</p>
+                <p style="margin:0;font-size:11px;line-height:21px;color:#7d8694;">© {{.Year}} ALBATEXTUS</p>
               </td>
             </tr>
           </table>

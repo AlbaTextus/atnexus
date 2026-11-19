@@ -8,7 +8,7 @@ import type { AccountUser } from "@/components/account/account-shell"
 import { NovelUserMenu } from "@/components/novel/novel-user-menu"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useNovelScrollReveal } from "@/components/novel/novel-motion"
+import { NovelAutoHeight, useNovelScrollReveal } from "@/components/novel/novel-motion"
 import { api } from "@/lib/api"
 import { hasOperation, type RolePolicy } from "@/lib/athub/athub-permissions"
 
@@ -62,13 +62,15 @@ export function CreatplatShell({ children }: { children: ReactNode }) {
           {!collapsed && <button type="button" className="creatplat-group-toggle" aria-expanded={groupOpen || Boolean(query.trim())} aria-controls="creatplat-navigation" onClick={() => setGroupOpen(value => !value)}>
             内容管理<ChevronDown aria-hidden="true" data-open={groupOpen || Boolean(query.trim())} />
           </button>}
-          <div id="creatplat-navigation" hidden={!collapsed && !groupOpen && !query.trim()} className="creatplat-navigation">
+          <NovelAutoHeight open={collapsed || groupOpen || Boolean(query.trim())}>
+          <div id="creatplat-navigation" className="creatplat-navigation">
             {visibleSections.map(({ href, title, icon: Icon }) => <Link key={href} href={href} className="creatplat-nav-item"
               aria-current={pathname === href ? "page" : undefined} aria-label={title} title={collapsed ? title : undefined}>
               <Icon aria-hidden="true" /><span className="creatplat-label">{title}</span>
             </Link>)}
             {!visibleSections.length && <p className="creatplat-search-empty" role="status">没有匹配的导航</p>}
           </div>
+          </NovelAutoHeight>
         </nav>
       </div>
       <div className="creatplat-sidebar-footer">

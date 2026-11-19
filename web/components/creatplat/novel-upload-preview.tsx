@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { BookOpen, ChevronLeft, ChevronRight, FileText, Folder, Library, Pencil, Search, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,16 +40,32 @@ export function NovelUploadPreview({ title, summary, chapters, volumes, disabled
   const [tab, setTab] = useState("intro")
   const [selectedKey, setSelectedKey] = useState<number | null>(null)
   const [query, setQuery] = useState("")
+  const deferredQuery = useDeferredValue(query)
   const [editingChapter, setEditingChapter] = useState(false)
   const reader = useRef<HTMLDivElement>(null)
   const index = chapters.findIndex(chapter => chapter.key === selectedKey)
   const selected = index < 0 ? null : chapters[index]
   const filtered = useMemo(() => {
-    const search = query.trim().toLocaleLowerCase()
+    const search = deferredQuery.trim().toLocaleLowerCase()
     const matchingVolumes = new Set(volumes.filter(volume => volume.title.toLocaleLowerCase().includes(search)).map(volume => volume.order))
     return chapters.map((chapter, index) => ({ chapter, index })).filter(({ chapter, index }) =>
       !search || chapter.title.toLocaleLowerCase().includes(search) || String(index + 1) === search || chapter.volumeOrder !== null && matchingVolumes.has(chapter.volumeOrder))
-  }, [chapters, volumes, query])
+  }, [chapters, volumes, deferredQuery])
+  const { groupedByVolume, ungrouped } = useMemo(() => {
+    const validVolumes = new Set(volumes.map(volume => volume.order))
+    const byVolume = new Map<number, typeof filtered>()
+    const loose: typeof filtered = []
+    for (const item of filtered) {
+      if (item.chapter.volumeOrder !== null && validVolumes.has(item.chapter.volumeOrder)) {
+        const list = byVolume.get(item.chapter.volumeOrder)
+        if (list) list.push(item)
+        else byVolume.set(item.chapter.volumeOrder, [item])
+      } else {
+        loose.push(item)
+      }
+    }
+    return { groupedByVolume: byVolume, ungrouped: loose }
+  }, [filtered, volumes])
   const content = useMemo(() => selected ? readingText(selected) : "", [selected])
 
   useEffect(() => { reader.current?.scrollTo({ top: 0 }) }, [selectedKey])
@@ -63,7 +79,7 @@ export function NovelUploadPreview({ title, summary, chapters, volumes, disabled
       <span className="novel-upload-chapter-number">{String(index + 1).padStart(2, "0")}</span><span>{chapter.title || "未命名章节"}</span><ChevronRight aria-hidden="true" />
     </button>
   </li>)}</ol>
-  const ungrouped = filtered.filter(({ chapter }) => chapter.volumeOrder === null || !volumes.some(volume => volume.order === chapter.volumeOrder))
+  const hasSearch = Boolean(deferredQuery.trim())
 
   return <div className="novel-upload-main">
     <div className="novel-upload-preview-heading">
@@ -80,7 +96,6 @@ export function NovelUploadPreview({ title, summary, chapters, volumes, disabled
         <TabsTrigger value="intro"><FileText aria-hidden="true" />作品简介</TabsTrigger>
         <TabsTrigger value="catalog"><Library aria-hidden="true" />章节目录<span>{chapters.length}</span></TabsTrigger>
       </TabsList>
-      <NovelAutoHeight>
       <TabsContent value="intro" className="novel-motion-enter">
         <section className="panel novel-upload-intro" aria-label="作品简介">
           <h2>简介</h2>
@@ -96,16 +111,16 @@ export function NovelUploadPreview({ title, summary, chapters, volumes, disabled
           </div>
           <div className={`novel-upload-catalog-body${selected ? " has-selection" : ""}`}>
             <nav className="novel-upload-chapter-list" aria-label="预览章节目录">
-              {filtered.length || volumes.length && !query.trim() ? <>
+              {filtered.length || volumes.length && !hasSearch ? <>
                 {volumes.map(volume => {
-                  const items = filtered.filter(({ chapter }) => chapter.volumeOrder === volume.order)
-                  if (!items.length && query.trim()) return null
-                  return <details key={volume.order} className="novel-upload-volume" open={query.trim() || selected?.volumeOrder === volume.order ? true : undefined}>
+                  const items = groupedByVolume.get(volume.order) ?? []
+                  if (!items.length && hasSearch) return null
+                  return <details key={volume.order} className="novel-upload-volume" open={hasSearch || selected?.volumeOrder === volume.order ? true : undefined}>
                     <summary><ChevronRight aria-hidden="true" /><Folder aria-hidden="true" /><span>{volume.title}</span><span>{items.length}</span></summary>
                     {items.length ? chapterList(items) : <p className="novel-upload-empty">暂无章节</p>}
                   </details>
                 })}
-                {ungrouped.length > 0 && (volumes.length ? <details className="novel-upload-volume" open={query.trim() || selected?.volumeOrder === null ? true : undefined}><summary><ChevronRight aria-hidden="true" /><Folder aria-hidden="true" /><span>未分卷</span><span>{ungrouped.length}</span></summary>{chapterList(ungrouped)}</details> : chapterList(ungrouped))}
+                {ungrouped.length > 0 && (volumes.length ? <details className="novel-upload-volume" open={hasSearch || selected?.volumeOrder === null ? true : undefined}><summary><ChevronRight aria-hidden="true" /><Folder aria-hidden="true" /><span>未分卷</span><span>{ungrouped.length}</span></summary>{chapterList(ungrouped)}</details> : chapterList(ungrouped))}
               </> : <p className="novel-upload-empty">没有匹配的章节</p>}
             </nav>
             {selected && <section id="upload-chapter-reader" className="novel-upload-reader novel-motion-enter" aria-label="章节正文预览">
@@ -136,7 +151,6 @@ export function NovelUploadPreview({ title, summary, chapters, volumes, disabled
           </div>
         </section>
       </TabsContent>
-      </NovelAutoHeight>
     </Tabs>
   </div>
 }

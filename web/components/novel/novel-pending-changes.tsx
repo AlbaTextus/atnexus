@@ -1,10 +1,11 @@
 "use client"
 
-import type { ReactNode } from "react"
+import { useMemo, type ReactNode } from "react"
 import { Clock3 } from "lucide-react"
 import { IllustrationImage } from "@/components/novel/illustration-image"
 import { IllustrationLayoutPreview } from "@/components/novel/illustration-layout-preview"
 import { NovelCover } from "@/components/novel/novel-cover"
+import { UnifiedDiffCard, buildTextDiffModel } from "@/components/novel/novel-diff-card"
 import { novelFieldLabels, useNovelEditor, useNovelPending, type NovelEditField } from "@/components/novel/novel-inline-editor"
 import { Badge } from "@/components/novel/ui/badge"
 import { novelStatus, safeContentURL, type Novel, type NovelIllustration } from "@/lib/athub/athub-client"
@@ -36,9 +37,29 @@ function recordText(after: Record<string, unknown>, name: string) {
   return typeof value === "string" ? value.trim() || null : value === null ? null : undefined
 }
 
+function PendingSummaryDiff({
+  beforeText,
+  afterText,
+  cleared,
+}: {
+  beforeText: string
+  afterText: string
+  cleared: boolean
+}) {
+  const spec = useMemo(() => ({
+    title: "简介",
+    subtitle: "小说条目",
+    action: cleared ? "DELETE" : undefined,
+    build: () => buildTextDiffModel(beforeText, afterText),
+  }), [beforeText, afterText, cleared])
+
+  return <UnifiedDiffCard spec={spec} showHeader={false} />
+}
+
 // What a submission makes of one field. An author, a platform and tags are
 // named as the submission names them: one it creates has no ID in the library.
-function PendingValue({ field, record }: { field: NovelEditField; record: PendingRecord }) {
+function PendingValue({ field, record, current }: { field: NovelEditField; record: PendingRecord; current?: string }) {
+  const editor = useNovelEditor()
   const after = pendingAfter(record)
   if (!after) return unrecorded
   switch (field) {
@@ -46,7 +67,12 @@ function PendingValue({ field, record }: { field: NovelEditField; record: Pendin
     case "platformId": return recordText(after, "platformName") || unrecorded
     case "summary": {
       const summary = recordText(after, "summary")
-      return summary === undefined ? unrecorded : summary === null ? <PendingNote>清空简介</PendingNote> : <p className="novel-pending-text">{summary}</p>
+      if (summary === undefined) return unrecorded
+      const beforeText = (editor?.catalog?.book?.summary ?? current ?? "").trim()
+      if (summary === null) {
+        return beforeText ? <PendingSummaryDiff beforeText={beforeText} afterText="" cleared /> : <PendingNote>清空简介</PendingNote>
+      }
+      return <PendingSummaryDiff beforeText={beforeText} afterText={summary} cleared={false} />
     }
     case "coverUrl": {
       const cover = recordText(after, "coverUrl")
@@ -73,12 +99,12 @@ function PendingValue({ field, record }: { field: NovelEditField; record: Pendin
   }
 }
 
-export function NovelPendingChanges({ field }: { field: NovelEditField }) {
+export function NovelPendingChanges({ field, current }: { field: NovelEditField; current?: string }) {
   const entries = useNovelPending(field)
   if (!entries.length) return null
   return <PendingBlock title="待合并的改动" label={`${novelFieldLabels[field]}：待合并的改动`}>
     {entries.map(({ key, createdAt, record }) => <PendingItem key={key} createdAt={createdAt}>
-      <div className="novel-pending-value"><PendingValue field={field} record={record} /></div>
+      <div className="novel-pending-value"><PendingValue field={field} record={record} current={current} /></div>
     </PendingItem>)}
   </PendingBlock>
 }

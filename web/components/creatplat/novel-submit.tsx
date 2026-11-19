@@ -21,6 +21,15 @@ import "@/styles/creatplat/novel-submit.css"
 type Catalog = { platforms: ContentPlatform[]; authors: ContentAuthor[]; tags: ContentTag[]; policy: RolePolicy }
 type SubmissionResult = { status: "pending"; review_id: string } | { novel: { id: number }; chapterCount: number }
 
+const chapterCharCounts = new WeakMap<UploadChapterDraft, number>()
+function getChapterCharCount(chapter: UploadChapterDraft): number {
+  const cached = chapterCharCounts.get(chapter)
+  if (cached !== undefined) return cached
+  const count = chapter.content.replace(/\s/g, "").length
+  chapterCharCounts.set(chapter, count)
+  return count
+}
+
 export function NovelSubmit() {
   return <div className="novel-demo novel-submit-view"><NovelAccessGate><SubmissionForm /></NovelAccessGate></div>
 }
@@ -84,7 +93,7 @@ function SubmissionForm() {
 
   const authorOptions = catalog?.authors.filter(author => author.platformId === Number(platformId)) || []
   const canUpload = Boolean(catalog && allowsEndpoint(catalog.policy, "upload", "POST", "/api/v2/upload"))
-  const wordCount = useMemo(() => chapters.reduce((total, chapter) => total + chapter.content.replace(/\s/g, "").length, 0), [chapters])
+  const wordCount = useMemo(() => chapters.reduce((total, chapter) => total + getChapterCharCount(chapter), 0), [chapters])
   const authorName = authorOptions.find(author => author.id === Number(authorId))?.name || (authorId === "none" ? "" : importedAuthor) || "作者待补充"
 
   function updateChapter(key: number, field: "title" | "content", value: string) {

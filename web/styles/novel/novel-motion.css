@@ -33,7 +33,7 @@
   .novel-chapter-volume[aria-expanded=true] > .novel-tree-chevron { transform: rotate(90deg); }
   .novel-chapter-content { transition: border-color 240ms ease; }
   .novel-upload-volume > summary > svg:first-child { transition: transform 280ms var(--novel-motion-ease); }
-  .novel-upload-catalog-body { grid-template-columns: minmax(0, 100%) minmax(0, 0%); transition: grid-template-columns 320ms var(--novel-motion-ease); }
+  .novel-upload-catalog-body { grid-template-columns: minmax(0, 100%); }
   .novel-upload-catalog-body.has-selection { grid-template-columns: minmax(0, 240px) minmax(0, calc(100% - 240px)); }
   .illustration-resource { transition: border-color 180ms ease, box-shadow 240ms ease, background-color 180ms ease; }
   .illustration-resource:hover { border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); box-shadow: 0 5px 16px rgb(25 40 65 / 6%); }

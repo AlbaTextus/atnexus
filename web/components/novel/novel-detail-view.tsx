@@ -64,7 +64,7 @@ export function NovelDetailView({novel: savedNovel,catalogLoading=false,catalogE
   <ContributorsCard novelId={novel.id} creator={novel.contributions?.creator} contributors={novel.contributions?.contributors} actions={actions}/>
   </aside>
   <div className="main-column">
-    {(novel.synopsis.length > 0 || summaryPending || editor?.mode && editor.allowed) && <section className="panel introduction" aria-label="作品简介"><ContentSectionHeading icon={BookOpenText}>简介</ContentSectionHeading><div className="synopsis"><NovelEditable field="summary" block>{novel.synopsis.length ? novel.synopsis.map((p,i)=><p key={i}>{p}</p>) : "暂无简介"}</NovelEditable></div><NovelPendingChanges field="summary"/></section>}
+    {(novel.synopsis.length > 0 || summaryPending || editor?.mode && editor.allowed) && <section className="panel introduction" aria-label="作品简介"><ContentSectionHeading icon={BookOpenText}>简介</ContentSectionHeading><div className="synopsis"><NovelEditable field="summary" block>{novel.synopsis.length ? novel.synopsis.map((p,i)=><p key={i}>{p}</p>) : "暂无简介"}</NovelEditable></div><NovelPendingChanges field="summary" current={savedNovel.rawSummary ?? ""}/></section>}
     <GallerySection novelId={Number(novel.id)}/>
   </div>
     {catalogLoading || catalogError ? <section className="panel novel-chapter-catalog" aria-labelledby="novel-catalog-heading">

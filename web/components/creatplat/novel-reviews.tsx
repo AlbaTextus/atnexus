@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { usePathname } from "next/navigation"
 import { Link } from "next-view-transitions"
-import { ArrowLeft, Check, Circle, CircleCheck, CircleX, ClipboardCheck, Clock3, FileClock, RefreshCw, TriangleAlert, X } from "lucide-react"
+import { ArrowRight, Check, Circle, CircleCheck, CircleX, ClipboardCheck, Clock3, FileClock, TriangleAlert, X } from "lucide-react"
 import { api } from "@/lib/api"
 import { feedback } from "@/lib/feedback"
-import type { IllustrationBlock, NovelIllustration } from "@/lib/athub/athub-client"
+import { novelStatus, safeContentURL, type ContentAuthor, type ContentPlatform, type ContentTag, type IllustrationBlock, type Novel, type NovelIllustration } from "@/lib/athub/athub-client"
 import { contentErrorMessage } from "@/lib/athub/athub-errors"
 import { type ReviewItem, type RolePolicy, allowsEndpoint, endpointNames, hasOperation, operationNames } from "@/lib/athub/athub-permissions"
 import { isIllustrationBlock, isPositiveNumber } from "@/lib/novel/illustration-layout"
@@ -13,6 +14,8 @@ import { readAllContent } from "@/lib/novel/novel-view-models"
 import type { AccountUser } from "@/components/account/account-shell"
 import { IllustrationImage } from "@/components/novel/illustration-image"
 import { IllustrationLayoutPreview } from "@/components/novel/illustration-layout-preview"
+import { NovelCover } from "@/components/novel/novel-cover"
+import { UnifiedDiffCard, buildTextDiffModel } from "@/components/novel/novel-diff-card"
 import { useNovelAccess } from "@/components/novel/novel-access"
 import { UserAvatar } from "@/components/shared/user-avatar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -23,18 +26,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Reviewers see every submission and decide it; a submitter sees only their
 // own and can only read them.
 const views = {
   reviews: {
     title: "审核中心", icon: ClipboardCheck, endpoint: "/api/v4/admin/athub/reviews",
-    login: "请先登录后查看审核中心。", list: "审核提交列表", refresh: "刷新审核列表", pages: "审核列表分页",
+    login: "请先登录后查看审核中心。", list: "审核提交列表", pages: "审核列表分页",
   },
   submissions: {
     title: "我的提交", icon: FileClock, endpoint: "/api/v4/account/athub/submissions",
-    login: "请先登录后查看我的提交。", list: "我的提交列表", refresh: "刷新提交列表", pages: "提交列表分页",
+    login: "请先登录后查看我的提交。", list: "我的提交列表", pages: "提交列表分页",
   },
 } as const
 const statuses = { pending: "待审核", approved: "已通过", rejected: "已驳回", failed: "生效失败" } as const
@@ -77,26 +80,200 @@ function ReviewStatusBadge({ status }: { status: ReviewItem["status"] }) {
 const approveButton = "bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
 const rejectButton = "border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950 dark:hover:text-red-300"
 const fields: Record<string, string> = {
-  id: "编号", novelId: "小说编号", novel: "小说资料", platformId: "平台编号", authorId: "作者编号", authorName: "作者名称",
+  id: "编号", novelId: "小说编号", novel: "小说资料", platformId: "平台", authorId: "作者", authorName: "作者名称",
   tagIds: "标签", tagNames: "标签名称", volumes: "分卷", chapters: "章节", volumeId: "分卷编号", volumeOrder: "分卷顺序",
   order: "顺序", title: "标题", name: "名称", summary: "简介", coverUrl: "封面", url: "地址",
   status: "连载状态", content: "正文", sha256: "校验值", width: "宽度", height: "高度",
   revision: "布局版本", blocks: "图片块", imageId: "插图编号", x: "横向位置", y: "纵向位置",
 }
-function SubmittedValue({ name, value, depth = 0 }: { name: string; value: unknown; depth?: number }) {
+type ReviewLookups = {
+  tags: Map<number, string> | null
+  authors: Map<number, string> | null
+  platforms: Map<number, string> | null
+}
+function formatScalarField(fieldKey: string | undefined, value: unknown, lookups?: ReviewLookups): string {
+  if (value === null || value === undefined || value === "") return "未设置"
+  if (fieldKey === "status" && typeof value === "string") {
+    return novelStatus(value as Novel["status"]) || value
+  }
+  if (fieldKey === "authorId" && typeof value === "number") {
+    return lookups?.authors?.get(value) || `作者 #${value}`
+  }
+  if (fieldKey === "platformId" && typeof value === "number") {
+    return lookups?.platforms?.get(value) || `平台 #${value}`
+  }
+  return String(value)
+}
+function CoverThumbnail({ url, label }: { url: string | null; label: string }) {
+  const safe = url ? safeContentURL(url) : null
+  if (!safe) return <span className="text-xs text-muted-foreground">{url ? "封面地址无效" : "未设置"}</span>
+  return <div className="w-24 aspect-[3/4] overflow-hidden rounded-md border bg-muted [&>img]:h-full [&>img]:w-full [&>img]:object-cover [&>span]:flex [&>span]:h-full [&>span]:items-center [&>span]:justify-center [&>span]:p-2 [&>span]:text-center [&>span]:text-xs [&>span]:text-muted-foreground">
+    <NovelCover src={safe} title={label} fallback="加载失败" />
+  </div>
+}
+function SubmittedTags({ name, labels }: { name: string; labels: string[] }) {
+  return <div className="min-w-0 text-sm">
+    <p className="mb-1.5 font-medium">{name}</p>
+    {labels.length > 0 ? <div className="flex flex-wrap gap-1.5">{labels.map((label, index) => <Badge key={`${label}-${index}`} variant="secondary">{label}</Badge>)}</div>
+      : <p className="text-muted-foreground">未设置</p>}
+  </div>
+}
+function SubmittedValue({ fieldKey, name, value, depth = 0, lookups }: { fieldKey?: string; name: string; value: unknown; depth?: number; lookups?: ReviewLookups }) {
   const [open, setOpen] = useState(false)
   if (depth > 6) return <p className="text-sm text-muted-foreground">内容层级过深</p>
+  if (fieldKey === "tagIds" && Array.isArray(value) && value.every((item): item is number => typeof item === "number" && Number.isSafeInteger(item) && item > 0)) {
+    return <SubmittedTags name={name} labels={value.map(id => lookups?.tags?.get(id) || `标签 #${id}`)} />
+  }
+  if (fieldKey === "tagNames" && Array.isArray(value) && value.every((item): item is string => typeof item === "string")) {
+    return <SubmittedTags name={name} labels={value} />
+  }
+  if (fieldKey === "coverUrl" && (value === null || typeof value === "string")) {
+    return <div className="min-w-0 space-y-1.5 text-sm"><p className="font-medium">{name}</p><CoverThumbnail url={value} label={name} /></div>
+  }
   if (value !== null && typeof value === "object") {
     const entries = Array.isArray(value) ? value.map((item, index) => [String(index + 1), item] as const) : Object.entries(value)
     return <details className="rounded-lg border p-3" onToggle={event => setOpen(event.currentTarget.open)}>
       <summary className="cursor-pointer text-sm font-medium">{name} · {entries.length} 项</summary>
-      {open && <div className="mt-3 space-y-3">{entries.map(([key, item]) => <SubmittedValue key={key} name={fields[key] || key} value={item} depth={depth + 1} />)}</div>}
+      {open && <div className="mt-3 space-y-3">{entries.map(([key, item]) => <SubmittedValue key={key} fieldKey={Array.isArray(value) ? undefined : key} name={fields[key] || key} value={item} depth={depth + 1} lookups={lookups} />)}</div>}
     </details>
   }
-  const text = value === null ? "未设置" : String(value)
+  const text = formatScalarField(fieldKey, value, lookups)
   return <div className="min-w-0 text-sm"><p className="mb-1 font-medium">{name}</p>{text.length > 10000
     ? <details onToggle={event => setOpen(event.currentTarget.open)}><summary className="cursor-pointer">展开内容（{text.length.toLocaleString()} 字符）</summary>{open && <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-3 font-sans">{text}</pre>}</details>
     : <p className="whitespace-pre-wrap break-words text-muted-foreground">{text}</p>}</div>
+}
+
+function useReviewLookups(enabled: boolean): ReviewLookups {
+  const { request } = useNovelAccess()
+  const [lookups, setLookups] = useState<ReviewLookups>({ tags: null, authors: null, platforms: null })
+  useEffect(() => {
+    if (!enabled) return
+    const controller = new AbortController()
+    void Promise.allSettled([
+      readAllContent<ContentTag>(request, "/api/v5/tags", controller.signal),
+      readAllContent<ContentAuthor>(request, "/api/v5/authors", controller.signal),
+      readAllContent<ContentPlatform>(request, "/api/v5/platforms", controller.signal),
+    ]).then(([tagsResult, authorsResult, platformsResult]) => {
+      if (controller.signal.aborted) return
+      setLookups({
+        tags: tagsResult.status === "fulfilled" ? new Map(tagsResult.value.map(tag => [tag.id, tag.name])) : null,
+        authors: authorsResult.status === "fulfilled" ? new Map(authorsResult.value.map(author => [author.id, author.name || `作者 #${author.id}`])) : null,
+        platforms: platformsResult.status === "fulfilled" ? new Map(platformsResult.value.map(platform => [platform.id, platform.name])) : null,
+      })
+    })
+    return () => controller.abort()
+  }, [enabled, request])
+  return lookups
+}
+
+function useNovelInfo(novelId: number | null) {
+  const { request } = useNovelAccess()
+  const [loaded, setLoaded] = useState<{ novelId: number; novel?: Novel; error?: string } | null>(null)
+  useEffect(() => {
+    if (novelId === null) return
+    const controller = new AbortController()
+    request<Novel>(`/api/v5/novelinfo?id=${novelId}`, controller.signal)
+      .then(novel => { if (!controller.signal.aborted) setLoaded({ novelId, novel }) })
+      .catch(reason => { if (!controller.signal.aborted) setLoaded({ novelId, error: contentErrorMessage(reason, "原小说资料加载失败。") }) })
+    return () => controller.abort()
+  }, [novelId, request])
+  return loaded?.novelId === novelId ? loaded : null
+}
+
+const novelFieldOrder = ["title", "status", "authorId", "platformId", "tagIds", "coverUrl", "summary"]
+const normalizeTagList = (value: unknown) =>
+  Array.isArray(value) ? Array.from(new Set(value.filter((item): item is number => typeof item === "number" && Number.isSafeInteger(item) && item > 0))).sort((a, b) => a - b) : []
+const normalizeText = (value: unknown) => (typeof value === "string" ? value.trim() : "")
+
+function isNovelFieldChanged(key: string, before: unknown, after: unknown) {
+  if (key === "tagIds") {
+    const a = normalizeTagList(before), b = normalizeTagList(after)
+    return a.length !== b.length || a.some((id, index) => id !== b[index])
+  }
+  if (key === "title" || key === "summary" || key === "coverUrl") {
+    return normalizeText(before) !== normalizeText(after)
+  }
+  return (before ?? null) !== (after ?? null)
+}
+
+function NovelFieldDiffRow({ fieldKey, before, after, lookups }: { fieldKey: string; before: unknown; after: unknown; lookups: ReviewLookups }) {
+  const label = fields[fieldKey] || fieldKey
+  if (fieldKey === "title" || fieldKey === "summary") {
+    return <div className="novel-history-view">
+      <UnifiedDiffCard spec={{ title: label, build: () => buildTextDiffModel(normalizeText(before), normalizeText(after)) }} />
+    </div>
+  }
+  if (fieldKey === "coverUrl") {
+    return <div className="space-y-2 rounded-lg border p-3 text-sm">
+      <p className="font-medium">{label}</p>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="space-y-1"><span className="text-xs text-muted-foreground">修改前</span><CoverThumbnail url={typeof before === "string" ? before : null} label="修改前封面" /></div>
+        <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+        <div className="space-y-1"><span className="text-xs text-muted-foreground">修改后</span><CoverThumbnail url={typeof after === "string" ? after : null} label="修改后封面" /></div>
+      </div>
+    </div>
+  }
+  if (fieldKey === "tagIds") {
+    const beforeIds = normalizeTagList(before), afterIds = normalizeTagList(after)
+    const beforeSet = new Set(beforeIds), afterSet = new Set(afterIds)
+    const removed = beforeIds.filter(id => !afterSet.has(id))
+    const added = afterIds.filter(id => !beforeSet.has(id))
+    const kept = afterIds.filter(id => beforeSet.has(id))
+    const tagLabel = (id: number) => lookups.tags?.get(id) || `标签 #${id}`
+    return <div className="space-y-2 rounded-lg border p-3 text-sm">
+      <p className="font-medium">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {removed.map(id => <Badge key={`del-${id}`} variant="outline" className="border-red-200 bg-red-50 text-red-700 line-through dark:border-red-800 dark:bg-red-950 dark:text-red-300">− {tagLabel(id)}</Badge>)}
+        {added.map(id => <Badge key={`add-${id}`} variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">+ {tagLabel(id)}</Badge>)}
+        {kept.map(id => <Badge key={`keep-${id}`} variant="secondary">{tagLabel(id)}</Badge>)}
+        {!removed.length && !added.length && !kept.length && <span className="text-muted-foreground">未设置</span>}
+      </div>
+    </div>
+  }
+  const beforeText = formatScalarField(fieldKey, before, lookups)
+  const afterText = formatScalarField(fieldKey, after, lookups)
+  return <div className="space-y-1.5 rounded-lg border p-3 text-sm">
+    <p className="font-medium">{label}</p>
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="rounded bg-red-50 px-2 py-0.5 text-red-700 line-through dark:bg-red-950 dark:text-red-300">{beforeText}</span>
+      <ArrowRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+      <span className="rounded bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{afterText}</span>
+    </div>
+  </div>
+}
+
+function SubmittedPayload({ item, lookups }: { item: ReviewItem; lookups: ReviewLookups }) {
+  const payload = item.payload
+  const isNovelUpdate = item.path === "/api/v2/novelinfo" && item.method === "PUT" && item.status !== "approved"
+  const rawNovelId = isNovelUpdate ? Number(new URLSearchParams(item.query).get("id") || payload?.id) : NaN
+  const novelId = Number.isSafeInteger(rawNovelId) && rawNovelId > 0 ? rawNovelId : null
+  const live = useNovelInfo(novelId)
+
+  if (!payload) return null
+  if (novelId !== null) {
+    if (!live) return <Skeleton className="h-40 w-full" />
+    if (live.novel) {
+      const current = live.novel as Record<string, unknown>
+      const keys = Object.keys(payload).filter(key => key !== "id")
+      keys.sort((a, b) => {
+        const ai = novelFieldOrder.indexOf(a), bi = novelFieldOrder.indexOf(b)
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+      })
+      const changed = keys.filter(key => isNovelFieldChanged(key, current[key], payload[key]))
+      return <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span className="font-medium">《{live.novel.title}》</span>
+          <Badge variant="outline">{changed.length > 0 ? `共 ${changed.length} 项改动` : "无字段改动"}</Badge>
+        </div>
+        {changed.length === 0 ? <p className="text-sm text-muted-foreground">提交内容与当前书库中的资料完全一致。</p>
+          : <div className="space-y-3">{changed.map(key => <NovelFieldDiffRow key={key} fieldKey={key} before={current[key]} after={payload[key]} lookups={lookups} />)}</div>}
+      </div>
+    }
+  }
+  return <div className="space-y-4">
+    {live?.error && <p className="text-xs text-muted-foreground">{live.error}以下为提交的完整内容。</p>}
+    {Object.entries(payload).map(([key, value]) => <SubmittedValue key={key} fieldKey={key} name={fields[key] || key} value={value} lookups={lookups} />)}
+  </div>
 }
 
 type IllustrationChange =
@@ -176,8 +353,10 @@ function failureReason(item: ReviewItem) {
 }
 
 function ReviewBoard({ view }: { view: keyof typeof views }) {
-  const { title, icon: TitleIcon, endpoint, login, list, refresh, pages } = views[view]
+  const { title, icon: TitleIcon, endpoint, login, list, pages } = views[view]
   const own = view === "submissions"
+  const pathname = usePathname()
+  const { ready: accessReady, authenticated } = useNovelAccess()
   const [user, setUser] = useState<AccountUser | null>(null)
   const [policy, setPolicy] = useState<RolePolicy | null>(null)
   const [denied, setDenied] = useState(false)
@@ -188,6 +367,7 @@ function ReviewBoard({ view }: { view: keyof typeof views }) {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
   const [detail, setDetail] = useState<ReviewItem | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState("")
   const [error, setError] = useState("")
   const [revision, setRevision] = useState(0)
@@ -195,8 +375,9 @@ function ReviewBoard({ view }: { view: keyof typeof views }) {
   const [note, setNote] = useState("")
   const [busy, setBusy] = useState(false)
   const [decisionError, setDecisionError] = useState("")
+  const lookups = useReviewLookups(authenticated && (own || (Boolean(policy) && !denied)))
   useEffect(() => {
-    if (own) return
+    if (own || !accessReady || !authenticated) return
     const controller = new AbortController()
     void Promise.all([
       api<AccountUser>("/api/v1/user", { signal: controller.signal }),
@@ -207,8 +388,9 @@ function ReviewBoard({ view }: { view: keyof typeof views }) {
       setDenied(actor.level < 3 || !hasOperation(permissions, "review"))
     }).catch(reason => { if (!controller.signal.aborted) { setDenied(true); setError(failure(reason, login)) } })
     return () => controller.abort()
-  }, [own, login])
+  }, [own, accessReady, authenticated, login])
   useEffect(() => {
+    if (!accessReady || !authenticated) { if (accessReady && !authenticated) setLoading(false); return }
     if (!own && (!policy || denied)) { if (denied) setLoading(false); return }
     const controller = new AbortController()
     setLoading(true); setError("")
@@ -219,16 +401,18 @@ function ReviewBoard({ view }: { view: keyof typeof views }) {
       .catch(reason => { if (!controller.signal.aborted) setError(failure(reason, login)) })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [own, endpoint, login, policy, denied, status, offset, revision])
+  }, [own, accessReady, authenticated, endpoint, login, policy, denied, status, offset, revision])
   useEffect(() => {
-    setDetail(null); setDetailError(""); setNote("")
-    if (!selected) return
+    setDetailError(""); setNote("")
+    if (!selected || !accessReady || !authenticated) { setDetail(null); setDetailLoading(false); return }
     const controller = new AbortController()
+    setDetailLoading(true)
     api<ReviewItem>(`${endpoint}/${selected}`, { signal: controller.signal })
       .then(item => { if (!controller.signal.aborted) setDetail(item) })
-      .catch(reason => { if (!controller.signal.aborted) setDetailError(failure(reason, login)) })
+      .catch(reason => { if (!controller.signal.aborted) { setDetail(null); setDetailError(failure(reason, login)) } })
+      .finally(() => { if (!controller.signal.aborted) setDetailLoading(false) })
     return () => controller.abort()
-  }, [endpoint, login, selected, revision])
+  }, [endpoint, login, selected, accessReady, authenticated, revision])
   async function decide() {
     if (own || !detail || !decision || busy) return
     if (decision === "reject" && !note.trim()) { setDecisionError("请填写驳回原因。"); return }
@@ -241,43 +425,39 @@ function ReviewBoard({ view }: { view: keyof typeof views }) {
     finally { setBusy(false) }
   }
   const canApprove = detail && policy && allowsEndpoint(policy, detail.operation, detail.method, detail.path) && detail.user_id !== user?.id
-  return <div className="mx-auto max-w-6xl space-y-6 py-7">
-    <div className="flex flex-wrap items-center justify-between gap-4">
-      <div className="flex items-center gap-3"><TitleIcon aria-hidden="true" /><h1 className="text-2xl font-semibold">{title}</h1></div>
-      <div className="flex gap-3"><Button nativeButton={false} role="link" render={<Link href="/library" />} variant="outline"><ArrowLeft />返回书库</Button>
-        <Button variant="outline" size="icon" aria-label={refresh} disabled={loading || busy} onClick={() => setRevision(value => value + 1)}><RefreshCw /></Button></div>
-    </div>
-    {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-    {denied ? <Card><CardContent className="py-6">此页面仅供拥有审核权限的 LT3、LT4 用户使用。</CardContent></Card> : <>
-      <TooltipProvider><ToggleGroup value={[status]} disabled={busy} variant="pill" aria-label="审核状态" onValueChange={values => { if (values[0]) { setStatus(values[0] as ReviewFilter); setOffset(0); setSelected(null) } }}>
+  const destructiveAlert = "border-red-200 bg-red-50/70 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 *:data-[slot=alert-description]:text-current"
+  return <div className="max-w-6xl space-y-6 py-7">
+    <div className="flex items-center gap-3"><TitleIcon aria-hidden="true" /><h1 className="text-2xl font-semibold">{title}</h1></div>
+    {error && <Alert variant="destructive" className={destructiveAlert}><AlertDescription>{error}</AlertDescription></Alert>}
+    {!accessReady ? <Skeleton className="h-60 w-full" /> : !authenticated ? <Card><CardContent className="flex flex-wrap items-center justify-between gap-4 py-6"><p className="text-sm text-muted-foreground">{login}</p><Button nativeButton={false} render={<Link href={`/login?return_to=${encodeURIComponent(pathname)}`} />}>登录</Button></CardContent></Card> : denied ? <Card><CardContent className="py-6">此页面仅供拥有审核权限的 LT3、LT4 用户使用。</CardContent></Card> : <>
+      <ToggleGroup value={[status]} disabled={busy} variant="pill" aria-label="审核状态" className="flex-wrap" onValueChange={values => { if (values[0]) { setStatus(values[0] as ReviewFilter); setOffset(0); setSelected(null) } }}>
         {(Object.keys(filterNames) as ReviewFilter[]).map(value => {
           const Icon = filterStyles[value].icon
           return <Tooltip key={value}>
-            <TooltipTrigger render={<ToggleGroupItem value={value} aria-label={filterNames[value]} className={`size-8 p-0 ${filterStyles[value].indicator}`} />}>
+            <TooltipTrigger render={<ToggleGroupItem value={value} title={filterNames[value]} aria-label={filterNames[value]} className={`size-8 p-0 ${filterStyles[value].indicator}`} />}>
               <Icon aria-hidden="true" className={`size-4 ${filterStyles[value].color}`} />
             </TooltipTrigger>
             <TooltipContent>{filterNames[value]}</TooltipContent>
           </Tooltip>
         })}
-      </ToggleGroup></TooltipProvider>
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      </ToggleGroup>
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-3" aria-label={list} aria-busy={loading}>
           {loading ? <Skeleton className="h-60 w-full" /> : !error && !items.length ? <Card><CardContent className="py-6 text-center text-muted-foreground">{status === "all" ? "暂无提交" : `暂无${statuses[status]}提交`}</CardContent></Card> :
-            items.map(item => <Card key={item.id} className={selected === item.id ? "ring-1 ring-primary" : ""}><CardContent className="space-y-3 py-4">
+            items.map(item => <Card key={item.id} onClick={() => setSelected(item.id)} className={`cursor-pointer transition-colors hover:bg-muted/40 ${selected === item.id ? "ring-1 ring-primary bg-muted/20" : ""}`}><CardContent className="space-y-3 py-4">
               {own ? <div className="flex items-center gap-3"><span className="min-w-0 flex-1 truncate font-medium">{subject(item)}</span><ReviewStatusBadge status={item.status} /></div> : <>
                 <div className="flex items-center gap-3"><UserAvatar src={item.contributor.avatar} name={item.contributor.name} decorative className="size-8 shrink-0" /><span className="min-w-0 flex-1 truncate font-medium">{item.contributor.name}</span><ReviewStatusBadge status={item.status} /></div>
                 <p className="text-sm">{subject(item)}</p>
               </>}
-              <div className="flex flex-wrap items-center justify-between gap-2"><time className="text-xs text-muted-foreground">{date(item.created_at)}</time><Button variant="outline" size="sm" disabled={busy} onClick={() => setSelected(item.id)}>查看提交</Button></div>
+              <div className="flex flex-wrap items-center justify-between gap-2"><time className="text-xs text-muted-foreground">{date(item.created_at)}</time><Button variant="outline" size="sm" disabled={busy} onClick={event => { event.stopPropagation(); setSelected(item.id) }}>查看提交</Button></div>
             </CardContent></Card>)}
           <nav aria-label={pages} className="flex items-center justify-between gap-2 text-sm"><Button variant="outline" disabled={busy || loading || offset === 0} onClick={() => setOffset(value => value - 20)}>上一页</Button><span>{Math.floor(offset / 20) + 1} / {Math.max(1, Math.ceil(total / 20))}</span><Button variant="outline" disabled={busy || loading || offset + 20 >= total} onClick={() => setOffset(value => value + 20)}>下一页</Button></nav>
         </div>
-        <Card className="min-w-0 self-start"><CardHeader><CardTitle><h2>提交详情</h2></CardTitle></CardHeader><CardContent className="space-y-5">
-          {!selected ? <p className="text-sm text-muted-foreground">选择一项提交查看内容。</p> : detailError ? <Alert variant="destructive"><AlertDescription>{detailError}</AlertDescription></Alert> : !detail ? <Skeleton className="h-48 w-full" /> : <>
-            <p className="text-sm">{own ? subject(detail) : `${detail.contributor.name} · ${subject(detail)}`}</p>
-            {detail.query && <dl className="space-y-2">{Array.from(new URLSearchParams(detail.query)).map(([key, value]) => <div key={key} className="flex gap-3 text-sm"><dt>{key === "id" && detail.path === "/api/v2/illustrations" ? fields.imageId : fields[key] || key}</dt><dd>{value}</dd></div>)}</dl>}
+        <Card className="min-w-0 self-start"><CardHeader><CardTitle><h2>提交详情</h2></CardTitle></CardHeader><CardContent className={`space-y-5 transition-opacity duration-150 ${detailLoading && detail ? "opacity-60" : ""}`}>
+          {!selected ? <p className="text-sm text-muted-foreground">选择一项提交查看内容。</p> : detailError ? <Alert variant="destructive" className={destructiveAlert}><AlertDescription>{detailError}</AlertDescription></Alert> : !detail ? <Skeleton className="h-48 w-full" /> : <div key={detail.id} className="novel-motion-enter space-y-5">
+            {!detail.payload && !illustrationChange(detail) && detail.query && <dl className="space-y-2">{Array.from(new URLSearchParams(detail.query)).map(([key, value]) => <div key={key} className="flex gap-3 text-sm"><dt>{key === "id" && detail.path === "/api/v2/illustrations" ? fields.imageId : fields[key] || key}</dt><dd>{value}</dd></div>)}</dl>}
             <SubmittedIllustration key={detail.id} item={detail} />
-            {detail.payload && <div className="space-y-4">{Object.entries(detail.payload).map(([key, value]) => <SubmittedValue key={key} name={fields[key] || key} value={value} />)}</div>}
+            <SubmittedPayload key={detail.id} item={detail} lookups={lookups} />
             {!own && detail.status === "pending" && detail.user_id === user?.id && <p className="text-sm text-muted-foreground">不能审核自己的提交。</p>}
             {detail.status === "pending" ? own ? <div className="border-t pt-4 text-sm"><ReviewStatusBadge status={detail.status} /></div> : <div className="flex flex-wrap justify-end gap-3">
               <Button variant="outline" className={rejectButton} disabled={busy || detail.user_id === user?.id} onClick={() => { setDecision("reject"); setDecisionError("") }}><X />驳回</Button>
@@ -291,7 +471,7 @@ function ReviewBoard({ view }: { view: keyof typeof views }) {
               </span>
               {detail.reviewed_at && <><span aria-hidden="true">·</span><time dateTime={detail.reviewed_at}>{date(detail.reviewed_at)}</time></>}
             </div>{detail.note && <p className="whitespace-pre-wrap break-words">{detail.note}</p>}{detail.status === "failed" && <p className="break-words text-destructive">{failureReason(detail)}</p>}</div>}
-          </>}
+          </div>}
         </CardContent></Card>
       </div>
     </>}

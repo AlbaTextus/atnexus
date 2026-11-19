@@ -10,6 +10,7 @@ temp
 temps
 web/temp
 release
+docs
 bin
 coverage.out
 README.md

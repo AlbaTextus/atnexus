@@ -6,7 +6,6 @@
     "build:linux-amd64": "node scripts/build-linux-amd64.mjs",
     "server:dev": "go run ./cmd/server",
     "test:go": "node scripts/test-go.mjs",
-    "docs:sync": "node scripts/docs-sync.mjs",
     "db:athub:install": "npm --prefix modules/athub ci",
     "db:athub:validate": "npm --prefix modules/athub run db:validate",
     "db:athub:deploy": "npm --prefix modules/athub run db:deploy",

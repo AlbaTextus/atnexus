@@ -2,28 +2,13 @@
 
 ## 说明文档
 
-- 说明文档在文档站仓库 [AlbaTextus/docs](https://github.com/AlbaTextus/docs)，以 Git 子模块挂在 `docs/`，只检出 `docs/content/` 下的 Markdown（按模块分目录：`athub`、`oauth`、`image`、`creatplat`、`deploy`）。本仓库只记录子模块的提交号，不保存文档副本。
-- 改动行为、环境变量、数据库迁移或部署方式时，同一次工作里更新 `docs/content/` 的对应说明，不要写回本仓库的 README。
-- 新的检出或 worktree 里 `docs/` 是空的，运行一次 `pnpm docs:sync` 即可初始化。不带参数时它只拉取文档仓库的新提交，并在本仓库提交子模块指针。
-- 子模块里的提交必须位于 `main` 分支上，不要在游离 HEAD 上提交。
-
-### 文档改动的流程
-
-文档跟着功能分支走：在分支里改，分支合并到 `main` 之后才推送到文档仓库。
-
-1. 在功能分支（worktree）里改代码时，同一个分支里改 `docs/content/` 的对应说明。
-2. 在仓库根目录运行 `pnpm docs:sync -m "文档提交说明"`。它在子模块里提交文档，合入文档仓库远端 `main` 的新提交，再在当前分支提交子模块指针。这一步只产生本地提交。
-3. 分支合并前不要推送文档仓库。推送文档仓库的 `main` 会发布文档站，文档会先于功能上线。
-4. 分支合并到本仓库的 `main` 之后，在改文档的那个 worktree 里运行 `git -C docs push origin main`，把文档推送到文档仓库。
-5. 文档仓库推送成功后再推送本仓库的 `main`。顺序不能反，否则别人拿到的指针指向远端不存在的提交。
-6. 在主检出里运行 `pnpm docs:sync`，让那里的 `docs/` 跟上。
-
-注意：
-
-- 文档提交在推送前只存在于改文档的那个 worktree 的子模块里，其他检出拿不到。推送完成前不要删除该 worktree。
-- 推送被拒绝说明远端有别的分支先推送了文档。重新运行 `pnpm docs:sync` 合入后再推送；不要对已经记录进本仓库的文档提交做 rebase 或 amend，否则指针会指向不存在的提交。
-
-访问 GitHub 失败时，先按本机环境设置 `HTTPS_PROXY` 再运行；不要把代理地址写进仓库。
+- 文档站 <https://docs.albatextus.com> 的正文写在本仓库的 `docs/`，按模块分目录（`athub`、`oauth`、`image`、`creatplat`、`deploy`），每个页面一个 Markdown 文件。站点代码在另一个仓库 [AlbaTextus/docs](https://github.com/AlbaTextus/docs)。
+- 改动行为、环境变量、数据库迁移或部署方式时，在同一个分支里更新 `docs/` 的对应说明，和代码一起提交；不要写回本仓库的 README。
+- 文档之间的链接写站内绝对路径，例如 `[数据库](/deploy/database)`，不要写成仓库内的相对路径。
+- 发布是自动的：`main` 推送到 GitHub 且改动包含 `docs/` 时，[同步工作流](.github/workflows/sync-docs.yml) 把 `docs/` 镜像到文档站仓库的 `content/` 并推送，文档站随即更新。功能分支上的文档在合并前不会发布。
+- 不要直接改文档站仓库的 `content/`，下一次同步会用本仓库的 `docs/` 覆盖它。
+- 新增页面除了在 `docs/<模块>/` 写 Markdown，还要在文档站仓库的 `lib/navigation.ts` 加一项，否则页面不会出现在站点上。只改已有页面不需要动文档站仓库。
+- 同步工作流依赖仓库密钥 `DOCS_DEPLOY_KEY`（文档站仓库带写权限的部署密钥的私钥）。
 
 ## Go 测试
 

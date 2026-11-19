@@ -24,7 +24,6 @@ const messages: Record<string, string> = {
   server_error: "服务暂时不可用，请稍后再试。",
   passkey_unavailable: "通行密钥暂时不可用，请使用邮箱和密码登录。",
   invalid_passkey: "通行密钥验证失败，请重试或使用邮箱登录。",
-  invalid_passkey_login: "通行密钥验证失败，请重试或使用邮箱登录。",
   "Failed to fetch": "无法连接到服务，请检查网络后重试。",
   "NetworkError when attempting to fetch resource.": "无法连接到服务，请检查网络后重试。",
   "Load failed": "无法连接到服务，请检查网络后重试。",

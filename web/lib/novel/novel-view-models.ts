@@ -17,7 +17,6 @@ export type NovelListItem = {
 }
 export type NovelDetailModel = Omit<NovelListItem, "synopsis"> & {
   synopsis: string[]
-  language: string
   publisher?: string
   chapters: TableOfContents["chapters"]
   volumes: TableOfContents["volumes"]
@@ -47,7 +46,6 @@ export function mapNovelDetailModel(book: Novel, tags: ContentTag[], toc: TableO
   return {
     ...mapNovelListItem(book, tags, author ? [author] : []),
     synopsis: synopsis.length ? synopsis : ["暂无简介"],
-    language: "待补充",
     publisher: platform?.name,
     words: typeof toc?.wordCount === "number" ? `${Number((toc.wordCount / 10000).toFixed(2))}w` : "待补充",
     chapterCount: toc?.chapters.length ?? null,

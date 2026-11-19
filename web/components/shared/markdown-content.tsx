@@ -22,7 +22,7 @@ export function MarkdownContent({ content }: { content: string }) {
       },
       a: ({ href, children }) => href ? <a href={href} target={/^(https?:)?\/\//.test(href) ? "_blank" : undefined} rel="noopener noreferrer">{children}</a> : <span>{children}</span>,
       img: ({ src, alt }) => typeof src === "string" && src ? <img src={src} alt={alt || ""} loading="lazy" decoding="async" referrerPolicy="no-referrer" /> : <span>{alt}</span>,
-      table: ({ children }) => <div className="legal-table-scroll" role="region" aria-label="协议表格" tabIndex={0}><table>{children}</table></div>,
+      table: ({ children }) => <div className="legal-table-scroll" role="region" aria-label="表格" tabIndex={0}><table>{children}</table></div>,
     }}>{content}</Markdown>
   </div>
 }

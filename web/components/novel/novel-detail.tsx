@@ -5,8 +5,7 @@ import { NovelDetailView } from "@/components/novel/novel-detail-view"
 import { ContentFailure, NovelAccessGate, useNovelAccess } from "@/components/novel/novel-access"
 import { mapNovelDetailModel, readAllContent, type NovelDetailModel } from "@/lib/novel/novel-view-models"
 import type { Novel, NovelContributors, ContentAuthor, ContentTag, ContentPlatform, TableOfContents } from "@/lib/athub/athub-client"
-import { NovelEdit } from "@/components/novel/novel-edit"
-import { NovelEditorProvider } from "@/components/novel/novel-inline-editor"
+import { NovelEdit, NovelEditorProvider } from "@/components/novel/novel-inline-editor"
 
 export function NovelDetail({ id }: { id: number }) {
   return <div className="novel-demo"><NovelAccessGate><DetailData key={id} id={id} /></NovelAccessGate></div>

@@ -34,7 +34,7 @@ export function managementError(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 401) return "登录已过期，请重新登录。"
     if (error.code === "admin_required") return "应用接入管理仅限管理员使用。"
-    if (error.code === "application_not_found") return "应用不存在，或你没有管理该应用的权限。"
+    if (error.code === "application_not_found") return "应用不存在，或已被删除。"
     if (error.status === 403) return "当前请求无法通过权限验证，请刷新页面后重试。"
     if (error.status >= 500) return "暂时无法连接用户中心，请稍后重试。"
     return error.message

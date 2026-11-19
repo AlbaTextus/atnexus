@@ -34,7 +34,7 @@ export function UserDetailsRow({ user, onSaved }: { user: ManagedUser; onSaved: 
       <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </DialogTrigger>
     <DialogContent showCloseButton={!keyLocked} className="center-dialog managed-user-dialog">
-      <DialogHeader className="managed-user-dialog-heading"><DialogTitle>用户详情</DialogTitle><DialogDescription>查看账户信息、管理登录权限{actor.role === "SUPER_ADMIN" ? "与积分。" : "。"}</DialogDescription></DialogHeader>
+      <DialogHeader className="managed-user-dialog-heading"><DialogTitle>用户详情</DialogTitle><DialogDescription>查看账户信息、管理登录权限。</DialogDescription></DialogHeader>
       <div className="managed-user-dialog-body">
         <div className="managed-user-profile">
           <section className="managed-user-panel managed-user-identity" aria-label="身份信息"><UserIdentityCard user={user} /></section>

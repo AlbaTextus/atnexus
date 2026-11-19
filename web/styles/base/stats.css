@@ -1,5 +1,10 @@
 [data-slot="stat-icon"] { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border: 1px solid transparent; border-radius: 50%; background: var(--muted); color: var(--muted-foreground); }
-[data-slot="stat-icon"][data-tone="blue"] { background: #f0f6fc; color: #658bb1; }
-[data-slot="stat-icon"][data-tone="green"] { background: #f0f8f3; color: #63977b; }
-[data-slot="stat-icon"][data-tone="orange"] { background: #fdf5ee; color: #b18a60; }
+[data-slot="stat-icon"][data-tone="blue"] { --stat-tone: #2563eb; }
+[data-slot="stat-icon"][data-tone="green"] { --stat-tone: #16a34a; }
+[data-slot="stat-icon"][data-tone="orange"] { --stat-tone: #ea580c; }
+.dark [data-slot="stat-icon"][data-tone="blue"] { --stat-tone: #60a5fa; }
+.dark [data-slot="stat-icon"][data-tone="green"] { --stat-tone: #4ade80; }
+.dark [data-slot="stat-icon"][data-tone="orange"] { --stat-tone: #fb923c; }
+[data-slot="stat-icon"]:is([data-tone="blue"], [data-tone="green"], [data-tone="orange"]) { background: color-mix(in srgb, var(--stat-tone) 11%, transparent); color: var(--stat-tone); }
+.dark [data-slot="stat-icon"]:is([data-tone="blue"], [data-tone="green"], [data-tone="orange"]) { background: color-mix(in srgb, var(--stat-tone) 16%, transparent); }
 [data-slot="stat-value"] { font-size: 29px; font-weight: 600; letter-spacing: -1px; line-height: 1.4; }

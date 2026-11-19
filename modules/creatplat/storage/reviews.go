@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 
 	"github.com/AlbaTextus/atnexus/internal/store"
 	"github.com/google/uuid"
@@ -165,6 +166,47 @@ func (p *Postgres) DecideATHubReview(ctx context.Context, actor, id uuid.UUID, d
 		return tx.Commit(ctx)
 	})
 	return r, err
+}
+
+// pendingChangesPage is how many queued changes one read of a novel returns.
+const pendingChangesPage = 50
+
+// PendingATHubChanges lists the reviews awaiting a decision whose change
+// alters the given novel, oldest first: the order they were submitted in. The
+// content API listed the novels a change alters in the baseline it reported,
+// under "novels", by ID. A review queued without a baseline names no novel
+// and is never listed. Each comes with the baseline cut down to this novel: a
+// change can alter many novels, and the others are not the reader's concern.
+// The actor has to be allowed to edit novels.
+func (p *Postgres) PendingATHubChanges(ctx context.Context, actor uuid.UUID, novelID int32, offset int) (store.ATHubPendingChangeList, error) {
+	result := store.ATHubPendingChangeList{Items: []store.ATHubPendingChange{}}
+	novel := strconv.FormatInt(int64(novelID), 10)
+	err := p.authority.WithCreatorEditAccess(ctx, actor, func() error {
+		tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+		const touched = ` FROM athub_reviews WHERE status='pending' AND (baseline->'novels') ? $1::text`
+		if err := tx.QueryRow(ctx, `SELECT COUNT(*)`+touched, novel).Scan(&result.Total); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT id,created_at,
+			jsonb_build_object('v',baseline->'v','novels',jsonb_build_object($1::text,baseline->'novels'->$1::text))`+touched+`
+			ORDER BY created_at,id LIMIT $2 OFFSET $3`, novel, pendingChangesPage, offset)
+		if err != nil {
+			return err
+		}
+		result.Items, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (store.ATHubPendingChange, error) {
+			var item store.ATHubPendingChange
+			return item, row.Scan(&item.ID, &item.CreatedAt, &item.Baseline)
+		})
+		if err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	})
+	return result, err
 }
 
 // PendingReviewMentions reports whether a review still awaiting a decision

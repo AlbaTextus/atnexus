@@ -1,6 +1,7 @@
 import { Building2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { NovelEditable } from "@/components/novel/novel-inline-editor";
+import { NovelPendingChanges } from "@/components/novel/novel-pending-changes";
 import publisherBranding from "@/config/publisher-branding.json";
 
 type PublicationCardProps = {
@@ -19,7 +20,7 @@ export function PublicationCard({ releaseDate, publisher }: PublicationCardProps
       <dl className="publication-details" aria-label="发行信息">
         <div className="publication-producer">
           <dt>发行方</dt>
-          <dd><NovelEditable field="platformId">{publisher || "待补充"}</NovelEditable></dd>
+          <dd><NovelEditable field="platformId">{publisher || "待补充"}</NovelEditable><NovelPendingChanges field="platformId"/></dd>
         </div>
         <div>
           <dt>发行时间</dt>

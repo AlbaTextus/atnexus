@@ -8,6 +8,15 @@ export type BlockOperation = ResizeHandle | "move"
 export type LayoutGuides = { x?: number; y?: number }
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
+// A submission is shown from what it carries, which is not known to have the
+// shape of an illustration or a layout until it has been checked.
+export const isPositiveNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0
+export function isIllustrationBlock(value: unknown): value is IllustrationBlock {
+  if (typeof value !== "object" || value === null) return false
+  const { imageId, x, y, width, height } = value as Record<string, unknown>
+  return isPositiveNumber(imageId) && isPositiveNumber(width) && isPositiveNumber(height) && [x, y].every(edge => edge === 0 || isPositiveNumber(edge))
+}
+
 export function fitIllustrationBlock(block: IllustrationBlock): IllustrationBlock {
   const ratio = block.width / block.height
   const maxWidth = Math.min(ILLUSTRATION_CANVAS_WIDTH, ILLUSTRATION_CANVAS_MAX_HEIGHT * ratio)

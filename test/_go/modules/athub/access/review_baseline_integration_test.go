@@ -22,8 +22,9 @@ import (
 // Opt-in. The content module, the moderation adapter and the creator database
 // are real and wired as the server wires them. A submission waits for review
 // while the library moves on. Approving it writes what the submission itself
-// changed and leaves the rest as the library holds it now; it is refused when
-// somebody else changed the same content in the meantime.
+// changed, over whatever somebody else made of the same content in the
+// meantime, and leaves the rest as the library holds it now. It is refused only
+// when what it changes is no longer there to change.
 func TestReviewBaselineIntegration(t *testing.T) {
 	dsn := os.Getenv("OAUTH_TEST_DATABASE_URL")
 	if dsn == "" {
@@ -216,33 +217,49 @@ func TestReviewBaselineIntegration(t *testing.T) {
 		}
 	})
 
-	t.Run("a field somebody else changed meanwhile refuses the approval", func(t *testing.T) {
+	t.Run("a field somebody else changed meanwhile is written over", func(t *testing.T) {
 		id, book := create()
 		pending := submit("PUT", book, form("新标题", "新简介", "https://covers.example/a.jpg"))
-		meanwhile("PUT", book, form("别人改的标题", "原简介", "https://covers.example/a.jpg"))
-		refused(approve(pending))
-		// Nothing of the submission is written, not even the summary nobody else touched.
-		if got := shown(book); got != [3]string{"别人改的标题", "原简介", "https://covers.example/a.jpg"} {
+		meanwhile("PUT", book, form("别人改的标题", "原简介", "https://covers.example/b.jpg"))
+		applied(approve(pending))
+		// The title and the summary are the submission's. The cover, which the
+		// submission left alone, is the one somebody else chose.
+		if got := shown(book); got != [3]string{"新标题", "新简介", "https://covers.example/b.jpg"} {
 			t.Fatalf("novel=%q", got)
 		}
-		if changes := credited(id); len(changes) != 0 {
-			t.Fatalf("a refused approval was recorded: %+v", changes)
+		// The history shows the title that was written over.
+		changes := credited(id)
+		if len(changes) != 1 || changes[0].Entity != "Novel" || changes[0].Action != "UPDATE" {
+			t.Fatalf("changes=%+v", changes)
+		}
+		before, after := changes[0].Before, changes[0].After
+		if before["title"] != "别人改的标题" || after["title"] != "新标题" ||
+			before["summary"] != "原简介" || after["summary"] != "新简介" ||
+			before["coverUrl"] != "https://covers.example/b.jpg" || after["coverUrl"] != "https://covers.example/b.jpg" {
+			t.Fatalf("before=%v after=%v", before, after)
 		}
 	})
 
-	t.Run("of two pending edits to one field only the first approved takes effect", func(t *testing.T) {
-		_, book := create()
-		first := submit("PUT", book, form("第一份修改", "原简介", "https://covers.example/a.jpg"))
-		second := submit("PUT", book, form("第二份修改", "原简介", "https://covers.example/a.jpg"))
-		applied(approve(first))
-		refused(approve(second))
-		if got := shown(book); got[0] != "第一份修改" {
-			t.Fatalf("novel=%q", got)
+	t.Run("of two pending edits to one field the one approved later stands", func(t *testing.T) {
+		for _, order := range [][2]int{{0, 1}, {1, 0}} {
+			_, book := create()
+			titles := [2]string{"第一份修改", "第二份修改"}
+			var pending [2]uuid.UUID
+			for i, title := range titles {
+				pending[i] = submit("PUT", book, form(title, "原简介", "https://covers.example/a.jpg"))
+			}
+			for _, turn := range order {
+				applied(approve(pending[turn]))
+				if got := shown(book); got[0] != titles[turn] {
+					t.Fatalf("approved %q, novel=%q", titles[turn], got)
+				}
+			}
 		}
 	})
 
 	t.Run("chapter edits", func(t *testing.T) {
 		id, _ := create()
+		path := fmt.Sprintf("/api/v2/content?novelId=%d&order=1", id)
 		meanwhile("PUT", "/api/v2/content", chapter(id, 1, "第一章", "原来的正文。"))
 		// Only the title: the body somebody else rewrote meanwhile stays.
 		pending := submit("PUT", "/api/v2/content", chapter(id, 1, "第一章 修订", "原来的正文。"))
@@ -251,11 +268,34 @@ func TestReviewBaselineIntegration(t *testing.T) {
 		if got := read(id, 1); got != [2]string{"第一章 修订", "别人重写的正文。"} {
 			t.Fatalf("chapter=%q", got)
 		}
-		// The body: refused once somebody else rewrote it too.
+		// Only the body: it is written over the one somebody else wrote
+		// meanwhile, and the title somebody else chose stays.
 		pending = submit("PUT", "/api/v2/content", chapter(id, 1, "第一章 修订", "投稿者重写的正文。"))
-		meanwhile("PUT", "/api/v2/content", chapter(id, 1, "第一章 修订", "别人又改了一次正文。"))
-		refused(approve(pending))
-		if got := read(id, 1); got != [2]string{"第一章 修订", "别人又改了一次正文。"} {
+		meanwhile("PUT", "/api/v2/content", chapter(id, 1, "别人改的章节名", "别人又改了一次正文，这次写得长了不少。"))
+		applied(approve(pending))
+		if got := read(id, 1); got != [2]string{"别人改的章节名", "投稿者重写的正文。"} {
+			t.Fatalf("chapter=%q", got)
+		}
+		// A body rewritten into one of the same length is applied over a body
+		// of another length all the same.
+		pending = submit("PUT", "/api/v2/content", chapter(id, 1, "别人改的章节名", "投稿者改写的正文。"))
+		meanwhile("PUT", "/api/v2/content", chapter(id, 1, "别人改的章节名", "短正文。"))
+		applied(approve(pending))
+		if got := read(id, 1); got != [2]string{"别人改的章节名", "投稿者改写的正文。"} {
+			t.Fatalf("chapter=%q", got)
+		}
+		// A chapter that was removed meanwhile is not brought back. Neither is one
+		// that was removed and written again changed: it is another chapter.
+		removed := submit("PUT", "/api/v2/content", chapter(id, 1, "投稿者改的章节名", "投稿者改写的正文。"))
+		replaced := submit("PUT", "/api/v2/content", chapter(id, 1, "投稿者再改的章节名", "投稿者改写的正文。"))
+		meanwhile("DELETE", path, nil)
+		refused(approve(removed))
+		if gone := call("SUPER_ADMIN", "GET", path, nil); gone.Code != 404 {
+			t.Fatalf("removed chapter: %d %s", gone.Code, gone.Body)
+		}
+		meanwhile("PUT", "/api/v2/content", chapter(id, 1, "别人改的章节名", "投稿者改写的正文。"))
+		refused(approve(replaced))
+		if got := read(id, 1); got != [2]string{"别人改的章节名", "投稿者改写的正文。"} {
 			t.Fatalf("chapter=%q", got)
 		}
 	})

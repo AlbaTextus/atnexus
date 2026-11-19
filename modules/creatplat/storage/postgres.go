@@ -18,6 +18,7 @@ import (
 type ReviewAuthority interface {
 	WithCreatorSubmission(context.Context, store.ATHubReview, func() error) error
 	WithCreatorReviewAccess(context.Context, uuid.UUID, func() error) error
+	WithCreatorEditAccess(context.Context, uuid.UUID, func() error) error
 	WithCreatorDecision(context.Context, uuid.UUID, store.ATHubReview, bool, func(json.RawMessage) error) error
 }
 

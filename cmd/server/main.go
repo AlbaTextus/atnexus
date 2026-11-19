@@ -147,6 +147,9 @@ func run(logger *slog.Logger) error {
 	creators.SetATHubIllustrationSubmitter(access.SubmitIllustration)
 	creators.SetATHubIllustrationDeleter(access.DeleteIllustration)
 	creators.SetATHubIllustrationLayoutEditor(access.SubmitIllustrationLayout)
+	creators.SetATHubChangeReader(func(baseline []byte, novelID int32) (any, error) {
+		return athub.SubmittedChanges(baseline, novelID)
+	})
 	creators.SetATHubKeyCoverUploader(access.UploadCoverWithKey)
 	creators.SetATHubKeyIllustrationUploader(access.UploadIllustrationWithKey)
 	creators.SetHistoryHandler(http.HandlerFunc(access.ServeHistory))

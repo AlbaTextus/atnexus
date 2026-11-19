@@ -568,7 +568,7 @@ func (a *API) respondError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, storage.ErrImageMissing):
 		writeError(w, http.StatusUnprocessableEntity, "cover or illustration image is no longer stored on the image host; upload it again")
 	case errors.Is(err, storage.ErrStale):
-		writeError(w, http.StatusPreconditionFailed, "content changed after this change was submitted; submit it again from the current content")
+		writeError(w, http.StatusPreconditionFailed, "a record this change alters was removed or replaced after the change was submitted, or what it removes has changed since; submit it again from the current content")
 	case errors.Is(err, context.DeadlineExceeded):
 		writeError(w, http.StatusGatewayTimeout, "database request timed out")
 	default:

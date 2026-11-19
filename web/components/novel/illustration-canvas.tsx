@@ -12,6 +12,7 @@ import { allowsEndpoint, type RolePolicy } from "@/lib/athub/athub-permissions";
 import { createIllustrationBlock, fitIllustrationBlock, normalizeIllustrationBlock, transformIllustrationBlock, ILLUSTRATION_CANVAS_WIDTH as WIDTH, type BlockOperation, type LayoutGuides, type ResizeHandle } from "@/lib/novel/illustration-layout";
 import { IllustrationImage } from "./illustration-image";
 import { NovelAutoHeight } from "@/components/novel/novel-motion";
+import { NovelPendingLayouts, NovelPendingUploads } from "@/components/novel/novel-pending-changes";
 
 const RESOURCE_MIME = "application/x-albatextus-illustration";
 const handles: { handle: ResizeHandle; label: string }[] = [
@@ -252,6 +253,7 @@ export function IllustrationCanvas({ novelId, images, editing, policy, onPreview
         {guides.x !== undefined && <span className="illustration-snap-guide is-vertical" style={{ left: `${guides.x / WIDTH * 100}%` }} />}
         {guides.y !== undefined && <span className="illustration-snap-guide is-horizontal" style={{ top: `${guides.y / height * 100}%` }} />}
       </div>}
+    {editing && <NovelPendingLayouts images={imageMap} />}
     {editing && <section className="illustration-resources novel-motion-enter" aria-label="插图资源">
       <h3>资源</h3>
       {images.length ? <div className="illustration-resource-list">{images.map((image, index) => {
@@ -268,6 +270,7 @@ export function IllustrationCanvas({ novelId, images, editing, policy, onPreview
           {resourceActions(image, index)}
         </div>;
       })}</div> : <p className="illustration-resources-empty">暂无图片资源</p>}
+      <NovelPendingUploads />
     </section>}
   </NovelAutoHeight>;
 }

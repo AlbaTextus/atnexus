@@ -115,9 +115,20 @@ func WithRehearsal(ctx context.Context) (context.Context, *Rehearsal) {
 
 // WithBaseline is used only by the host's approved-submission executor. It
 // hands back the baseline a rehearsal of the same change produced, so that the
-// change is applied to what it altered then and refused when that has changed.
+// change writes only what it altered then. It writes that over whatever is
+// stored by now, and is refused when a record it alters has been removed or
+// replaced since.
 func WithBaseline(ctx context.Context, baseline []byte) context.Context {
 	return storage.WithBaseline(ctx, baseline)
+}
+
+// SubmittedChange is one record of a novel that a queued change alters.
+type SubmittedChange = storage.SubmittedChange
+
+// SubmittedChanges reads from the baseline of a queued change what that change
+// does to one novel, so the host can show it before the change is applied.
+func SubmittedChanges(baseline []byte, novelID int32) ([]SubmittedChange, error) {
+	return storage.SubmittedChanges(baseline, novelID)
 }
 
 // Rehearsing reports whether ctx belongs to a rehearsal.

@@ -44,6 +44,12 @@ func (p *Postgres) SaveIllustrationLayout(ctx context.Context, novelID int32, in
 	if err := p.trackNovel(ctx, novelID, false); err != nil {
 		return IllustrationLayout{}, err
 	}
+	records, applying := submitted(ctx, novelID)
+	if applying && len(records[layoutKey]) == 0 {
+		// The rehearsal stored the layout that was already there, and so left
+		// it as it was. Whatever has been stored since stays.
+		return p.GetIllustrationLayout(ctx, novelID)
+	}
 	tx, err := p.db(ctx).Begin(ctx)
 	if err != nil {
 		return IllustrationLayout{}, err
@@ -58,7 +64,11 @@ func (p *Postgres) SaveIllustrationLayout(ctx context.Context, novelID int32, in
 	if err != nil && err != pgx.ErrNoRows {
 		return IllustrationLayout{}, err
 	}
-	if revision != input.Revision {
+	// The revision tells a caller that the layout it worked from has been
+	// replaced. A layout that was rehearsed carries the revision of that time
+	// and is applied over whatever was stored since: of two queued layouts the
+	// one applied later stands.
+	if !applying && revision != input.Revision {
 		return IllustrationLayout{}, ErrConflict
 	}
 	ids := make([]int32, 0, len(input.Blocks))

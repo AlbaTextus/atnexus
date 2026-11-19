@@ -1,16 +1,16 @@
 # 模块概览
 
-本模块负责账户认证、OAuth 授权、第三方登录、Passkey、邮箱、人机验证，以及外部 API Key 的管理与凭据校验。
+本模块负责账户认证、OAuth 授权、第三方登录、Passkey、人机验证，以及外部 API Key 的管理与凭据校验。邮箱验证码与发信已拆到[邮件模块](/mail/overview)（`/api/v3`）。
 
 统一服务在聚合入口（默认 `8010`，由 `GATEWAY_HTTP_ADDR` 配置）提供 `/api/v1/*`。OAuth 协议端点 `/oauth/*` 和发现端点 `/.well-known/*` 保持原路径。
 
-各项能力分别见[登录与账户](/oauth/login)、[邮箱认证](/oauth/email)、[应用接入](/oauth/integration)、[ATHub 密钥与权限](/oauth/athub-key)、[站点开关与维护](/oauth/site)和[接口一览](/oauth/api)。
+各项能力分别见[登录与账户](/oauth/login)、[邮件模块](/mail/overview)、[应用接入](/oauth/integration)、[ATHub 密钥与权限](/oauth/athub-key)、[站点开关与维护](/oauth/site)和[接口一览](/oauth/api)。
 
 ## 路由与凭据
 
 OAuth 使用 `/api/v1/*`，协议端点 `/oauth/*` 和发现端点保持原路径。
-ATHub 公开入口改为 `/api/v5/*`，创作者平台为 `/api/v4/*`。
-底层内容引擎、权限配置与历史审计的 v2/v3 操作标签暂保留，通过边界适配转换。
+ATHub 公开入口改为 `/api/v5/*`，创作者平台为 `/api/v4/*`，邮件模块为 `/api/v3/*`。
+底层内容引擎、权限配置与历史审计的 v2/v3 操作标签暂保留，通过边界适配转换；这些标签只在内部使用，与邮件模块公开的 `/api/v3` 无关。
 这不表示 image 使用了旧内容接口，也不创建新的 library 模块。
 
 `GET /api/v1/session` 返回 session 到期时间与缓存隔离标识，不返回凭证。浏览器站内请求使用 HttpOnly session Cookie；Key 用于外部调用，两者独立。

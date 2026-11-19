@@ -1,6 +1,6 @@
 # atnexus
 
-atnexus 是 ALBATEXTUS 的统一服务：一个 Go 程序运行 OAuth、图床、创作者平台和 ATHub 四个模块，前端位于 `web/`。
+atnexus 是 ALBATEXTUS 的统一服务：一个 Go 程序运行 OAuth、图床、邮件、创作者平台和 ATHub 五个模块，前端位于 `web/`。
 
 Go 测试集中在 [`test/`](test/)，运行 `pnpm test:go` 执行测试套件。
 

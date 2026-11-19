@@ -34,7 +34,7 @@ export function AccountEmail() {
     const input = document.getElementById("security-email") as HTMLInputElement | null
     if (!input?.reportValidity()) return
     setError("")
-    try { await verification.send("/api/v1/account/email/code") }
+    try { await verification.send("/api/v3/account/email/code") }
     catch (reason) { setError(authErrorMessage(reason, "验证码发送失败，请稍后重试。")) }
   }
 
@@ -43,7 +43,7 @@ export function AccountEmail() {
     if (busy || !verification.challengeID) return
     setError(""); setSubmitting(true)
     try {
-      const updated = await api<AccountUser>("/api/v1/account/email", { method: "POST", body: JSON.stringify({ email: email.trim(), code: verification.code, challenge_id: verification.challengeID, current_password: password }) })
+      const updated = await api<AccountUser>("/api/v3/account/email", { method: "POST", body: JSON.stringify({ email: email.trim(), code: verification.code, challenge_id: verification.challengeID, current_password: password }) })
       updateUser(updated); setEmail(updated.email); setPassword(""); verification.reset()
       feedback.success(unchanged ? "邮箱已验证" : "邮箱已更新，其他设备需重新登录")
     } catch (reason) { setError(authErrorMessage(reason, "邮箱验证失败，请稍后重试。")) }

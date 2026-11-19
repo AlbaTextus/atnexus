@@ -22,6 +22,7 @@ import (
 	creatorapi "github.com/AlbaTextus/atnexus/modules/creatplat/api"
 	creatorstorage "github.com/AlbaTextus/atnexus/modules/creatplat/storage"
 	imagebackend "github.com/AlbaTextus/atnexus/modules/image"
+	mailapi "github.com/AlbaTextus/atnexus/modules/mail/api"
 	"github.com/AlbaTextus/atnexus/modules/oauth"
 	"github.com/AlbaTextus/atnexus/modules/oauth/api"
 	"github.com/joho/godotenv"
@@ -156,6 +157,8 @@ func run(logger *slog.Logger) error {
 	oauthHandler := server.ModuleHTTP(api.Router(), cfg.HTTPRequestTimeout, logger, contentOrigins...)
 	athubHandler := server.ModuleHTTP(server.NewATHubHandler(hub.Handler(), hub.Ping), requestTimeout, logger, contentOrigins...)
 	creatorHandler := server.ModuleHTTP(creators.Router(), requestTimeout, logger, contentOrigins...)
+	// Mail keeps the account deadline, which covers one 10s SMTP delivery.
+	mailHandler := server.ModuleHTTP(mailapi.New(cfg, st, logger, api).Router(), cfg.HTTPRequestTimeout, logger, contentOrigins...)
 	// File responses and multipart requests must stream without TimeoutHandler's
 	// full response buffer. Listener deadlines still bound transfers.
 	imageAPI := server.ModuleHTTP(images.Router(), 0, logger, contentOrigins...)
@@ -170,6 +173,7 @@ func run(logger *slog.Logger) error {
 	gateway := server.NewGateway(
 		server.GatewayRoute{Prefixes: []string{"/api/v1", "/oauth", "/.well-known"}, Handler: oauthHandler, Timeout: cfg.HTTPRequestTimeout},
 		server.GatewayRoute{Prefixes: []string{"/api/v2", "/file"}, Handler: imageHandler, Timeout: cfg.ImageHTTPTimeout},
+		server.GatewayRoute{Prefixes: []string{"/api/v3"}, Handler: mailHandler, Timeout: cfg.HTTPRequestTimeout},
 		server.GatewayRoute{Prefixes: []string{"/api/v4"}, Handler: creatorHandler, Timeout: requestTimeout},
 		server.GatewayRoute{Prefixes: []string{"/api/v5"}, Handler: athubHandler, Timeout: requestTimeout},
 	)

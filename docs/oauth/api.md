@@ -63,6 +63,6 @@
 ## 其他接口
 
 - 个人 Key、调用记录与等级权限接口见 [ATHub 密钥与权限](/oauth/athub-key)。
-- 邮箱验证码与邮箱变更接口见[邮箱认证](/oauth/email)。
+- 邮箱验证码与邮箱变更接口已移到 `/api/v3`，见[邮件模块](/mail/overview)。
 - 站点功能开关与维护接口见[站点开关与维护](/oauth/site)。
 - 图床 Key 的管理接口 `/api/v1/admin/image/keys` 见[图床文档](/image/overview)。

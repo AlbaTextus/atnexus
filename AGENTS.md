@@ -2,7 +2,7 @@
 
 ## 说明文档
 
-- 文档站 <https://docs.albatextus.com> 的正文写在本仓库的 `docs/`，按模块分目录（`athub`、`oauth`、`image`、`creatplat`、`deploy`），每个页面一个 Markdown 文件。站点代码在另一个仓库 [AlbaTextus/docs](https://github.com/AlbaTextus/docs)。
+- 文档站 <https://docs.albatextus.com> 的正文写在本仓库的 `docs/`，按模块分目录（`athub`、`oauth`、`mail`、`image`、`creatplat`、`deploy`），每个页面一个 Markdown 文件。站点代码在另一个仓库 [AlbaTextus/docs](https://github.com/AlbaTextus/docs)。
 - 改动行为、环境变量、数据库迁移或部署方式时，在同一个分支里更新 `docs/` 的对应说明，和代码一起提交；不要写回本仓库的 README。
 - 文档之间的链接写站内绝对路径，例如 `[数据库](/deploy/database)`，不要写成仓库内的相对路径。
 - 发布是自动的：`main` 推送到 GitHub 且改动包含 `docs/` 时，[同步工作流](.github/workflows/sync-docs.yml) 把 `docs/` 镜像到文档站仓库的 `content/` 并推送，文档站随即更新。功能分支上的文档在合并前不会发布。

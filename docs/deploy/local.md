@@ -25,7 +25,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```dotenv
 DATABASE_URL=postgresql://oauth:oauth@localhost:5432/oauth?sslmode=disable
 ATHUB_DATABASE_URL=postgresql://athub:athub@localhost:5433/athub?sslmode=disable
-# 唯一的后端监听地址，按路径前缀分发给四个模块。
+# 唯一的后端监听地址，按路径前缀分发给五个模块。
 GATEWAY_HTTP_ADDR=:8010
 # 独立图床库；使用实际连接和已有文件目录。
 IMAGE_DATABASE_URL=
@@ -92,7 +92,7 @@ pnpm web:dev
 
 访问 [首页](http://localhost:3288/)、[登录页](http://localhost:3288/login) 或 [用户中心](http://localhost:3288/account)。后端只监听 `8010`，例如 `http://localhost:8010/api/v1/healthz` 用于检查账户模块，`http://localhost:8010/api/v5/content?novelId=1&order=1` 用于访问内容接口。
 
-Next.js 将 `/api/v1/*`、`/oauth/*` 和 `/.well-known/*` 转发至 `OAUTH_BACKEND_URL`，将创作者操作 `/api/v4/*` 转发至 `CREATPLAT_BACKEND_URL`。两个地址都默认指向 `http://localhost:8010`。Key 管理和统计继续通过账户入口访问。浏览器中不要混用 `localhost` 和 `127.0.0.1`，否则 Cookie 和 Passkey 的来源校验可能不一致。
+Next.js 将 `/api/v1/*`、邮件接口 `/api/v3/*`、`/oauth/*` 和 `/.well-known/*` 转发至 `OAUTH_BACKEND_URL`，将创作者操作 `/api/v4/*` 转发至 `CREATPLAT_BACKEND_URL`。两个地址都默认指向 `http://localhost:8010`。Key 管理和统计继续通过账户入口访问。浏览器中不要混用 `localhost` 和 `127.0.0.1`，否则 Cookie 和 Passkey 的来源校验可能不一致。
 
 小说内容 `/api/v5/*` 和历史查询 `/api/v4/*` 分别使用 `NEXT_PUBLIC_ATHUB_API_URL` 和 `NEXT_PUBLIC_CREATPLAT_API_URL` 从浏览器直连聚合入口，本地都填写 `http://localhost:8010`。两个变量都需在前端构建前配置。生产入口须与账户页面共享 Cookie 主机范围。
 

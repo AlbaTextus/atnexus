@@ -39,7 +39,7 @@ export function RegisterForm({ returnTo }: RegisterFormProps) {
     const input = document.getElementById("email") as HTMLInputElement | null
     if (!input?.reportValidity()) return
     setError("")
-    try { await emailVerification.send("/api/v1/auth/email/code", verification.headers) }
+    try { await emailVerification.send("/api/v3/auth/email/code", verification.headers) }
     catch (reason) { setError(authErrorMessage(reason, "验证码发送失败，请稍后重试。")) }
     finally { verification.reset() }
   }

@@ -22,6 +22,10 @@ model CreatorReview {
   result       Json?
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   reviewedAt   DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  // What the content API found the submission to alter when it was submitted;
+  // handed back when the review is approved. NULL for reviews queued before it
+  // was recorded, which are applied in full.
+  baseline     Json?
 
   @@index([status, createdAt, id], map: "athub_reviews_status_created_idx")
   @@index([userId, createdAt, id], map: "athub_reviews_user_created_idx")

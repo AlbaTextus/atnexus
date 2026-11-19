@@ -103,9 +103,22 @@ func (m *Module) Handler() http.Handler          { return m.handler }
 func (m *Module) Ping(ctx context.Context) error { return m.pool.Ping(ctx) }
 func (m *Module) Close()                         { m.pool.Close() }
 
+// Rehearsal receives what a rehearsed change would alter; see WithRehearsal.
+type Rehearsal = storage.Rehearsal
+
 // WithRehearsal makes the content handler run a change and roll it back, so the
-// host can learn how it would be answered without storing anything.
-func WithRehearsal(ctx context.Context) context.Context { return storage.WithRehearsal(ctx) }
+// host can learn how it would be answered, and what it would alter, without
+// storing anything.
+func WithRehearsal(ctx context.Context) (context.Context, *Rehearsal) {
+	return storage.WithRehearsal(ctx)
+}
+
+// WithBaseline is used only by the host's approved-submission executor. It
+// hands back the baseline a rehearsal of the same change produced, so that the
+// change is applied to what it altered then and refused when that has changed.
+func WithBaseline(ctx context.Context, baseline []byte) context.Context {
+	return storage.WithBaseline(ctx, baseline)
+}
 
 // Rehearsing reports whether ctx belongs to a rehearsal.
 func Rehearsing(ctx context.Context) bool { return storage.Rehearsing(ctx) }

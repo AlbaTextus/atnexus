@@ -75,6 +75,10 @@ func (p *Postgres) UpdateAuthorName(ctx context.Context, id int32, name *string)
 	if err := p.trackRelated(ctx, `SELECT id FROM "Novel" WHERE "authorId"=$1 ORDER BY id`, id); err != nil {
 		return Author{}, err
 	}
+	// After the novels, so that the author is always locked after them.
+	if err := p.trackShared(ctx, "Author", id); err != nil {
+		return Author{}, err
+	}
 	return scanAuthor(p.db(ctx).QueryRow(ctx, `UPDATE "Author" SET "name"=$2 WHERE "id"=$1
 		RETURNING "id", "platformId", "name"`, id, name))
 }

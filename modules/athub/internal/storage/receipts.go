@@ -19,17 +19,27 @@ type MutationReceipt struct {
 
 type rehearsalKey struct{}
 
+// Rehearsal receives what a rehearsed change turned out to alter.
+type Rehearsal struct{ baseline []byte }
+
+// Baseline describes the content a rehearsed change alters, as it was when the
+// rehearsal ran. It is nil unless the rehearsal succeeded. WithBaseline takes
+// it back when the same change is applied later.
+func (r *Rehearsal) Baseline() []byte { return r.baseline }
+
 // WithRehearsal makes Mutate run a change in full and then roll it back. The
-// caller learns how the change would be answered right now, while nothing is
-// stored, recorded as a revision or remembered as a receipt.
-func WithRehearsal(ctx context.Context) context.Context {
-	return context.WithValue(ctx, rehearsalKey{}, true)
+// caller learns how the change would be answered right now and what it would
+// alter, while nothing is stored, recorded as a revision or remembered as a
+// receipt.
+func WithRehearsal(ctx context.Context) (context.Context, *Rehearsal) {
+	rehearsal := &Rehearsal{}
+	return context.WithValue(ctx, rehearsalKey{}, rehearsal), rehearsal
 }
 
 // Rehearsing reports whether ctx belongs to a rehearsal.
 func Rehearsing(ctx context.Context) bool {
-	rehearsing, _ := ctx.Value(rehearsalKey{}).(bool)
-	return rehearsing
+	rehearsal, _ := ctx.Value(rehearsalKey{}).(*Rehearsal)
+	return rehearsal != nil
 }
 
 func WithMutationID(ctx context.Context, id string) context.Context {

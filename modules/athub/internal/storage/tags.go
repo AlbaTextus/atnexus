@@ -51,10 +51,17 @@ func (p *Postgres) UpdateTag(ctx context.Context, id int32, input TagInput) (Tag
 	if err := p.trackRelated(ctx, `SELECT "novelId" FROM "NovelTag" WHERE "tagId"=$1 ORDER BY "novelId"`, id); err != nil {
 		return Tag{}, err
 	}
+	// After the novels, so that the tag is always locked after them.
+	if err := p.trackShared(ctx, "Tag", id); err != nil {
+		return Tag{}, err
+	}
 	return scanTag(p.db(ctx).QueryRow(ctx, `UPDATE "Tag" SET "name" = $2 WHERE "id" = $1 RETURNING "id", "name"`, id, input.Name))
 }
 
 func (p *Postgres) DeleteTag(ctx context.Context, id int32) error {
+	if err := p.trackShared(ctx, "Tag", id); err != nil {
+		return err
+	}
 	result, err := p.db(ctx).Exec(ctx, `DELETE FROM "Tag" WHERE "id" = $1`, id)
 	if errors.Is(databaseError(err), ErrInvalidReference) {
 		return ErrTagInUse

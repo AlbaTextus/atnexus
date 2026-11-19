@@ -13,13 +13,25 @@ import (
 const reviewColumns = `id,user_id,contributor,operation,method,path,query,payload,status,reviewer,note,result_status,result,created_at,reviewed_at`
 const reviewSummaryColumns = `id,user_id,contributor,operation,method,path,query,NULL::jsonb AS payload,status,reviewer,note,result_status,NULL::jsonb AS result,created_at,reviewed_at`
 
-func scanReview(row interface{ Scan(...any) error }) (store.ATHubReview, error) {
+// scanReview reads reviewColumns, then whatever else the query selects into
+// more.
+func scanReview(row interface{ Scan(...any) error }, more ...any) (store.ATHubReview, error) {
 	var r store.ATHubReview
-	err := row.Scan(&r.ID, &r.UserID, &r.Contributor, &r.Operation, &r.Method, &r.Path, &r.Query, &r.Payload, &r.Status, &r.Reviewer, &r.Note, &r.ResultStatus, &r.Result, &r.CreatedAt, &r.ReviewedAt)
+	err := row.Scan(append([]any{&r.ID, &r.UserID, &r.Contributor, &r.Operation, &r.Method, &r.Path, &r.Query, &r.Payload, &r.Status, &r.Reviewer, &r.Note, &r.ResultStatus, &r.Result, &r.CreatedAt, &r.ReviewedAt}, more...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = store.ErrNotFound
 	}
 	return r, err
+}
+
+// storedBaseline is what the baseline column holds: SQL NULL unless the content
+// API reported what the change alters. A review without a baseline is applied
+// in full.
+func storedBaseline(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	return raw
 }
 
 func (p *Postgres) QueueATHubReview(ctx context.Context, r store.ATHubReview) (store.ATHubReview, error) {
@@ -29,7 +41,7 @@ func (p *Postgres) QueueATHubReview(ctx context.Context, r store.ATHubReview) (s
 	var result store.ATHubReview
 	err := p.authority.WithCreatorSubmission(ctx, r, func() error {
 		var err error
-		result, err = scanReview(p.pool.QueryRow(ctx, `INSERT INTO athub_reviews(id,user_id,contributor,operation,method,path,query,payload) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING `+reviewColumns, r.ID, r.UserID, r.Contributor, r.Operation, r.Method, r.Path, r.Query, r.Payload))
+		result, err = scanReview(p.pool.QueryRow(ctx, `INSERT INTO athub_reviews(id,user_id,contributor,operation,method,path,query,payload,baseline) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING `+reviewColumns, r.ID, r.UserID, r.Contributor, r.Operation, r.Method, r.Path, r.Query, r.Payload, storedBaseline(r.Baseline)))
 		return err
 	})
 	return result, err
@@ -105,7 +117,10 @@ func (p *Postgres) DecideATHubReview(ctx context.Context, actor, id uuid.UUID, d
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(742190614)`); err != nil {
 		return store.ATHubReview{}, err
 	}
-	r, err := scanReview(tx.QueryRow(ctx, `SELECT `+reviewColumns+` FROM athub_reviews WHERE id=$1 FOR UPDATE`, id))
+	// Only a decision reads the baseline, which can be large. It comes with the
+	// locked row, so the executor applies the change against what was queued.
+	var baseline json.RawMessage
+	r, err := scanReview(tx.QueryRow(ctx, `SELECT `+reviewColumns+`,baseline FROM athub_reviews WHERE id=$1 FOR UPDATE`, id), &baseline)
 	if err != nil {
 		return r, err
 	}
@@ -121,7 +136,11 @@ func (p *Postgres) DecideATHubReview(ctx context.Context, actor, id uuid.UUID, d
 			if r.UserID == nil || execute == nil {
 				return store.ErrATHubPermissionDenied
 			}
-			result, err := execute(ctx, r)
+			// The executor alone is handed the baseline; the review this
+			// returns never carries it.
+			queued := r
+			queued.Baseline = baseline
+			result, err := execute(ctx, queued)
 			if err != nil {
 				return err
 			}

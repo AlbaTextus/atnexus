@@ -49,8 +49,12 @@ type tableDigest struct {
 	Count int64
 }
 
+// digest hashes the rows of a table that the legacy database and this one both
+// hold. Only reviews in this database have a baseline, which the import never
+// copies, so it is left out. A row without that column hashes as it did before
+// the column existed, which keeps import markers of earlier versions valid.
 func digest(ctx context.Context, tx pgx.Tx, table string) (tableDigest, error) {
-	rows, err := tx.Query(ctx, `SELECT to_jsonb(t)::text FROM `+pgx.Identifier{table}.Sanitize()+` t ORDER BY id`)
+	rows, err := tx.Query(ctx, `SELECT (to_jsonb(t) - 'baseline'::text)::text FROM `+pgx.Identifier{table}.Sanitize()+` t ORDER BY id`)
 	if err != nil {
 		return tableDigest{}, err
 	}

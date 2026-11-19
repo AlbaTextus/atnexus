@@ -285,4 +285,5 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("word count", func(t *testing.T) { testWordCount(t, ctx, store) })
 	t.Run("history", func(t *testing.T) { testHistoryIntegration(t, ctx, store) })
 	t.Run("novel reference names", func(t *testing.T) { testNovelReferenceNames(t, ctx, store) })
+	t.Run("baseline", func(t *testing.T) { testBaselineIntegration(t, ctx, store) })
 }

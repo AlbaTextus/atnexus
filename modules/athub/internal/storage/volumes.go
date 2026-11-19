@@ -65,6 +65,9 @@ func (p *Postgres) SaveVolume(ctx context.Context, input VolumeInput) (Volume, e
 		}
 		return Volume{}, err
 	}
+	if err := p.keepVolumeTitle(ctx, &input); err != nil {
+		return Volume{}, err
+	}
 	return scanVolume(p.db(ctx).QueryRow(ctx, saveVolumeSQL, input.NovelID, input.Order, input.Title))
 }
 

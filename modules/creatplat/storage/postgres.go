@@ -61,7 +61,7 @@ func (p *Postgres) Close()                         { p.pool.Close() }
 
 func (p *Postgres) CheckSchema(ctx context.Context) error {
 	for _, query := range []string{
-		`SELECT id,user_id,contributor,operation,method,path,query,payload,status,reviewer_id,reviewer,note,result_status,result,created_at,reviewed_at FROM athub_reviews LIMIT 0`,
+		`SELECT id,user_id,contributor,operation,method,path,query,payload,status,reviewer_id,reviewer,note,result_status,result,created_at,reviewed_at,baseline FROM athub_reviews LIMIT 0`,
 		`SELECT key,source_database,source_server,review_digest,history_digest,review_count,history_count,completed_at FROM creator_migration_state LIMIT 0`,
 	} {
 		rows, err := p.pool.Query(ctx, query)

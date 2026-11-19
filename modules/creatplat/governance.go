@@ -131,7 +131,8 @@ func (a *Governance) QueueMutation(w http.ResponseWriter, r *http.Request, call 
 	}
 	// A change the content API would refuse right now is answered at once
 	// instead of waiting for a reviewer to find out.
-	if refusal := a.rehearse(r, payload, actor); refusal != nil {
+	baseline, refusal := a.rehearse(r, payload, actor)
+	if refusal != nil {
 		if refusal.status >= 500 {
 			apibase.WriteError(w, 503, "reviews_unavailable")
 			return true
@@ -145,7 +146,7 @@ func (a *Governance) QueueMutation(w http.ResponseWriter, r *http.Request, call 
 	}
 	contributor, _ := json.Marshal(actor)
 	item, err := reviews.QueueATHubReview(r.Context(), store.ATHubReview{
-		ID: call.ID, UserID: call.UserID, Contributor: contributor, Operation: op, Method: r.Method, Path: r.URL.Path, Query: r.URL.RawQuery, Payload: payload,
+		ID: call.ID, UserID: call.UserID, Contributor: contributor, Operation: op, Method: r.Method, Path: r.URL.Path, Query: r.URL.RawQuery, Payload: payload, Baseline: baseline,
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrATHubPermissionDenied) {
@@ -161,26 +162,28 @@ func (a *Governance) QueueMutation(w http.ResponseWriter, r *http.Request, call 
 	return true
 }
 
-// rehearse runs the change against the content API and rolls it back. It
-// returns the reply when the change would fail, and nil when it would succeed
-// or no content executor is attached. Approval still applies the change to
-// whatever the content is then, so this only catches what is wrong already.
-func (a *Governance) rehearse(r *http.Request, payload []byte, actor athub.Contributor) *reviewResponse {
+// rehearse runs the change against the content API and rolls it back. When the
+// change would fail, it returns the reply. When it would succeed, it returns
+// the baseline: what the change alters, as the content API found it. The
+// baseline is queued with the change and handed back by ApplyReview, so that
+// approval writes only that and refuses the change when it was changed
+// meanwhile. Both results are nil when no content executor is attached.
+func (a *Governance) rehearse(r *http.Request, payload []byte, actor athub.Contributor) (json.RawMessage, *reviewResponse) {
 	if a.content == nil {
-		return nil
+		return nil, nil
 	}
-	ctx := athub.WithRehearsal(athub.WithContributor(r.Context(), actor))
+	ctx, rehearsal := athub.WithRehearsal(athub.WithContributor(r.Context(), actor))
 	request, err := http.NewRequestWithContext(ctx, r.Method, r.URL.RequestURI(), bytes.NewReader(payload))
 	if err != nil {
-		return &reviewResponse{status: 500}
+		return nil, &reviewResponse{status: 500}
 	}
 	request.Header.Set("Content-Type", "application/json")
 	response := &reviewResponse{header: make(http.Header)}
 	a.content.ServeHTTP(response, request)
 	if response.status < 400 {
-		return nil
+		return rehearsal.Baseline(), nil
 	}
-	return response
+	return nil, response
 }
 
 type reviewResponse struct {
@@ -202,8 +205,9 @@ func (w *reviewResponse) Write(body []byte) (int, error) {
 	return w.body.Write(body)
 }
 
-// ApplyReview invokes the private content handler, with a host-only receipt ID.
-// It never accepts a client-supplied bypass header or forwards account cookies.
+// ApplyReview invokes the private content handler, with a host-only receipt ID
+// and the baseline that was queued with the change. It never accepts a
+// client-supplied bypass header or forwards account cookies.
 func (a *Governance) ApplyReview(ctx context.Context, item store.ATHubReview) (store.ATHubReviewResult, error) {
 	if a.content == nil || item.UserID == nil {
 		return store.ATHubReviewResult{}, errors.New("review executor unavailable")
@@ -217,6 +221,9 @@ func (a *Governance) ApplyReview(ctx context.Context, item store.ATHubReview) (s
 	}
 	ctx = athub.WithContributor(ctx, actor)
 	ctx = athub.WithMutationID(ctx, item.ID.String())
+	// A review queued without a baseline is applied in full, as all reviews
+	// were before baselines were recorded.
+	ctx = athub.WithBaseline(ctx, item.Baseline)
 	var result store.ATHubReviewResult
 	for attempt := 0; attempt < 2; attempt++ {
 		target := item.Path

@@ -26,6 +26,10 @@ const saveChapterSQL = `INSERT INTO "Chapter" ("novelId", "volumeId", "order", "
 	VALUES ($1, $2, $3, $4, $5, now()) ON CONFLICT ("novelId", "order") DO UPDATE SET
 	"volumeId" = EXCLUDED."volumeId", "title" = EXCLUDED."title", "content" = EXCLUDED."content", "updatedAt" = now()`
 
+// Takes the leading arguments of saveChapterSQL and leaves the body alone.
+const saveChapterHeadingSQL = `UPDATE "Chapter" SET "volumeId" = $2, "title" = $4, "updatedAt" = now()
+	WHERE "novelId" = $1 AND "order" = $3`
+
 func scanNovel(row pgx.Row) (Novel, error) {
 	var n Novel
 	err := row.Scan(&n.ID, &n.PlatformID, &n.AuthorID, &n.Title, &n.Summary, &n.CoverURL, &n.Status, &n.CreatedAt, &n.UpdatedAt, &n.TagIDs)
@@ -131,6 +135,17 @@ func (p *Postgres) UpdateNovel(ctx context.Context, id int32, n NovelInput) (Nov
 	if err := tx.QueryRow(ctx, `SELECT "id" FROM "Novel" WHERE "id" = $1 FOR UPDATE`, id).Scan(&existingID); err != nil {
 		return Novel{}, databaseError(err)
 	}
+	if records, ok := submitted(ctx, id); ok {
+		if altered, whole := records.altered("Novel"); !whole {
+			// Before references are resolved: a name the edit left alone must
+			// neither be looked up nor created.
+			current, err := scanNovel(tx.QueryRow(ctx, `SELECT `+novelReadColumns+` FROM "Novel" WHERE "id" = $1`, id))
+			if err != nil {
+				return Novel{}, err
+			}
+			keepNovel(&n, current.NovelInput, altered)
+		}
+	}
 	if err := resolveNovelReferences(ctx, tx, &n); err != nil {
 		return Novel{}, err
 	}
@@ -209,6 +224,15 @@ func (p *Postgres) SaveChapter(ctx context.Context, c ChapterInput) (Chapter, er
 			return Chapter{}, ErrInvalidReference
 		}
 		return Chapter{}, err
+	}
+	keepBody, err := p.keepChapter(ctx, &c)
+	if err != nil {
+		return Chapter{}, err
+	}
+	if keepBody {
+		// The stored body is neither read for a diff nor written back.
+		return scanChapter(p.db(ctx).QueryRow(ctx, saveChapterHeadingSQL+` RETURNING `+chapterColumns,
+			c.NovelID, c.VolumeID, c.Order, c.Title))
 	}
 	if err := p.trackChapterBodies(ctx, p.db(ctx), c.NovelID, []int32{c.Order}); err != nil {
 		return Chapter{}, err

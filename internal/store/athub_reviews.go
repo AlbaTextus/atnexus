@@ -26,6 +26,11 @@ type ATHubReview struct {
 	Result       json.RawMessage `json:"result,omitempty"`
 	CreatedAt    time.Time       `json:"created_at"`
 	ReviewedAt   *time.Time      `json:"reviewed_at"`
+	// Baseline is what the content API found the change to alter when it was
+	// submitted. The creator database keeps it with the queued review and hands
+	// it to the executor on approval. No other read loads it, and it is never
+	// served.
+	Baseline json.RawMessage `json:"-"`
 }
 type ATHubReviewResult struct {
 	Status int             `json:"status"`
@@ -106,6 +111,8 @@ func (p *Postgres) QueueATHubReview(ctx context.Context, r ATHubReview) (ATHubRe
 	if !admitted {
 		return r, ErrATHubPermissionDenied
 	}
+	// The account database has no column for a baseline, so a review queued
+	// here is applied in full when it is approved.
 	result, err := scanReview(tx.QueryRow(ctx, `INSERT INTO athub_reviews(id,user_id,contributor,operation,method,path,query,payload)
 		VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING `+reviewColumns, r.ID, r.UserID, r.Contributor, r.Operation, r.Method, r.Path, r.Query, r.Payload))
 	if err != nil {

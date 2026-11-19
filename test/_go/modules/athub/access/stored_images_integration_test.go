@@ -195,16 +195,19 @@ func TestStoredImagesIntegration(t *testing.T) {
 		t.Fatalf("the other novel shows %q", shown(other))
 	}
 
-	// So is a cover that a pending review would write back.
+	// So is a cover that a pending review carries.
 	pending := submit(book, cover("c"))
 	if status := replace(book, cover("d")); status != 200 || !shelf[cover("c")] {
 		t.Fatalf("status=%d stored=%v", status, shelf)
 	}
-	if decided := approve(pending); decided.Status != "approved" || shown(book) != cover("c") {
+	// That review changed the title and only repeated the cover it saw, so
+	// approving it does not write the older cover back over the newer one.
+	if decided := approve(pending); decided.Status != "approved" || shown(book) != cover("d") {
 		t.Fatalf("approval=%s cover=%q", decided.Status, shown(book))
 	}
-	// Approving it replaced the cover in turn.
-	if shelf[cover("d")] || !shelf[cover("c")] {
+	// No cover was replaced, so none is deleted: the one the review carried
+	// stays on the host although nothing shows it any more.
+	if !shelf[cover("d")] || !shelf[cover("c")] {
 		t.Fatalf("stored=%v", shelf)
 	}
 
@@ -215,12 +218,12 @@ func TestStoredImagesIntegration(t *testing.T) {
 	if decided.Status != "failed" || decided.ResultStatus == nil || *decided.ResultStatus != 422 {
 		t.Fatalf("approval=%+v", decided)
 	}
-	if shown(book) != cover("c") || !shelf[cover("c")] {
+	if shown(book) != cover("d") || !shelf[cover("d")] {
 		t.Fatalf("a refused review was applied: cover=%q stored=%v", shown(book), shelf)
 	}
 
 	// Deleting a novel deletes its cover.
-	if removed := call("SUPER_ADMIN", "DELETE", book, nil); removed.Code != 204 || shelf[cover("c")] {
+	if removed := call("SUPER_ADMIN", "DELETE", book, nil); removed.Code != 204 || shelf[cover("d")] {
 		t.Fatalf("status=%d stored=%v", removed.Code, shelf)
 	}
 	// Only the address a file was stored under deletes it: a cover recorded in

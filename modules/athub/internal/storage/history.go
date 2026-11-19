@@ -58,6 +58,14 @@ type mutation struct {
 	tx            pgx.Tx
 	before        map[int32]map[string]map[string]any
 	chapterBodies map[int32]string
+	// Novels the change created itself. Nobody else can have changed them, and
+	// a rehearsal gave them other IDs, so no baseline describes them.
+	created map[int32]bool
+	// Catalog records the change touches. Nil unless the change is rehearsed
+	// or applied with a baseline: nothing else needs them.
+	shared map[string]sharedRecord
+	// What the rehearsal of this change altered, when it is applied with one.
+	baseline *baseline
 }
 
 func (p *Postgres) db(ctx context.Context) database {
@@ -88,30 +96,70 @@ func (p *Postgres) Mutate(ctx context.Context, fn func(context.Context) error) e
 			return err
 		}
 	}
-	m := &mutation{tx: tx, before: make(map[int32]map[string]map[string]any), chapterBodies: make(map[int32]string)}
+	m := &mutation{tx: tx, before: make(map[int32]map[string]map[string]any), chapterBodies: make(map[int32]string), created: make(map[int32]bool)}
+	rehearsal, _ := ctx.Value(rehearsalKey{}).(*Rehearsal)
+	if raw, ok := ctx.Value(baselineKey{}).([]byte); ok {
+		// Read before the change runs, because its writes consult the baseline
+		// too. One that cannot be read says nothing about the content, so it
+		// is a failure of its own and not a refusal.
+		if m.baseline, err = decodeBaseline(raw); err != nil {
+			return err
+		}
+	}
+	if rehearsal != nil || m.baseline != nil {
+		m.shared = make(map[string]sharedRecord)
+	}
 	ctx = context.WithValue(ctx, mutationKey{}, m)
 	if err := fn(ctx); err != nil {
 		return err
 	}
-	if Rehearsing(ctx) {
-		// The deferred rollback discards everything the change did.
-		return nil
-	}
-	drafts := make([]RevisionDraft, 0)
-	actor, _ := ctx.Value(contributorKey{}).(Contributor)
 	ids := make([]int, 0, len(m.before))
 	for id := range m.before {
 		ids = append(ids, int(id))
 	}
 	sort.Ints(ids)
-	diffDeadline := time.Now().Add(mutationDiffBudget)
+	changed := make(map[int32][]Change, len(ids))
 	for _, value := range ids {
 		id := int32(value)
+		if rehearsal != nil && m.created[id] {
+			// A baseline says nothing about a novel the change creates, so a
+			// rehearsal has no use for what became of it.
+			continue
+		}
 		after, err := snapshot(ctx, tx, id)
 		if err != nil {
 			return err
 		}
-		changes := diffSnapshot(m.before[id], after)
+		changed[id] = diffSnapshot(m.before[id], after)
+	}
+	if rehearsal != nil || m.baseline != nil {
+		existing := make(map[int32][]Change, len(changed))
+		for id, changes := range changed {
+			if !m.created[id] {
+				existing[id] = changes
+			}
+		}
+		shared, err := m.sharedChanges(ctx)
+		if err != nil {
+			return err
+		}
+		// Refused before anything is recorded or remembered: the deferred
+		// rollback then discards the whole change.
+		if m.baseline != nil && !m.baseline.permits(existing, shared) {
+			return ErrStale
+		}
+		if rehearsal != nil {
+			// The deferred rollback discards everything the change did.
+			rehearsal.baseline, err = encodeBaseline(existing, shared)
+			return err
+		}
+	}
+	drafts := make([]RevisionDraft, 0)
+	actor, _ := ctx.Value(contributorKey{}).(Contributor)
+	diffDeadline := time.Now().Add(mutationDiffBudget)
+	for _, value := range ids {
+		id := int32(value)
+		changes := changed[id]
 		// One query fetches every rewritten body instead of one per chapter.
 		rewritten := make(map[int32]*Change)
 		chapterIDs := make([]int32, 0)
@@ -201,6 +249,7 @@ func (p *Postgres) trackNovel(ctx context.Context, id int32, created bool) error
 	}
 	if created {
 		m.before[id] = map[string]map[string]any{}
+		m.created[id] = true
 		return nil
 	}
 	var locked int32

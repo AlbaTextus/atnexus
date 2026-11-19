@@ -177,15 +177,19 @@ const failure = (reason: unknown, login: string) => contentErrorMessage(reason, 
 const subject = (item: ReviewItem) => `${operationNames[item.operation]} · ${endpointNames[item.path] || "内容"}`
 // The content API explains a refused change only in English, so the status it
 // answered with is put into words; its own sentence follows for the exact cause.
+// A submission overtaken by later changes always has the same cause and the
+// same remedy, so it is given the remedy in place of that sentence.
 function failureReason(item: ReviewItem) {
   const status = item.result_status
   const cause = typeof item.result === "object" && item.result !== null && "error" in item.result ? String(item.result.error) : ""
   const reason = status === 404 ? "提交涉及的内容已不存在"
     : status === 409 ? "与书库中的现有内容冲突"
+    : status === 412 ? "提交改动的内容在提交后已有其他修改"
     : status === 413 ? "提交内容过大"
     : status === 422 ? "提交引用的封面或插图已不在图床中"
     : status !== undefined && status >= 400 && status < 500 ? "内容校验或引用检查未通过"
     : "内容未能写入书库"
+  if (status === 412) return `${reason}，请按当前内容重新提交。`
   return cause ? `${reason}（${cause}）。` : `${reason}，请核对提交内容后重新提交。`
 }
 
@@ -310,7 +314,7 @@ function ReviewBoard({ view }: { view: keyof typeof views }) {
       </div>
     </>}
     {!own && <Dialog open={Boolean(decision)} onOpenChange={open => { if (!open && !busy) setDecision(null) }}>
-      <DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>{decision === "approve" ? "通过这项提交？" : "驳回这项提交？"}</DialogTitle><DialogDescription>{decision === "approve" ? "通过后，提交内容将写入正式书库并记录变更历史。" : "提交内容不会写入书库，提交者可以查看驳回原因。"}</DialogDescription></DialogHeader>
+      <DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>{decision === "approve" ? "通过这项提交？" : "驳回这项提交？"}</DialogTitle><DialogDescription>{decision === "approve" ? "通过后，只将这项提交改动的内容写入正式书库并记录变更历史；提交之后书库里的其他修改不会被覆盖。" : "提交内容不会写入书库，提交者可以查看驳回原因。"}</DialogDescription></DialogHeader>
         <label className="space-y-2 text-sm"><span>{decision === "reject" ? "驳回原因" : "审核备注（可选）"}</span><Textarea aria-label={decision === "reject" ? "驳回原因" : "审核备注"} maxLength={1000} value={note} disabled={busy} onChange={event => setNote(event.target.value)} /></label>
         {decisionError && <Alert variant="destructive"><AlertDescription>{decisionError}</AlertDescription></Alert>}
         <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setDecision(null)}>取消</Button><Button variant={decision === "reject" ? "destructive" : "default"} className={decision === "approve" ? approveButton : undefined} disabled={busy} onClick={() => void decide()}>{busy ? "处理中…" : decision === "approve" ? "确认通过" : "确认驳回"}</Button></DialogFooter>

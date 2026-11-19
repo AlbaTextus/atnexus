@@ -3,9 +3,24 @@ package storage
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 )
+
+const uploadedChapterColumns = ` RETURNING "id", "order", "volumeId", "updatedAt"`
+
+// chapterWrite is a chapter of an upload, with what it keeps of the chapter
+// stored at its order when the upload is applied after a rehearsal.
+type chapterWrite struct {
+	UploadChapter
+	// The chapter stays in volumeID, whatever VolumeOrder says.
+	keepVolume bool
+	volumeID   *int32
+	keepBody   bool
+	// The stored chapter, when nothing of it is written.
+	stored *UploadedChapter
+}
 
 func (p *Postgres) Upload(ctx context.Context, input UploadInput) (UploadResult, error) {
 	if input.NovelID != nil {
@@ -43,15 +58,24 @@ func (p *Postgres) Upload(ctx context.Context, input UploadInput) (UploadResult,
 			return UploadResult{}, err
 		}
 	}
-	if len(input.Volumes) > 0 {
-		result.Volumes, err = uploadVolumes(ctx, tx, result.Novel.ID, input.Volumes)
+	volumes, chapters := input.Volumes, make([]chapterWrite, len(input.Chapters))
+	for i, c := range input.Chapters {
+		chapters[i].UploadChapter = c
+	}
+	if records, ok := submitted(ctx, result.Novel.ID); ok {
+		if volumes, err = keepUpload(ctx, tx, result.Novel.ID, records, volumes, chapters); err != nil {
+			return UploadResult{}, err
+		}
+	}
+	if len(volumes) > 0 {
+		result.Volumes, err = uploadVolumes(ctx, tx, result.Novel.ID, volumes)
 		if err != nil {
 			return UploadResult{}, err
 		}
 	}
 	volumeOrders := make([]int32, 0)
-	for _, c := range input.Chapters {
-		if c.VolumeOrder != nil {
+	for _, c := range chapters {
+		if c.VolumeOrder != nil && !c.keepVolume {
 			volumeOrders = append(volumeOrders, *c.VolumeOrder)
 		}
 	}
@@ -76,35 +100,146 @@ func (p *Postgres) Upload(ctx context.Context, input UploadInput) (UploadResult,
 		}
 	}
 	batch := &pgx.Batch{}
-	chapterOrders := make([]int32, 0, len(input.Chapters))
-	for _, c := range input.Chapters {
-		chapterOrders = append(chapterOrders, c.Order)
+	chapterOrders := make([]int32, 0, len(chapters))
+	for _, c := range chapters {
+		if !c.keepBody {
+			chapterOrders = append(chapterOrders, c.Order)
+		}
 	}
 	if err := p.trackChapterBodies(ctx, tx, result.Novel.ID, chapterOrders); err != nil {
 		return UploadResult{}, err
 	}
-	for _, c := range input.Chapters {
-		var volumeID *int32
-		if c.VolumeOrder != nil {
+	for _, c := range chapters {
+		if c.stored != nil {
+			continue
+		}
+		volumeID := c.volumeID
+		if c.VolumeOrder != nil && !c.keepVolume {
 			id, ok := volumeIDs[*c.VolumeOrder]
 			if !ok {
 				return UploadResult{}, ErrInvalidReference
 			}
 			volumeID = &id
 		}
-		batch.Queue(saveChapterSQL+` RETURNING "id", "order", "volumeId", "updatedAt"`, result.Novel.ID, volumeID, c.Order, c.Title, c.Content)
+		if c.keepBody {
+			batch.Queue(saveChapterHeadingSQL+uploadedChapterColumns, result.Novel.ID, volumeID, c.Order, c.Title)
+		} else {
+			batch.Queue(saveChapterSQL+uploadedChapterColumns, result.Novel.ID, volumeID, c.Order, c.Title, c.Content)
+		}
 	}
-	if len(input.Chapters) > 0 {
-		result.Chapters, err = uploadChapters(ctx, tx, batch, len(input.Chapters))
-		if err != nil {
+	var written []UploadedChapter
+	if batch.Len() > 0 {
+		if written, err = uploadChapters(ctx, tx, batch, batch.Len()); err != nil {
 			return UploadResult{}, err
 		}
+	}
+	for _, c := range chapters {
+		if c.stored != nil {
+			// Nothing of it was written, so it is reported as it is stored.
+			result.Chapters = append(result.Chapters, *c.stored)
+			continue
+		}
+		result.Chapters, written = append(result.Chapters, written[0]), written[1:]
 	}
 	result.ChapterCount = len(result.Chapters)
 	if err := tx.Commit(ctx); err != nil {
 		return UploadResult{}, databaseError(err)
 	}
 	return result, nil
+}
+
+// keepUpload prepares an upload into an existing novel that is applied after a
+// rehearsal: volumes and chapters the rehearsal left alone keep what they hold
+// now. It returns the volumes to save and marks on the chapters what is not to
+// be written.
+func keepUpload(ctx context.Context, tx pgx.Tx, novelID int32, records baselineRecords, volumes []UploadVolume, chapters []chapterWrite) ([]UploadVolume, error) {
+	orders := make([]int32, 0, len(volumes))
+	for _, v := range volumes {
+		if records.keptVolume(v.Order) {
+			orders = append(orders, v.Order)
+		}
+	}
+	if len(orders) > 0 {
+		rows, err := tx.Query(ctx, `SELECT "order", "title" FROM "Volume"
+			WHERE "novelId" = $1 AND "order" = ANY($2::integer[])`, novelID, orders)
+		if err != nil {
+			return nil, databaseError(err)
+		}
+		titles := make(map[int32]string, len(orders))
+		for rows.Next() {
+			var order int32
+			var title string
+			if err := rows.Scan(&order, &title); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			titles[order] = title
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		// The caller's volumes are not ours to rewrite.
+		volumes = slices.Clone(volumes)
+		for i := range volumes {
+			if title, ok := titles[volumes[i].Order]; ok {
+				volumes[i].Title = title
+			}
+		}
+	}
+	kept := make(map[int32]keptChapter, len(chapters))
+	orders = make([]int32, 0, len(chapters))
+	for _, c := range chapters {
+		if parts, ok := records.keptChapter(c.Order); ok {
+			kept[c.Order] = parts
+			orders = append(orders, c.Order)
+		}
+	}
+	if len(orders) == 0 {
+		return volumes, nil
+	}
+	// Headings tell what stays as it is; no body is read for that.
+	rows, err := tx.Query(ctx, `SELECT "id", "order", "volumeId", "updatedAt", "title" FROM "Chapter"
+		WHERE "novelId" = $1 AND "order" = ANY($2::integer[])`, novelID, orders)
+	if err != nil {
+		return nil, databaseError(err)
+	}
+	stored := make(map[int32]UploadedChapter, len(orders))
+	titles := make(map[int32]string, len(orders))
+	for rows.Next() {
+		var c UploadedChapter
+		var title string
+		if err := rows.Scan(&c.ID, &c.Order, &c.VolumeID, &c.UpdatedAt, &title); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		stored[c.Order], titles[c.Order] = c, title
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range chapters {
+		c := &chapters[i]
+		current, exists := stored[c.Order]
+		if !exists {
+			// Nothing is stored at this order, or the rehearsal replaced what
+			// was: the chapter is written as it was submitted.
+			continue
+		}
+		parts := kept[c.Order]
+		if parts.title {
+			c.Title = titles[c.Order]
+		}
+		if parts.volume {
+			c.keepVolume, c.volumeID = true, current.VolumeID
+		}
+		c.keepBody = parts.body
+		if parts.title && parts.volume && parts.body {
+			c.stored = &current
+		}
+	}
+	return volumes, nil
 }
 
 func uploadAuthor(ctx context.Context, tx pgx.Tx, platformID int32, name string) (int32, error) {

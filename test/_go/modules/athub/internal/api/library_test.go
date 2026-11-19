@@ -29,7 +29,7 @@ func (s *libraryStore) CatalogCount(context.Context, string) (int64, error) { re
 func TestCatalogPageAndBatchAuthors(t *testing.T) {
 	st := &libraryStore{}
 	handler := testHandler(t, st)
-	w := request(handler, "GET", "/api/v2/novelinfo?view=page&limit=24&offset=24&q=writer&sort=title&authorId=3&tagId=2", "", "Bearer "+testToken)
+	w := request(handler, "GET", "/api/v2/novelinfo?view=page&limit=24&offset=24&q=writer&sort=title&authorId=3&tagId=2", "")
 	var page storage.NovelPage
 	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || w.Code != 200 || page.Total != 125 || len(page.Items) != 1 {
 		t.Fatalf("page status=%d body=%s error=%v", w.Code, w.Body, err)
@@ -37,12 +37,12 @@ func TestCatalogPageAndBatchAuthors(t *testing.T) {
 	if st.page.Limit != 24 || st.page.Offset != 24 || st.page.AuthorID != 3 || st.page.TagID != 2 || st.page.Search != "writer" || st.page.Sort != "title" {
 		t.Fatalf("invalid filter: %+v", st.page)
 	}
-	w = request(handler, "GET", "/api/v2/authors?ids=3,5,8", "", "Bearer "+testToken)
+	w = request(handler, "GET", "/api/v2/authors?ids=3,5,8", "")
 	if w.Code != 200 || !reflect.DeepEqual(st.ids, []int32{3, 5, 8}) {
 		t.Fatalf("batch authors status=%d ids=%v", w.Code, st.ids)
 	}
 	for _, path := range []string{"novelinfo", "authors", "tags", "platforms"} {
-		w = request(handler, "GET", "/api/v2/"+path+"?view=count", "", "Bearer "+testToken)
+		w = request(handler, "GET", "/api/v2/"+path+"?view=count", "")
 		if w.Code != 200 || w.Body.String() != "{\"total\":125}\n" {
 			t.Fatalf("count %s: %d %s", path, w.Code, w.Body)
 		}
@@ -54,12 +54,12 @@ func TestCatalogPageAndBatchAuthors(t *testing.T) {
 		"/api/v2/novelinfo?view=count&limit=1", "/api/v2/tags?view=other",
 		"/api/v2/authors?ids=0", "/api/v2/authors?ids=1&platformId=3",
 	} {
-		if w := request(handler, http.MethodGet, path, "", "Bearer "+testToken); w.Code != 400 {
+		if w := request(handler, http.MethodGet, path, ""); w.Code != 400 {
 			t.Errorf("invalid query %s: %d %s", path, w.Code, w.Body)
 		}
 	}
 	// Legacy callers still receive an array and use the original store method.
-	w = request(handler, "GET", "/api/v2/novelinfo?limit=24", "", "Bearer "+testToken)
+	w = request(handler, "GET", "/api/v2/novelinfo?limit=24", "")
 	if w.Code != 200 || w.Body.String() != "[]\n" || st.called != "listNovels" {
 		t.Fatalf("legacy API changed: %d %s", w.Code, w.Body)
 	}

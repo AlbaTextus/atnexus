@@ -46,7 +46,7 @@ func (a *API) tags(w http.ResponseWriter, r *http.Request) error {
 		var id int32
 		if r.Method == http.MethodPost {
 			if len(query) != 0 {
-				return badRequest("POST /api/v2/tags does not accept query parameters")
+				return badRequest("POST /api/v5/tags does not accept query parameters")
 			}
 		} else {
 			id, err = onlyID(query)

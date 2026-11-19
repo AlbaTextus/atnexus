@@ -44,7 +44,7 @@ func (a *API) platforms(w http.ResponseWriter, r *http.Request) error {
 		return writeJSON(w, http.StatusOK, items)
 	case http.MethodPost:
 		if len(query) != 0 {
-			return badRequest("POST /api/v2/platforms does not accept query parameters")
+			return badRequest("POST /api/v5/platforms does not accept query parameters")
 		}
 		var input storage.PlatformInput
 		if err := decodeJSON(w, r, &input); err != nil {
@@ -105,7 +105,7 @@ func (a *API) authors(w http.ResponseWriter, r *http.Request) error {
 		return writeJSON(w, http.StatusOK, items)
 	case http.MethodPost:
 		if len(query) != 0 {
-			return badRequest("POST /api/v2/authors does not accept query parameters")
+			return badRequest("POST /api/v5/authors does not accept query parameters")
 		}
 		var input storage.AuthorInput
 		if err := decodeJSON(w, r, &input); err != nil {

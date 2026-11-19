@@ -37,7 +37,7 @@ func TestDeleteIllustrationValidationAndErrors(t *testing.T) {
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			st := &deleteIllustrationStore{fakeStore: fakeStore{err: scenario.err}}
-			response := request(testHandler(t, st), http.MethodDelete, "/api/v2/illustrations?"+scenario.query, "", "Bearer "+testToken)
+			response := request(testHandler(t, st), http.MethodDelete, "/api/v2/illustrations?"+scenario.query, "")
 			if response.Code != scenario.want || (st.called == "deleteIllustration") != scenario.called {
 				t.Fatalf("status=%d body=%s called=%s", response.Code, response.Body, st.called)
 			}

@@ -33,7 +33,7 @@ func TestAuthorNames(t *testing.T) {
 	} {
 		t.Run(tc.method+tc.path+tc.body, func(t *testing.T) {
 			st := &fakeStore{}
-			w := request(testHandler(t, st), tc.method, tc.path, tc.body, "Bearer "+testToken)
+			w := request(testHandler(t, st), tc.method, tc.path, tc.body)
 			if w.Code != tc.status {
 				t.Fatalf("status=%d body=%s", w.Code, w.Body)
 			}
@@ -52,7 +52,7 @@ func TestAuthorNames(t *testing.T) {
 			}
 		})
 	}
-	w := request(testHandler(t, &fakeStore{err: storage.ErrNotFound}), "PUT", "/api/v2/authors?id=999", `{"name":"笔名"}`, "Bearer "+testToken)
+	w := request(testHandler(t, &fakeStore{err: storage.ErrNotFound}), "PUT", "/api/v2/authors?id=999", `{"name":"笔名"}`)
 	if w.Code != 404 {
 		t.Fatalf("missing author status=%d", w.Code)
 	}

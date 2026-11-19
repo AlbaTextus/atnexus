@@ -14,8 +14,6 @@ import (
 	"github.com/AlbaTextus/atnexus/modules/athub/internal/storage"
 )
 
-var testToken = strings.Repeat("t", 32)
-
 type fakeStore struct {
 	called                   string
 	err                      error
@@ -62,50 +60,23 @@ func (s *fakeStore) DeleteChapter(_ context.Context, id, order int32) error {
 	return s.err
 }
 
+// testHandler serves the content API the way the host mounts it, with the
+// host's admission left out.
 func testHandler(t *testing.T, store storage.Store) http.Handler {
 	t.Helper()
-	handler, err := New(store, testToken, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler, err := NewWithMiddleware(store, func(next http.Handler) http.Handler { return next }, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return handler
 }
 
-func request(handler http.Handler, method, path, body, auth string) *httptest.ResponseRecorder {
+func request(handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
-	if auth != "" {
-		r.Header.Set("Authorization", auth)
-	}
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 	return w
-}
-
-func TestTokenConfiguration(t *testing.T) {
-	for _, token := range []string{"", "short", " " + testToken, testToken + "\n", testToken + " space"} {
-		if _, err := New(nil, token, nil); err == nil {
-			t.Errorf("accepted invalid token %q", token)
-		}
-	}
-}
-
-func TestAuthentication(t *testing.T) {
-	handler := testHandler(t, nil)
-	for _, auth := range []string{"", "Basic " + testToken, "Bearer wrong", "Bearer " + testToken + " ", "Bearer  " + testToken} {
-		w := request(handler, http.MethodGet, "/api/v2/novelinfo", "", auth)
-		if w.Code != http.StatusUnauthorized || w.Header().Get("WWW-Authenticate") != "Bearer" {
-			t.Errorf("auth %q: status %d", auth, w.Code)
-		}
-	}
-	r := httptest.NewRequest(http.MethodGet, "/api/v2/novelinfo", nil)
-	r.Header.Add("Authorization", "Bearer "+testToken)
-	r.Header.Add("Authorization", "Bearer "+testToken)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("duplicate authorization: status %d", w.Code)
-	}
 }
 
 func TestRoutes(t *testing.T) {
@@ -125,7 +96,7 @@ func TestRoutes(t *testing.T) {
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			store := &fakeStore{}
-			w := request(testHandler(t, store), tc.method, tc.path, tc.body, "bearer "+testToken)
+			w := request(testHandler(t, store), tc.method, tc.path, tc.body)
 			if w.Code != tc.status || store.called != tc.called {
 				t.Fatalf("status=%d called=%s body=%s", w.Code, store.called, w.Body.String())
 			}
@@ -170,7 +141,7 @@ func TestAbandonedNovelStatus(t *testing.T) {
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			store := &fakeStore{}
-			w := request(testHandler(t, store), tc.method, tc.path, tc.body, "Bearer "+testToken)
+			w := request(testHandler(t, store), tc.method, tc.path, tc.body)
 			if w.Code != tc.status || store.called != tc.called || store.novel.Status != "ABANDONED" {
 				t.Fatalf("status=%d called=%s novel=%+v body=%s", w.Code, store.called, store.novel, w.Body.String())
 			}
@@ -201,7 +172,7 @@ func TestNovelReferenceNames(t *testing.T) {
 				wantStatus = http.StatusOK
 			}
 			w := request(testHandler(t, store), method, path,
-				`{"platformId":2,"title":"Book","authorName":" 新作者 ","tagNames":[" 科幻 ","冒险","科幻"]}`, "Bearer "+testToken)
+				`{"platformId":2,"title":"Book","authorName":" 新作者 ","tagNames":[" 科幻 ","冒险","科幻"]}`)
 			if w.Code != wantStatus || store.novel.AuthorName == nil || *store.novel.AuthorName != "新作者" || store.novel.AuthorID != nil {
 				t.Fatalf("status=%d novel=%+v body=%s", w.Code, store.novel, w.Body.String())
 			}
@@ -218,7 +189,7 @@ func TestNovelReferenceNames(t *testing.T) {
 		`{"platformId":2,"title":"Book","tagNames":["bad\u0000tag"]}`,
 	} {
 		store := &fakeStore{}
-		w := request(testHandler(t, store), http.MethodPut, "/api/v2/novelinfo?id=7", body, "Bearer "+testToken)
+		w := request(testHandler(t, store), http.MethodPut, "/api/v2/novelinfo?id=7", body)
 		if w.Code != http.StatusBadRequest || store.called != "" {
 			t.Fatalf("invalid references reached storage: status=%d called=%s body=%s", w.Code, store.called, w.Body.String())
 		}
@@ -267,7 +238,7 @@ func TestRejectedRequests(t *testing.T) {
 	} {
 		t.Run(tc.method+tc.path+tc.body, func(t *testing.T) {
 			store := &fakeStore{}
-			w := request(testHandler(t, store), tc.method, tc.path, tc.body, "Bearer "+testToken)
+			w := request(testHandler(t, store), tc.method, tc.path, tc.body)
 			if w.Code != tc.status || store.called != "" {
 				t.Fatalf("status=%d called=%s body=%s", w.Code, store.called, w.Body.String())
 			}
@@ -296,7 +267,7 @@ func TestChapterVolume(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &fakeStore{}
 			body := `{"novelId":7,"order":1,"title":"Chapter","content":"Body"` + tc.field + `}`
-			w := request(testHandler(t, store), "PUT", "/api/v2/content", body, "Bearer "+testToken)
+			w := request(testHandler(t, store), "PUT", "/api/v2/content", body)
 			if w.Code != tc.status {
 				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 			}
@@ -338,7 +309,6 @@ func TestBodyLimitsAndMediaType(t *testing.T) {
 		{strings.Repeat(" ", int(MaxBodyBytes)+1), "application/json", 413},
 	} {
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/novelinfo", strings.NewReader(tc.body))
-		r.Header.Set("Authorization", "Bearer "+testToken)
 		r.Header.Set("Content-Type", tc.mediaType)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, r)
@@ -361,7 +331,7 @@ func TestStorageErrors(t *testing.T) {
 		{context.DeadlineExceeded, 504},
 		{errors.New("secret connection details"), 500},
 	} {
-		w := request(testHandler(t, &fakeStore{err: tc.err}), "GET", "/api/v2/novelinfo?id=1", "", "Bearer "+testToken)
+		w := request(testHandler(t, &fakeStore{err: tc.err}), "GET", "/api/v2/novelinfo?id=1", "")
 		if w.Code != tc.status {
 			t.Errorf("%v: status %d", tc.err, w.Code)
 		}
@@ -382,7 +352,7 @@ func TestPostgresTextValidation(t *testing.T) {
 		{"PUT", "/api/v2/content", `{"novelId":1,"order":1,"title":"Chapter","content":"body\u0000"}`},
 	} {
 		store := &fakeStore{}
-		w := request(testHandler(t, store), tc.method, tc.path, tc.body, "Bearer "+testToken)
+		w := request(testHandler(t, store), tc.method, tc.path, tc.body)
 		if w.Code != http.StatusBadRequest || store.called != "" {
 			t.Fatalf("status=%d called=%s", w.Code, store.called)
 		}

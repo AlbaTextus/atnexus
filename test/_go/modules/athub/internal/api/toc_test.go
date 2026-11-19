@@ -38,7 +38,7 @@ func TestTOCResponse(t *testing.T) {
 			{ID: 9, NovelID: 7, VolumeID: &volumeID, Order: 3, Title: "Chapter", UpdatedAt: now},
 		}}
 	store := &tocStore{result: want}
-	w := request(testHandler(t, store), "GET", "/api/v2/toc?novelId=7", "", "Bearer "+testToken)
+	w := request(testHandler(t, store), "GET", "/api/v2/toc?novelId=7", "")
 	if w.Code != http.StatusOK || store.called != "getTOC" || store.id != 7 {
 		t.Fatalf("status=%d store=%+v body=%s", w.Code, store, w.Body.String())
 	}
@@ -53,7 +53,7 @@ func TestTOCResponse(t *testing.T) {
 		t.Fatal("missing response headers")
 	}
 	// Nil store slices must still serialize as arrays, not null.
-	w = request(testHandler(t, &fakeStore{}), "GET", "/api/v2/toc?novelId=7", "", "Bearer "+testToken)
+	w = request(testHandler(t, &fakeStore{}), "GET", "/api/v2/toc?novelId=7", "")
 	if w.Code != 200 || strings.TrimSpace(w.Body.String()) != `{"novelId":7,"wordCount":0,"volumes":[],"chapters":[]}` {
 		t.Fatalf("empty TOC: %d %s", w.Code, w.Body.String())
 	}
@@ -69,7 +69,7 @@ func TestTOCRejectedRequests(t *testing.T) {
 	} {
 		t.Run(path, func(t *testing.T) {
 			store := &fakeStore{}
-			w := request(testHandler(t, store), "GET", path, "", "Bearer "+testToken)
+			w := request(testHandler(t, store), "GET", path, "")
 			if w.Code != 400 || store.called != "" {
 				t.Fatalf("status=%d called=%s body=%s", w.Code, store.called, w.Body.String())
 			}
@@ -77,15 +77,10 @@ func TestTOCRejectedRequests(t *testing.T) {
 	}
 	for _, method := range []string{"POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"} {
 		store := &fakeStore{}
-		w := request(testHandler(t, store), method, "/api/v2/toc?novelId=7", "", "Bearer "+testToken)
+		w := request(testHandler(t, store), method, "/api/v2/toc?novelId=7", "")
 		if w.Code != 405 || w.Header().Get("Allow") != "GET" || store.called != "" {
 			t.Fatalf("%s: status=%d Allow=%s called=%s", method, w.Code, w.Header().Get("Allow"), store.called)
 		}
-	}
-	store := &fakeStore{}
-	w := request(testHandler(t, store), "GET", "/api/v2/toc?novelId=7", "", "")
-	if w.Code != 401 || store.called != "" {
-		t.Fatal("unauthenticated TOC request reached storage")
 	}
 }
 
@@ -98,7 +93,7 @@ func TestTOCStorageErrors(t *testing.T) {
 		{context.DeadlineExceeded, 504},
 		{errors.New("private database details"), 500},
 	} {
-		w := request(testHandler(t, &fakeStore{err: tc.err}), "GET", "/api/v2/toc?novelId=7", "", "Bearer "+testToken)
+		w := request(testHandler(t, &fakeStore{err: tc.err}), "GET", "/api/v2/toc?novelId=7", "")
 		if w.Code != tc.status || strings.Contains(w.Body.String(), "private database details") {
 			t.Fatalf("error=%v status=%d body=%s", tc.err, w.Code, w.Body.String())
 		}

@@ -62,7 +62,7 @@ func TestReadCacheStillAuthenticatesAndInvalidates(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 2; i++ {
-		w := request(handler, "GET", "/api/v2/novelinfo?id=1", "", "")
+		w := request(handler, "GET", "/api/v2/novelinfo?id=1", "")
 		if w.Code != 200 || !strings.Contains(w.Body.String(), "before") || w.Header().Get("Cache-Control") != "no-store" {
 			t.Fatalf("read status=%d body=%s headers=%v", w.Code, w.Body, w.Header())
 		}
@@ -71,15 +71,15 @@ func TestReadCacheStillAuthenticatesAndInvalidates(t *testing.T) {
 		t.Fatalf("cache bypassed accounting or missed: reads=%d admissions=%d", st.reads.Load(), admitted.Load())
 	}
 	denied.Store(true)
-	if w := request(handler, "GET", "/api/v2/novelinfo?id=1", "", ""); w.Code != 401 {
+	if w := request(handler, "GET", "/api/v2/novelinfo?id=1", ""); w.Code != 401 {
 		t.Fatal("cache bypassed revoked authentication")
 	}
 	denied.Store(false)
-	w := request(handler, "POST", "/api/v2/novelinfo", `{"platformId":1,"title":"after","status":"ONGOING"}`, "")
+	w := request(handler, "POST", "/api/v2/novelinfo", `{"platformId":1,"title":"after","status":"ONGOING"}`)
 	if w.Code != 201 {
 		t.Fatalf("mutation %d %s", w.Code, w.Body)
 	}
-	w = request(handler, "GET", "/api/v2/novelinfo?id=1", "", "")
+	w = request(handler, "GET", "/api/v2/novelinfo?id=1", "")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "after") || st.reads.Load() != 2 {
 		t.Fatalf("mutation left stale cache: %d %s reads=%d", w.Code, w.Body, st.reads.Load())
 	}
@@ -96,23 +96,23 @@ func TestReadCacheCoalescesAndRejectsStaleFill(t *testing.T) {
 			readers.Add(1)
 			go func() {
 				defer readers.Done()
-				request(handler, "GET", "/api/v2/novelinfo?id=1", "", "")
+				request(handler, "GET", "/api/v2/novelinfo?id=1", "")
 			}()
 			<-st.started
 			if mutate {
-				request(handler, "POST", "/api/v2/novelinfo", `{"platformId":1,"title":"after","status":"ONGOING"}`, "")
+				request(handler, "POST", "/api/v2/novelinfo", `{"platformId":1,"title":"after","status":"ONGOING"}`)
 			} else {
 				for i := 0; i < 12; i++ {
 					readers.Add(1)
 					go func() {
 						defer readers.Done()
-						request(handler, "GET", "/api/v2/novelinfo?id=1", "", "")
+						request(handler, "GET", "/api/v2/novelinfo?id=1", "")
 					}()
 				}
 			}
 			close(st.release)
 			readers.Wait()
-			w := request(handler, "GET", "/api/v2/novelinfo?id=1", "", "")
+			w := request(handler, "GET", "/api/v2/novelinfo?id=1", "")
 			wantReads, title := int32(1), "before"
 			if mutate {
 				wantReads, title = 2, "after"
@@ -126,7 +126,7 @@ func TestReadCacheCoalescesAndRejectsStaleFill(t *testing.T) {
 				a.cache.entries[key] = entry
 			}
 			a.cache.mu.Unlock()
-			request(handler, "GET", "/api/v2/novelinfo?id=1", "", "")
+			request(handler, "GET", "/api/v2/novelinfo?id=1", "")
 			if st.reads.Load() != wantReads+1 {
 				t.Fatal("expired entry did not reload")
 			}
@@ -140,16 +140,16 @@ func TestReadCacheBoundsAndErrors(t *testing.T) {
 	// NewWithMiddleware supplies the error logger, including the error path.
 	handler, _ := NewWithMiddleware(st, func(next http.Handler) http.Handler { return next }, nil)
 	st.fail.Store(true)
-	if w := request(handler, "GET", "/api/v2/novelinfo?id=1", "", ""); w.Code != 500 {
+	if w := request(handler, "GET", "/api/v2/novelinfo?id=1", ""); w.Code != 500 {
 		t.Fatalf("error status=%d", w.Code)
 	}
 	st.fail.Store(false)
-	if w := request(handler, "GET", "/api/v2/novelinfo?id=1", "", ""); w.Code != 200 || st.reads.Load() != 2 {
+	if w := request(handler, "GET", "/api/v2/novelinfo?id=1", ""); w.Code != 200 || st.reads.Load() != 2 {
 		t.Fatal("error response was cached")
 	}
 	st.title.Store(strings.Repeat("x", readCacheItemBytes+1))
 	for i := 0; i < 2; i++ {
-		request(handler, "GET", "/api/v2/novelinfo?id=2", "", "")
+		request(handler, "GET", "/api/v2/novelinfo?id=2", "")
 	}
 	if st.reads.Load() != 4 {
 		t.Fatal("oversized response was cached")

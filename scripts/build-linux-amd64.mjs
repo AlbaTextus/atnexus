@@ -209,7 +209,7 @@ Preserve the existing .env, encryption keys, databases and user data.
 For a new installation, copy .env.example to .env and configure it; chmod 600 .env.
 chmod +x atnexus atnexus-migrate-creatplat atnexus-migrate-image start-backend.sh start-frontend.sh
 Run ./start-backend.sh and ./start-frontend.sh as separate services.
-The backend serves all four APIs on port 8010 (GATEWAY_HTTP_ADDR); the frontend uses 3288.
+The backend serves all five APIs on port 8010 (GATEWAY_HTTP_ADDR); the frontend uses 3288.
 When upgrading, point reverse proxies and API clients to the gateway instead of the old module ports.
 HOSTNAME_OVERRIDE and PORT configure the frontend listener.
 

@@ -194,7 +194,6 @@ func (a *Access) admit(serve func(http.ResponseWriter, *http.Request, store.ATHu
 					return
 				}
 				call.UserID, call.SessionID, call.Authenticated = &identity.UserID, &identity.SessionID, true
-				r = r.WithContext(auth.WithIdentity(r.Context(), identity))
 			}
 		}
 		if len(r.Header.Values("Authorization")) == 1 && r.Method == http.MethodGet && a.readSecret != "" {

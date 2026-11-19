@@ -71,7 +71,7 @@ func TestUploadIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		w := request(handler, method, path, string(data), "Bearer "+testToken)
+		w := request(handler, method, path, string(data))
 		if w.Code != status {
 			t.Fatalf("%s %s: want %d got %d: %s", method, path, status, w.Code, w.Body.String())
 		}

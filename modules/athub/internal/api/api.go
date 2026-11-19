@@ -3,8 +3,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -23,37 +21,12 @@ import (
 const MaxBodyBytes int64 = 8 << 20
 
 type API struct {
-	store     storage.Store
-	tokenHash [32]byte
-	logger    *slog.Logger
-	cache     *readCache
-}
-
-func New(store storage.Store, token string, logger *slog.Logger) (http.Handler, error) {
-	if len(token) < 32 || strings.TrimSpace(token) != token || strings.ContainsAny(token, " \t\r\n") {
-		return nil, errors.New("API_TOKEN must contain at least 32 bytes and no whitespace")
-	}
-	if logger == nil {
-		logger = slog.Default()
-	}
-	return &API{store: store, tokenHash: sha256.Sum256([]byte(token)), logger: logger}, nil
-}
-
-func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	scheme, token, ok := strings.Cut(r.Header.Get("Authorization"), " ")
-	tokenHash := sha256.Sum256([]byte(token))
-	if len(r.Header.Values("Authorization")) != 1 || !ok || !strings.EqualFold(scheme, "Bearer") || subtle.ConstantTimeCompare(tokenHash[:], a.tokenHash[:]) != 1 {
-		w.Header().Set("WWW-Authenticate", "Bearer")
-		writeError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	a.serveContent(w, r)
+	store  storage.Store
+	logger *slog.Logger
+	cache  *readCache
 }
 
 // NewWithMiddleware delegates authentication and accounting to the host.
-// New remains available for standalone API regression tests.
 func NewWithMiddleware(store storage.Store, wrap func(http.Handler) http.Handler, logger *slog.Logger) (http.Handler, error) {
 	if wrap == nil {
 		return nil, errors.New("host authentication middleware is required")
@@ -222,7 +195,7 @@ func (a *API) novelInfo(w http.ResponseWriter, r *http.Request) error {
 		return writeJSON(w, http.StatusOK, novels)
 	case http.MethodPost:
 		if len(query) != 0 {
-			return badRequest("POST /api/v2/novelinfo does not accept query parameters")
+			return badRequest("POST /api/v5/novelinfo does not accept query parameters")
 		}
 		var input storage.NovelInput
 		if err := decodeJSON(w, r, &input); err != nil {
@@ -309,7 +282,7 @@ func (a *API) content(w http.ResponseWriter, r *http.Request) error {
 		return writeJSON(w, http.StatusOK, chapters)
 	case http.MethodPut:
 		if len(query) != 0 {
-			return badRequest("PUT /api/v2/content uses novelId and order in the JSON body")
+			return badRequest("PUT /api/v5/content uses novelId and order in the JSON body")
 		}
 		var input storage.ChapterInput
 		if err := decodeJSON(w, r, &input); err != nil {

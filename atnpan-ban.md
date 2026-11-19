@@ -4,7 +4,7 @@
 
 后端按业务模块维护，由根 Go module、`cmd/server` 和统一发布产物装配。当前统一进程部署；目录边界及依赖注入保留以后拆分服务的可能，本轮不增加独立服务部署。
 
-library 已取消，`8003/api/v3` 不再注册。正式书库归 ATHub；投稿、审核、历史和修订归创作者平台 creatplat；外部 Key 与统一 session 归 OAuth；图片和对象存储归 image。
+library 已取消，旧 `8003` 端口不再监听；`/api/v3` 现由邮件模块使用。正式书库归 ATHub；投稿、审核、历史和修订归创作者平台 creatplat；外部 Key 与统一 session 归 OAuth；图片和对象存储归 image。
 
 最新图床任务只包含 **后端 Go 改写与 SQLite → PostgreSQL 迁移**。原 imgbed 前端、页面和构建保持原样，本轮不做前端接入。
 
@@ -14,11 +14,12 @@ library 已取消，`8003/api/v3` 不再注册。正式书库归 ATHub；投稿�
 | --- | --- | --- |
 | `modules/oauth` | `/api/v1` | 账户、session、OAuth、外部 Key 管理与验证 |
 | `modules/image` | `/api/v2` | 图片元数据、上传、文件管理、本地/S3 存储 |
+| `modules/mail` | `/api/v3` | SMTP 发信、邮箱验证码、绑定与更换邮箱；使用账户库 |
 | `modules/creatplat` | `/api/v4` | 投稿、审核、历史、修订及创作者素材调用 |
 | `modules/athub` | `/api/v5` | 书库、正式内容、内容变更执行 |
 | `modules/other` | 预留 `/api/v6` | 业务未明确，不启动占位服务 |
 
-Go 后端只监听聚合端口 `8010`，按路径前缀分发到四个模块。OAuth 标准路径 `/oauth/*`、`/.well-known/*` 不变，各模块仍提供 `/api/v{n}/healthz`。图片文件通过 `/file/<ID>` 或 `/api/v2/file/<ID>` 读取，不再启动旧文件端口。前端端口 `3288` 不变。
+Go 后端只监听聚合端口 `8010`，按路径前缀分发到五个模块。OAuth 标准路径 `/oauth/*`、`/.well-known/*` 不变，各模块仍提供 `/api/v{n}/healthz`。图片文件通过 `/file/<ID>` 或 `/api/v2/file/<ID>` 读取，不再启动旧文件端口。前端端口 `3288` 不变。
 
 ## 3. 目录与依赖
 
@@ -28,6 +29,7 @@ cmd/migrate-creatplat/  创作者独立库导入工具
 cmd/migrate-image/      图床只读 SQLite 导入工具
 modules/oauth/          账户、认证、session、Key
 modules/image/          图床 Go API、存储、独立数据库与迁移
+modules/mail/           SMTP 发信、邮箱验证码与邮箱变更
 modules/creatplat/      创作流程、审核和历史
 modules/athub/          正式内容 API、执行和存储
 pkg/auth/               模块共享身份契约

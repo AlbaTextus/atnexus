@@ -18,4 +18,7 @@ const messages: Record<string, string> = {
   login_failed: "第三方登录未完成，请重试。",
 }
 
-export function externalLoginError(code: string | null) { return code ? messages[code] || messages.login_failed : "" }
+export function externalLoginError(code: string | null) {
+  if (!code) return ""
+  return Object.hasOwn(messages, code) ? messages[code] : messages.login_failed
+}

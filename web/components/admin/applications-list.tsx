@@ -24,7 +24,6 @@ export function ApplicationsList() {
   const [apps, setApps] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [admin, setAdmin] = useState(false)
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState("all")
   const [pending, setPending] = useState<string[]>([])
@@ -42,7 +41,7 @@ export function ApplicationsList() {
   }
   async function load() {
     setLoading(true); setError("")
-    try { const result = await api<{ applications: Application[]; can_manage_all: boolean }>("/api/v1/applications"); setApps(result.applications); setAdmin(result.can_manage_all) }
+    try { const result = await api<{ applications: Application[] }>("/api/v1/applications"); setApps(result.applications) }
     catch (reason) { setError(managementError(reason)) } finally { setLoading(false) }
   }
   useEffect(() => { void load() }, [])
@@ -53,7 +52,7 @@ export function ApplicationsList() {
     {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error} <Button variant="link" onClick={load}>重试</Button></AlertDescription></Alert>}
     <div className="application-stats grid grid-cols-3 gap-3 sm:gap-4">
       {([
-        { label: admin ? "全部应用" : "我的应用", count: apps.length, icon: LayoutGrid, tone: "blue", note: admin ? "管理员可管理全部应用" : "你创建并管理的应用" },
+        { label: "全部应用", count: apps.length, icon: LayoutGrid, tone: "blue", note: "管理员可管理全部应用" },
         { label: "已启用", count: activeCount, icon: Check, tone: "green", note: "可以进行登录授权" },
         { label: "已停用", count: apps.length - activeCount, icon: Settings2, tone: "orange", note: "已暂停新的登录授权" },
       ] as const).map(item => <StatCard key={item.label} label={item.label} value={loading ? null : item.count} icon={<item.icon size={18} />} tone={item.tone} note={item.note} />)}

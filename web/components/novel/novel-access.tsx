@@ -112,26 +112,6 @@ export function useNovelAccess() {
   return context
 }
 
-export function useContentResource<T>(path: string | null) {
-  const { authenticated, request } = useNovelAccess()
-  const [result, setResult] = useState<{ path: string | null; data?: T; error?: string }>({ path: null })
-  const [revision, setRevision] = useState(0)
-  useEffect(() => {
-    if (!authenticated || !path) { setResult({ path: null }); return }
-    const controller = new AbortController()
-    setResult(previous => previous.path === path && previous.data !== undefined ? { ...previous, error: undefined } : { path })
-    request<T>(path, controller.signal)
-      .then(data => { if (!controller.signal.aborted) setResult({ path, data }) })
-      .catch(reason => { if (!controller.signal.aborted) setResult({ path, error: reason instanceof Error ? reason.message : "加载失败。" }) })
-    return () => controller.abort()
-  }, [path, authenticated, request, revision])
-  return {
-    data: authenticated && result.path === path ? result.data : undefined,
-    error: result.path === path ? result.error : undefined,
-    retry: () => setRevision(value => value + 1),
-  }
-}
-
 export function NovelConnection() {
   const { ready, authenticated, error, refresh } = useNovelAccess()
   const pathname = usePathname()

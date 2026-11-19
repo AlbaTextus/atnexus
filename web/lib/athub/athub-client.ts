@@ -36,7 +36,6 @@ export type NovelRevision = {
 export type NovelRevisionChanges = { changes: NovelChange[]; total: number }
 export type NovelHistory = { revisions: NovelRevision[]; total: number }
 export type ChapterSummary = { id: number; novelId: number; volumeId: number | null; order: number; title: string; updatedAt: string }
-export type Chapter = ChapterSummary & { content: string }
 export type TableOfContents = {
   novelId: number
   wordCount?: number

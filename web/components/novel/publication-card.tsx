@@ -4,11 +4,10 @@ import { NovelEditable } from "@/components/novel/novel-inline-editor";
 import publisherBranding from "@/config/publisher-branding.json";
 
 type PublicationCardProps = {
-  releaseDate?: string;
   publisher?: string;
 };
 
-export function PublicationCard({ releaseDate, publisher }: PublicationCardProps) {
+export function PublicationCard({ publisher }: PublicationCardProps) {
   const branding = publisherBranding.find(platform => platform.name === publisher?.trim());
   return (
     <section className="panel publication-card" aria-labelledby="publication-heading">
@@ -23,13 +22,7 @@ export function PublicationCard({ releaseDate, publisher }: PublicationCardProps
         </div>
         <div>
           <dt>发行时间</dt>
-          <dd>
-            {releaseDate ? (
-              <time dateTime={releaseDate}>{releaseDate}</time>
-            ) : (
-              "待补充"
-            )}
-          </dd>
+          <dd>待补充</dd>
         </div>
         <div>
           <dt>年龄限制</dt>

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -47,10 +48,16 @@ func safeLoginReturn(value string) string {
 	if err != nil || u.IsAbs() || u.Host != "" || strings.ContainsAny(u.Path, "\\\r\n\t") {
 		return "/account"
 	}
-	if u.Path == "/account" || strings.HasPrefix(u.Path, "/account/") || u.Path == "/admin" || strings.HasPrefix(u.Path, "/admin/") || u.Path == "/oauth/authorize" {
+	// Check the normalized path, but retain the original route and query for the redirect.
+	switch p := path.Clean(u.Path); {
+	case p == "/account", strings.HasPrefix(p, "/account/"),
+		p == "/admin", strings.HasPrefix(p, "/admin/"),
+		p == "/library", strings.HasPrefix(p, "/library/"),
+		u.Path == "/oauth/authorize":
 		return u.RequestURI()
+	default:
+		return "/account"
 	}
-	return "/account"
 }
 
 func (a *API) startExternalLogin(w http.ResponseWriter, r *http.Request) {

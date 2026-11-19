@@ -18,6 +18,7 @@
 | GET | `/api/v1/auth/providers` | 第三方平台开放状态 |
 | GET | `/api/v1/auth/verification` | Turnstile 公开配置 |
 | GET | `/api/v1/legal/{slug}` | 公开协议正文 |
+| GET | `/api/v1/profiles/{id}` | 用户公开资料 |
 
 ## 认证与个人账户
 
@@ -33,7 +34,12 @@
 | GET / DELETE | `/api/v1/account/identities` / `/api/v1/account/identities/{provider}` | 列出或解绑第三方账号 |
 | GET | `/api/v1/account/applications` | 当前用户可访问的应用信息 |
 | PATCH | `/api/v1/account/profile` | 更新昵称 |
+| POST | `/api/v1/account/setup` | 注册后完成首次用户名设置，见[邮件模块](/mail/overview) |
+| PATCH | `/api/v1/account/bio` | 更新个人简介 |
+| POST / DELETE | `/api/v1/account/background` | 上传 / 移除个人主页背景 |
 | PATCH | `/api/v1/account/avatar` | 更改头像来源 |
+| POST | `/api/v1/account/avatar` | 上传自定义头像 |
+| POST | `/api/v1/account/avatar/preview` | 返回 GIF 头像的裁剪预览，不保存 |
 | POST | `/api/v1/account/password` | 设置或修改密码 |
 | POST | `/api/v1/passkeys/registration/options`、`/api/v1/passkeys/registration/finish` | 注册通行密钥 |
 | POST | `/api/v1/passkeys/login/options`、`/api/v1/passkeys/login/finish` | 通行密钥登录 |
@@ -50,6 +56,7 @@
 | --- | --- | --- |
 | GET / POST | `/api/v1/applications` | 应用列表 / 创建 |
 | GET / PUT / DELETE | `/api/v1/applications/{id}` | 应用详情 / 更新 / 删除 |
+| PATCH | `/api/v1/applications/{id}/status` | 启用 / 停用应用 |
 | GET / POST | `/api/v1/applications/{id}/secret` | 查看 / 重置客户端密钥 |
 | GET / POST | `/api/v1/admin/users` | 用户列表 / 创建 |
 | PATCH | `/api/v1/admin/users/{id}` | 修改昵称、角色与启停状态 |

@@ -18,7 +18,7 @@ Target server: Linux AMD64 with glibc, Node.js >= 20.9, PostgreSQL.
 
 Optional build environment:
   OAUTH_BACKEND_URL          http://127.0.0.1:8010
-  NEXT_PUBLIC_ATHUB_API_URL https://api.albatextus.com
+  NEXT_PUBLIC_ATHUB_API_URL http://localhost:8010
   NEXT_PUBLIC_CREATPLAT_API_URL  public creator API origin
   CREATPLAT_BACKEND_URL     http://127.0.0.1:8010
   NEXT_PUBLIC_WIKI_URL      http://localhost:3200

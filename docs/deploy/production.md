@@ -23,6 +23,7 @@
 | --- | --- |
 | `/api/v1`、`/oauth`、`/.well-known` | OAuth |
 | `/api/v2`、`/file` | 图床 |
+| `/api/v3` | 邮件 |
 | `/api/v4` | 创作者平台 |
 | `/api/v5` | ATHub |
 

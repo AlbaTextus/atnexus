@@ -75,6 +75,6 @@ Key 目前拥有共享内容库读写权限，用户归属用于鉴权与统计�
 
 保存 Key 总调用限制或接口权限后，此后完成准入的调用即按新设置判定。保存只等待该等级已在处理中的调用完成准入，同一等级的持续调用不会让保存一直等待；等待期间新到的调用排在保存之后。
 
-权限配置接口为 `GET/PUT /api/v1/admin/athub/permissions`，当前账户能力接口为 `GET /api/v1/account/athub/permissions`。启用此功能需分别运行 `pnpm db:deploy` 和 `pnpm db:athub:deploy`，应用账户库权限／审核迁移及内容库幂等回执迁移，然后更新前后端；迁移不改变现有账户等级和 Key 总调用限额。
+Key 总调用限制接口为 `GET/PUT /api/v1/admin/athub/key-limits`，调用统计面板接口为 `GET /api/v1/admin/athub/dashboard`。权限配置接口为 `GET/PUT /api/v1/admin/athub/permissions`，当前账户能力接口为 `GET /api/v1/account/athub/permissions`。启用此功能需分别运行 `pnpm db:deploy` 和 `pnpm db:athub:deploy`，应用账户库权限／审核迁移及内容库幂等回执迁移，然后更新前后端；迁移不改变现有账户等级和 Key 总调用限额。
 
 审核的提交与处理流程见[创作者平台](/creatplat/workflow)。

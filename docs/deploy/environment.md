@@ -16,6 +16,7 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 | `AUTH_UI_URL` | 认证前端对外地址 |
 | `COOKIE_SECURE` | HTTPS 部署设为 `true` |
 | `SESSION_TTL` | 中心会话有效期，默认 `24h` |
+| `SESSION_COOKIE_NAME` | 中心会话 Cookie 名称，默认 `albatextus_session` |
 | `LOGIN_FAILURE_LIMIT` | 同一地址对同一邮箱在窗口内允许的密码登录失败次数，默认 `10`；单个邮箱合计为 3 倍、单个地址合计为 5 倍，`0` 关闭限速 |
 | `LOGIN_FAILURE_WINDOW` | 登录失败计数窗口，默认 `15m` |
 | `AUTHORIZATION_CODE_TTL` | 授权码有效期，默认 `5m` |

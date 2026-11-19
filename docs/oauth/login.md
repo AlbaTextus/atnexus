@@ -81,7 +81,6 @@ Go 服务在注册、密码登录、第三方登录发起、通行密钥登录�
 | `/admin/applications` | 应用列表、创建、启停、配置与密钥管理 |
 | `/admin/users` | 用户搜索、角色与状态管理、密码重置、撤销登录 |
 | `/admin/integration`、`/account/integration`、`/wiki/*` | 跳转到独立的 [ALBATEXTUS Wiki](https://github.com/AlbaTextus/wiki) 接入指南与对应文档 |
-| `/admin/legal` | 跳转到 Wiki |
 | `/privacy`、`/terms` | 跳转到 Wiki 上的公开协议正文；协议内容仍由本服务的 `/api/v1/legal/{slug}` 提供 |
 | `/consent` | OAuth 应用授权确认 |
 

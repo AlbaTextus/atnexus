@@ -93,7 +93,7 @@ func (p *Postgres) CheckATHubSchema(ctx context.Context) error {
 	} {
 		rows, err := p.pool.Query(ctx, query)
 		if err != nil {
-			return errors.New("ATHub authentication schema is not ready; run pnpm db:deploy in the host repository")
+			return errors.New("ATHub authentication schema is not ready; run pnpm db:deploy")
 		}
 		rows.Close()
 	}
@@ -102,22 +102,22 @@ func (p *Postgres) CheckATHubSchema(ctx context.Context) error {
 
 // These methods adapt the unchanged shared account pool to OAuth-owned key storage.
 func (p *Postgres) CreateATHubKey(ctx context.Context, key ATHubKey) (ATHubKey, error) {
-	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound, ErrUserForbidden).CreateATHubKey(ctx, key)
+	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound).CreateATHubKey(ctx, key)
 }
 func (p *Postgres) EnsureATHubKey(ctx context.Context, key ATHubKey) (ATHubKey, bool, error) {
-	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound, ErrUserForbidden).EnsureATHubKey(ctx, key)
+	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound).EnsureATHubKey(ctx, key)
 }
 func (p *Postgres) ResetATHubKey(ctx context.Context, key ATHubKey) (ATHubKey, error) {
-	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound, ErrUserForbidden).ResetATHubKey(ctx, key)
+	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound).ResetATHubKey(ctx, key)
 }
 func (p *Postgres) ListATHubKeys(ctx context.Context, user uuid.UUID) ([]ATHubKey, error) {
-	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound, ErrUserForbidden).ListATHubKeys(ctx, user)
+	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound).ListATHubKeys(ctx, user)
 }
 func (p *Postgres) RevokeATHubKey(ctx context.Context, user, id uuid.UUID) error {
-	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound, ErrUserForbidden).RevokeATHubKey(ctx, user, id)
+	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound).RevokeATHubKey(ctx, user, id)
 }
 func (p *Postgres) ResolveATHubKey(ctx context.Context, hash string) (ATHubIdentity, error) {
-	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound, ErrUserForbidden).ResolveATHubKey(ctx, hash)
+	return oauthrepo.NewAPIKeys(p.pool, ErrNotFound).ResolveATHubKey(ctx, hash)
 }
 
 // athubRoleLock is the advisory lock key guarding one role's ATHub settings: its

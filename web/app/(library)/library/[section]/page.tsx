@@ -1,12 +1,11 @@
 import type { Metadata } from "next"
-import { notFound, redirect } from "next/navigation"
+import { notFound } from "next/navigation"
 import { findNovelSection } from "@/lib/novel/novel-sections"
 import { NovelResources } from "@/components/novel/novel-resources"
 
 type Props = { params: Promise<{ section: string }> }
 
 function resolveSection(id: string) {
-  if (id === "settings") redirect("/library")
   const section = findNovelSection(id)
   if (!section || section.id === "library") notFound()
   return section

@@ -16,11 +16,10 @@ var ErrATHubAdminDisabled = errors.New("ATHub access disabled by administrator")
 type APIKeys struct {
 	pool      *pgxpool.Pool
 	notFound  error
-	forbidden error
 }
 
-func NewAPIKeys(pool *pgxpool.Pool, notFound, forbidden error) *APIKeys {
-	return &APIKeys{pool: pool, notFound: notFound, forbidden: forbidden}
+func NewAPIKeys(pool *pgxpool.Pool, notFound error) *APIKeys {
+	return &APIKeys{pool: pool, notFound: notFound}
 }
 
 type ATHubKey struct {

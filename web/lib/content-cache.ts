@@ -83,8 +83,8 @@ export class ContentCache {
         entries = entries.slice(1)
         json = JSON.stringify(entries)
       }
-      // History and chapter bodies need not survive reloads.
-      entries = entries.filter(([path]) => !/^\/api\/v4\/history(\?|$)/.test(path) && !/^\/api\/v5\/content(\?|$)/.test(path))
+      // History need not survive reloads.
+      entries = entries.filter(([path]) => !/^\/api\/v4\/history(\?|$)/.test(path))
       sessionStorage.setItem(prefix + this.scope, JSON.stringify(entries))
     } catch { /* Storage is optional. */ }
   }

@@ -72,7 +72,7 @@ pnpm db:seed
 | 示例 Client Secret | `development-secret-change-me` |
 | 示例回调 | `http://localhost:3288/auth/callback` |
 
-可用 `SEED_ADMIN_EMAIL`、`SEED_ADMIN_PASSWORD`、`SEED_ADMIN_NAME`、`SEED_CLIENT_ID`、`SEED_CLIENT_SECRET`、`SEED_CLIENT_REDIRECT_URIS` 覆盖默认值。Seed 会输出开发凭据，也会更新已有记录；不要把它作为每次部署必跑的迁移步骤。
+可用 `SEED_ADMIN_EMAIL`、`SEED_ADMIN_PASSWORD`、`SEED_ADMIN_NAME`、`SEED_CLIENT_ID`、`SEED_CLIENT_SECRET`、`SEED_CLIENT_REDIRECT_URIS`、`SEED_CLIENT_NAME`、`SEED_CLIENT_GRANT_TYPES`、`SEED_CLIENT_SCOPES`、`SEED_ACCESS_TOKEN_TTL`、`SEED_REFRESH_TOKEN_TTL` 覆盖默认值。Seed 会输出开发凭据，也会更新已有记录；不要把它作为每次部署必跑的迁移步骤。
 
 示例回调只是登记值，本项目没有实现 `/auth/callback` 应用页面，实际接入时需替换。
 

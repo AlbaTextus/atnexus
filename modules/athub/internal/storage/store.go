@@ -13,7 +13,7 @@ var (
 	ErrVolumeNotEmpty   = errors.New("volume still contains chapters")
 	ErrTagInUse         = errors.New("tag is still referenced by novels")
 	ErrImageMissing     = errors.New("image is no longer stored on the image host")
-	ErrStale            = errors.New("content changed after the change was submitted")
+	ErrStale            = errors.New("a record the change alters is no longer the one the change was submitted for")
 )
 
 type PlatformInput struct {

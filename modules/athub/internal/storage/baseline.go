@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -16,9 +18,11 @@ type baselineKey struct{}
 
 // WithBaseline makes Mutate apply a change that was rehearsed earlier, given
 // the baseline that rehearsal produced. Only what the change altered then is
-// written, everything else keeps what it holds now, and the change is refused
-// with ErrStale when what it altered has been changed since. An empty baseline
-// leaves ctx as it is, so the change is applied in full.
+// written, and everything else keeps what it holds now. What the change altered
+// is written over whatever it holds by now, so of two changes to the same field
+// the one applied later stands. The change is refused with ErrStale when a
+// record it alters is no longer the one it was rehearsed on: see permit. An
+// empty baseline leaves ctx as it is, so the change is applied in full.
 func WithBaseline(ctx context.Context, baseline []byte) context.Context {
 	if trimmed := bytes.TrimSpace(baseline); len(trimmed) == 0 || string(trimmed) == "null" {
 		return ctx
@@ -31,15 +35,15 @@ func WithBaseline(ctx context.Context, baseline []byte) context.Context {
 const baselineVersion = 1
 
 // A baseline lists the records a rehearsed change altered, among those that
-// existed before it. The host stores it and hands it back unread.
+// existed before it. The host stores it and hands it back. The host reads it
+// in two ways only: the keys of Novels tell which novels a queued change
+// touches, and SubmittedChanges describes what it does to one of them.
 type baselineDocument struct {
 	Version int                       `json:"v"`
 	Novels  map[int32][]baselineEntry `json:"novels,omitempty"`
 	Shared  []baselineEntry           `json:"shared,omitempty"`
 }
 
-// Later values are not kept: they are never compared, and the IDs a rehearsal
-// gave to what it created are not the ones the applied change will get.
 type baselineEntry struct {
 	Key    string `json:"key"`
 	Action string `json:"action"`
@@ -49,6 +53,12 @@ type baselineEntry struct {
 	// What the fields an update altered held before, or the whole removed
 	// record. Absent for a created record.
 	Before map[string]any `json:"before,omitempty"`
+	// What the fields an update altered hold afterwards, or the created record.
+	// Absent for a removed record. It is kept to show a queued change to people
+	// and is never compared. The IDs a rehearsal gave to what it created are not
+	// the ones the applied change will get, so a created record is kept without
+	// its own.
+	After map[string]any `json:"after,omitempty"`
 }
 
 // baselineRecords holds baseline entries by natural key.
@@ -61,9 +71,22 @@ type baseline struct {
 
 // These fields of a novel repeat names held by other records. They change when
 // an author, a platform or a tag is renamed, which is no change to the novel.
-var reflectedFields = map[string]map[string]bool{
-	"Novel": {"authorName": true, "platformName": true, "tagNames": true},
+// Each is given with the field of the novel that refers to those records.
+var reflectedFields = map[string]map[string]string{
+	"Novel": {"authorName": "authorId", "platformName": "platformId", "tagNames": "tagIds"},
 }
+
+func reflected(entity, field string) bool {
+	_, ok := reflectedFields[entity][field]
+	return ok
+}
+
+// The illustration layout of a novel is known by the novel alone.
+const layoutKey = "IllustrationLayout"
+
+// A novel has at most one of these records and never loses it, so storing it
+// for the first time and replacing it are the same act to a submitter.
+var singleRecords = map[string]bool{layoutKey: true}
 
 // naturalKey names a changed record by what a submitter knows it by. Rows a
 // rehearsal created were rolled back, so their IDs differ from the ones the
@@ -74,7 +97,7 @@ func naturalKey(change Change) string {
 		record = change.After
 	}
 	switch change.Entity {
-	case "Novel", "IllustrationLayout":
+	case "Novel", layoutKey:
 		return change.Entity
 	case "Volume", "Chapter":
 		return change.Entity + ":" + keyText(record["order"])
@@ -100,7 +123,7 @@ func orderKey(entity string, order int32) string {
 func alteredFields(change Change) map[string]any {
 	fields := make(map[string]any)
 	for name, value := range change.Before {
-		if reflectedFields[change.Entity][name] {
+		if reflected(change.Entity, name) {
 			continue
 		}
 		if next, ok := change.After[name]; !ok || !reflect.DeepEqual(value, next) {
@@ -108,8 +131,23 @@ func alteredFields(change Change) map[string]any {
 		}
 	}
 	for name := range change.After {
-		if _, ok := change.Before[name]; !ok && !reflectedFields[change.Entity][name] {
+		if _, ok := change.Before[name]; !ok && !reflected(change.Entity, name) {
 			fields[name] = nil
+		}
+	}
+	return fields
+}
+
+// laterFields returns what the fields an update altered hold afterwards. A
+// field that refers to other records comes with the names it then repeats.
+func laterFields(change Change, altered map[string]any) map[string]any {
+	fields := make(map[string]any, len(altered))
+	for name := range altered {
+		fields[name] = change.After[name]
+	}
+	for name, source := range reflectedFields[change.Entity] {
+		if _, ok := altered[source]; ok {
+			fields[name] = change.After[name]
 		}
 	}
 	return fields
@@ -120,15 +158,23 @@ func baselineEntries(changes []Change) []baselineEntry {
 	for _, change := range changes {
 		entry := baselineEntry{Key: naturalKey(change), Action: change.Action}
 		switch change.Action {
+		case "INSERT":
+			entry.After = make(map[string]any, len(change.After))
+			for name, value := range change.After {
+				if name != "id" {
+					entry.After[name] = value
+				}
+			}
 		case "UPDATE":
 			entry.ID, entry.Before = change.Before["id"], alteredFields(change)
 			if len(entry.Before) == 0 {
 				continue
 			}
+			entry.After = laterFields(change, entry.Before)
 		case "DELETE":
 			entry.Before = make(map[string]any, len(change.Before))
 			for name, value := range change.Before {
-				if !reflectedFields[change.Entity][name] {
+				if !reflected(change.Entity, name) {
 					entry.Before[name] = value
 				}
 			}
@@ -154,16 +200,24 @@ func encodeBaseline(novels map[int32][]Change, shared []Change) ([]byte, error) 
 	return json.Marshal(document)
 }
 
-// decodeBaseline reads values the way snapshot does, so that what a baseline
+// readBaseline reads values the way snapshot does, so that what a baseline
 // kept compares equal to the same record read again, however the host's
 // database has rewritten the document in between.
-func decodeBaseline(raw []byte) (*baseline, error) {
+func readBaseline(raw []byte) (baselineDocument, error) {
 	var document baselineDocument
 	if err := json.Unmarshal(raw, &document); err != nil {
-		return nil, fmt.Errorf("content baseline: %w", err)
+		return document, fmt.Errorf("content baseline: %w", err)
 	}
 	if document.Version != baselineVersion {
-		return nil, fmt.Errorf("content baseline has unsupported version %d", document.Version)
+		return document, fmt.Errorf("content baseline has unsupported version %d", document.Version)
+	}
+	return document, nil
+}
+
+func decodeBaseline(raw []byte) (*baseline, error) {
+	document, err := readBaseline(raw)
+	if err != nil {
+		return nil, err
 	}
 	index := func(entries []baselineEntry) baselineRecords {
 		records := make(baselineRecords, len(entries))
@@ -177,6 +231,49 @@ func decodeBaseline(raw []byte) (*baseline, error) {
 		result.novels[id] = index(entries)
 	}
 	return result, nil
+}
+
+// SubmittedChange is one record of a novel that a queued change alters, as the
+// baseline of that change describes it.
+type SubmittedChange struct {
+	Entity string `json:"entity"`
+	Action string `json:"action"`
+	// The row an update alters or a removal removes.
+	ID any `json:"id,omitempty"`
+	// The fields an update alters.
+	Fields []string `json:"fields,omitempty"`
+	// What those fields become, or the record that is created, without the ID
+	// it will get. Absent for a removal, and for a change that was queued
+	// before later values were kept.
+	After map[string]any `json:"after,omitempty"`
+}
+
+// SubmittedChanges tells what the change a baseline belongs to does to one
+// novel, so that a queued change can be shown before it is applied. The result
+// is empty when the change leaves the novel alone.
+func SubmittedChanges(raw []byte, novelID int32) ([]SubmittedChange, error) {
+	document, err := readBaseline(raw)
+	if err != nil {
+		return nil, err
+	}
+	entries := document.Novels[novelID]
+	changes := make([]SubmittedChange, 0, len(entries))
+	for _, entry := range entries {
+		entity, _, _ := strings.Cut(entry.Key, ":")
+		change := SubmittedChange{Entity: entity, Action: entry.Action, ID: entry.ID, After: entry.After}
+		switch entry.Action {
+		case "UPDATE":
+			change.Fields = make([]string, 0, len(entry.Before))
+			for name := range entry.Before {
+				change.Fields = append(change.Fields, name)
+			}
+			sort.Strings(change.Fields)
+		case "DELETE":
+			change.ID = entry.Before["id"]
+		}
+		changes = append(changes, change)
+	}
+	return changes, nil
 }
 
 // permits reports whether a change may be applied under this baseline, given
@@ -194,9 +291,31 @@ func (b *baseline) permits(novels map[int32][]Change, shared []Change) bool {
 	return true
 }
 
-// permit reports whether each change is one the rehearsal made as well, to a
-// record that still holds what the rehearsal found in the fields it alters. A
-// change of the rehearsal that is not made now is no objection: someone made
+func (r baselineRecords) find(key, action string) *baselineEntry {
+	for i := range r[key] {
+		if r[key][i].Action == action {
+			return &r[key][i]
+		}
+	}
+	return nil
+}
+
+// permit reports whether each change is one the rehearsal made as well, to the
+// record the rehearsal made it to. What a field holds by now is no objection
+// to an update: the change writes the fields its rehearsal altered over
+// whatever they hold, so of two changes to the same field the one applied
+// later stands. A change is refused when
+//
+//   - it creates a record where the rehearsal found one, or updates a record
+//     where the rehearsal created one: what the rehearsal found was removed,
+//     or the place it filled was taken, in the meantime;
+//   - it updates another row than the rehearsal did: the record was removed
+//     and created again;
+//   - it alters a field the rehearsal left alone, the hash and the length of a
+//     chapter's body counting as one;
+//   - it removes a record that no longer holds what the rehearsal found.
+//
+// A change of the rehearsal that is not made now is no objection: someone made
 // it in the meantime, or what it removed is already gone.
 func (r baselineRecords) permit(changes []Change) bool {
 	for _, change := range changes {
@@ -206,14 +325,14 @@ func (r baselineRecords) permit(changes []Change) bool {
 				continue
 			}
 		}
-		var entry *baselineEntry
-		for i := range r[naturalKey(change)] {
-			if candidate := &r[naturalKey(change)][i]; candidate.Action == change.Action {
-				entry = candidate
-				break
-			}
-		}
+		key := naturalKey(change)
+		entry := r.find(key, change.Action)
 		if entry == nil {
+			if change.Action == "UPDATE" && singleRecords[change.Entity] && r.find(key, "INSERT") != nil {
+				// The rehearsal stored the record for the first time, and
+				// someone else has stored one since.
+				continue
+			}
 			return false
 		}
 		switch change.Action {
@@ -221,10 +340,16 @@ func (r baselineRecords) permit(changes []Change) bool {
 			if !reflect.DeepEqual(change.Before["id"], entry.ID) {
 				return false
 			}
-			for name, value := range altered {
-				if submitted, ok := entry.Before[name]; !ok || !reflect.DeepEqual(value, submitted) {
-					return false
+			for name := range altered {
+				if _, ok := entry.Before[name]; ok {
+					continue
 				}
+				// The rehearsal rewrote the body as well, over another one,
+				// which the new body differed from in other respects.
+				if change.Entity == "Chapter" && bodyFields[name] && rewritesBody(entry.Before) {
+					continue
+				}
+				return false
 			}
 		case "DELETE":
 			// A field the baseline does not know was added to the records later.
@@ -252,6 +377,20 @@ func (r baselineRecords) altered(key string) (fields map[string]any, whole bool)
 	return entries[0].Before, false
 }
 
+// A snapshot never reads the body of a chapter. It holds the hash and the
+// length of the body instead, so a change that rewrites the body alters one of
+// them or both, depending on the body it is written over.
+var bodyFields = map[string]bool{"contentHash": true, "contentLength": true}
+
+func rewritesBody(altered map[string]any) bool {
+	for name := range bodyFields {
+		if _, ok := altered[name]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 // keptChapter tells which parts of a chapter a rehearsed change left alone.
 type keptChapter struct{ title, volume, body bool }
 
@@ -263,9 +402,7 @@ func (r baselineRecords) keptChapter(order int32) (kept keptChapter, ok bool) {
 	}
 	_, title := altered["title"]
 	_, volume := altered["volumeId"]
-	_, hash := altered["contentHash"]
-	_, length := altered["contentLength"]
-	return keptChapter{title: !title, volume: !volume, body: !hash && !length}, true
+	return keptChapter{title: !title, volume: !volume, body: !rewritesBody(altered)}, true
 }
 
 // keptVolume reports whether the rehearsal left the title of a volume alone.

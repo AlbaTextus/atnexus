@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useTransitionRouter } from "next-view-transitions"
-import { Check, Loader2, Pencil, X } from "lucide-react"
+import { Check, Clock3, Loader2, Pencil, X } from "lucide-react"
 import { useNovelAccess } from "@/components/novel/novel-access"
 import { NovelInlineSelect } from "@/components/novel/novel-inline-select"
 import { NovelAuthorField, NovelTagsField } from "@/components/novel/novel-reference-fields"
@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { api } from "@/lib/api"
 import { contentErrorMessage } from "@/lib/athub/athub-errors"
+import { pendingFieldChanges, pendingNovelDeletes, pendingTime, readPendingChanges, type PendingChange } from "@/lib/athub/athub-pending"
 import { allowsEndpoint, type RolePolicy } from "@/lib/athub/athub-permissions"
 import { novelStatus, safeContentURL, type ContentAuthor, type ContentPlatform, type ContentTag, type Novel } from "@/lib/athub/athub-client"
 import { readAllContent, type NovelDetailModel } from "@/lib/novel/novel-view-models"
@@ -39,6 +40,7 @@ const labels: Record<NovelEditField, string> = {
   title: "作品名称", authorId: "作者", platformId: "来源平台", status: "连载状态",
   tagIds: "标签", summary: "简介", coverUrl: "封面链接",
 }
+export { labels as novelFieldLabels }
 
 type LayoutEditorActions = { dirty: boolean; busy: boolean; save: () => Promise<"saved" | "pending" | null>; cancel: () => void }
 type Editor = {
@@ -51,6 +53,12 @@ type Editor = {
   catalog: Catalog | null
   draft: Draft | null
   preview: Partial<NovelDetailModel> | null
+  // The submissions awaiting review that alter this novel, read on entering
+  // edit mode. They are shown next to what they alter and do not limit editing.
+  pending: PendingChange[]
+  pendingLoading: boolean
+  pendingError: string
+  refreshPending: () => Promise<void>
   error: string
   notice: string
   dirty: boolean
@@ -64,6 +72,11 @@ type Editor = {
 }
 const Context = createContext<Editor | null>(null)
 export const useNovelEditor = () => useContext(Context)
+// The submissions awaiting review that alter one field, shown in edit mode.
+export function useNovelPending(field: NovelEditField) {
+  const editor = useNovelEditor()
+  return editor?.mode ? pendingFieldChanges(editor.pending, field) : []
+}
 
 export function NovelEditorProvider({ id, children }: { id: number; children: ReactNode }) {
   const { request } = useNovelAccess()
@@ -74,12 +87,16 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
   const [active, setActive] = useState<NovelEditField | null>(null)
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
+  const [pending, setPending] = useState<PendingChange[]>([])
+  const [pendingLoading, setPendingLoading] = useState(false)
+  const [pendingError, setPendingError] = useState("")
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const starting = useRef(false)
   const submitting = useRef(false)
   const fieldSnapshot = useRef<Draft | null>(null)
   const controller = useRef<AbortController | null>(null)
+  const pendingController = useRef<AbortController | null>(null)
   const layout = useRef<LayoutEditorActions | null>(null)
   const [layoutState, setLayoutState] = useState({ dirty: false, busy: false })
   const registerLayout = useCallback((actions: LayoutEditorActions | null) => {
@@ -101,7 +118,7 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
     api<RolePolicy>("/api/v1/account/athub/permissions", { signal: abort.signal, cache: "no-store" })
       .then(value => { if (!abort.signal.aborted) setPolicy(value) })
       .catch(() => { /* Entering edit mode retries the permission read. */ })
-    return () => { abort.abort(); controller.current?.abort() }
+    return () => { abort.abort(); controller.current?.abort(); pendingController.current?.abort() }
   }, [])
 
   useEffect(() => {
@@ -110,6 +127,24 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
     window.addEventListener("beforeunload", leave)
     return () => window.removeEventListener("beforeunload", leave)
   }, [dirty])
+
+  const refreshPending = useCallback(async () => {
+    if (!controller.current || controller.current.signal.aborted) return
+    pendingController.current?.abort()
+    const abort = new AbortController()
+    pendingController.current = abort
+    setPendingLoading(true); setPendingError("")
+    try {
+      const changes = await readPendingChanges(id, abort.signal)
+      if (!abort.signal.aborted) setPending(changes)
+    } catch (reason) {
+      if (!abort.signal.aborted) setPendingError(contentErrorMessage(reason, "待合并的改动加载失败。", {
+        403: "无法读取待合并的改动，编辑权限可能已变化。",
+      }))
+    } finally {
+      if (!abort.signal.aborted) setPendingLoading(false)
+    }
+  }, [id])
 
   async function begin(field?: NovelEditField) {
     if (starting.current || submitting.current) return
@@ -121,15 +156,20 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
       return
     }
     starting.current = true
+    controller.current?.abort()
+    pendingController.current?.abort()
     const abort = new AbortController()
     controller.current = abort
     setMode(true); setLoading(true); setError(""); setNotice("")
+    setPendingLoading(false); setPendingError("")
     try {
       const permissions = await api<RolePolicy>("/api/v1/account/athub/permissions", { signal: abort.signal, cache: "no-store" })
       if (abort.signal.aborted) return
       setPolicy(permissions)
       if (!canManage(permissions)) throw new Error("当前账户没有可用的编辑权限。")
       if (field && !canEdit(permissions)) throw new Error("当前账户没有编辑作品资料的权限。")
+      // Pending changes are informational and also visible to illustration-only editors.
+      void refreshPending()
       if (!canEdit(permissions)) return
       const [book, authors, platforms, tags] = await Promise.all([
         request<Novel>(`/api/v5/novelinfo?id=${id}`, abort.signal),
@@ -145,8 +185,7 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
     } catch (reason) {
       if (!abort.signal.aborted) setError(reason instanceof Error ? reason.message : "作品资料加载失败，请重试。")
     } finally {
-      starting.current = false
-      if (!abort.signal.aborted) setLoading(false)
+      if (!abort.signal.aborted) { starting.current = false; setLoading(false) }
     }
   }
 
@@ -171,11 +210,17 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
     }
     setActive(null)
   }
+  function finishEditing() {
+    controller.current?.abort()
+    pendingController.current?.abort()
+    starting.current = false
+    setMode(false); setActive(null); setDraft(null); setCatalog(null); setPending([]); setLoading(false); setError("")
+    setPendingLoading(false); setPendingError("")
+  }
   function cancel() {
     if (submitting.current || layout.current?.busy) return
     layout.current?.cancel()
-    controller.current?.abort()
-    setMode(false); setActive(null); setDraft(null); setCatalog(null); setLoading(false); setError("")
+    finishEditing()
   }
   async function save() {
     if (submitting.current || layout.current?.busy) return
@@ -189,9 +234,10 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
       layoutPending = outcome === "pending"
       if (!metadataDirty) {
         setNotice(layoutPending ? "插图布局已提交审核，通过后生效。" : "插图布局已保存。")
-        setMode(false); setActive(null); setDraft(null); setCatalog(null)
+        finishEditing()
         return
       }
+      if (layoutPending) void refreshPending()
     }
     if (!draft || !catalog || !policy || !canEdit(policy) || !metadataDirty) return
     setError("")
@@ -226,7 +272,7 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
         throw new Error("未能确认提交结果，请刷新查看后再操作。")
       }
       setNotice("review_id" in response || layoutPending ? "已提交审核，通过后生效。" : "作品资料已保存。")
-      setMode(false); setActive(null); setDraft(null); setCatalog(null)
+      finishEditing()
     } catch (reason) {
       setError(contentErrorMessage(reason, "未能确认提交结果，请刷新查看后再操作。", {
         400: "作品资料未通过校验，请检查后重试。",
@@ -250,7 +296,8 @@ export function NovelEditorProvider({ id, children }: { id: number; children: Re
     synopsis: draft.summary?.split(/\r?\n/).filter(line => line.trim()) || [],
   } : null
   return <Context.Provider value={{
-    mode, loading, busy: busy || layoutState.busy, active, allowed: Boolean(policy && canEdit(policy)), policy, catalog, draft, preview,
+    mode, loading, busy: busy || layoutState.busy, active, allowed: Boolean(policy && canEdit(policy)), policy, catalog, draft, preview, pending,
+    pendingLoading, pendingError, refreshPending,
     error, notice, dirty, layoutDirty: layoutState.dirty, registerLayout, begin, change, closeField, cancel, save,
   }}>{children}</Context.Provider>
 }
@@ -274,10 +321,17 @@ export function NovelEdit() {
 export function NovelEditToolbar() {
   const editor = useNovelEditor()
   if (!editor) return null
+  const deletes = editor.mode ? pendingNovelDeletes(editor.pending) : []
   return <NovelAutoHeight open={editor.mode || Boolean(editor.notice)} className="novel-inline-toolbar-motion">
   <div className="novel-inline-toolbar" aria-label="作品编辑操作">
     <div className="novel-inline-feedback">
       {editor.mode && <span>{editor.loading ? "正在加载编辑资料…" : "编辑模式"}</span>}
+      {deletes.length > 0 && <div className="novel-pending-removal">
+        <span className="novel-pending-notice"><Clock3 aria-hidden="true" />这部作品有待审核的删除申请</span>
+        <ul className="novel-pending-times">{deletes.map(({ key, createdAt }) => <li key={key}><time dateTime={createdAt}>{pendingTime(createdAt)}</time></li>)}</ul>
+      </div>}
+      {editor.mode && editor.pendingLoading && <span role="status">正在加载待合并的改动…</span>}
+      {editor.mode && editor.pendingError && <span role="alert">{editor.pendingError} <Button variant="ghost" size="sm" onClick={() => { void editor.refreshPending() }}>重试待合并改动</Button></span>}
       {editor.error && <span role="alert">{editor.error} {!editor.draft && !editor.loading && <Button variant="ghost" size="sm" onClick={() => editor.begin()}>重试</Button>}</span>}
       {editor.notice && <span role="status">{editor.notice}</span>}
     </div>
@@ -303,6 +357,7 @@ export function NovelEditable({ field, children, block = false, viewAction }: {
   const editable = Boolean(editor?.mode && editor.allowed && !editor.loading && editor.draft)
   const Element = block ? "div" : "span"
   const active = Boolean(editor?.mode && editor.active === field && editor.draft && editor.catalog)
+  const pending = useNovelPending(field).length > 0
   useEffect(() => {
     if (active) host.current?.querySelector<HTMLElement>("input, textarea, select, button")?.focus({ preventScroll: true })
   }, [active])
@@ -310,7 +365,7 @@ export function NovelEditable({ field, children, block = false, viewAction }: {
   if (!editor) return children
   const start = () => { if (timer.current) clearTimeout(timer.current); editor.begin(field) }
   return <Element ref={host} className={`novel-inline-field${block ? " is-block" : ""}`}
-    data-editable={editable || undefined} data-active={active || undefined}
+    data-editable={editable || undefined} data-active={active || undefined} data-pending={pending || undefined}
     role={!active && editable ? "button" : undefined}
     tabIndex={!active && editable ? 0 : undefined}
     aria-label={!active && editable ? `编辑${labels[field]}` : undefined}

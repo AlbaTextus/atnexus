@@ -48,6 +48,7 @@ func testBaselineIntegration(t *testing.T, ctx context.Context, st *Postgres) {
 	t.Run("volumes", s.volumes)
 	t.Run("catalog records", s.catalogRecords)
 	t.Run("illustration deletion", s.illustrationDeletion)
+	t.Run("illustration layouts", s.illustrationLayouts)
 	t.Run("documents", s.documents)
 	t.Run("receipts", s.receipts)
 }
@@ -196,7 +197,9 @@ func (s *baselineSuite) novelFields(t *testing.T) {
 		t.Fatalf("change without a baseline not applied in full: %+v %v", got, err)
 	}
 
-	// The same kind of edit is refused once someone else has changed the title.
+	// The same kind of edit is written over a title someone else has given the
+	// novel since: of two changes to one field the one applied later stands. The
+	// summary it did not alter keeps what it was given since.
 	other := s.novel(t, form)
 	change = func(ctx context.Context) error { _, err := st.UpdateNovel(ctx, other.ID, edit); return err }
 	baseline = s.rehearse(t, change)
@@ -205,15 +208,60 @@ func (s *baselineSuite) novelFields(t *testing.T) {
 	if _, err := st.UpdateNovel(ctx, other.ID, renamed); err != nil {
 		t.Fatal(err)
 	}
-	s.refused(t, baseline, change)
-	if got, err := st.GetNovel(ctx, other.ID); err != nil || got.Title != renamed.Title || got.Summary == nil || *got.Summary != second {
-		t.Fatalf("refused change altered the novel: %+v %v", got, err)
+	changes = s.applied(t, baseline, change)
+	if got, err := st.GetNovel(ctx, other.ID); err != nil || got.Title != edit.Title || got.Summary == nil || *got.Summary != second {
+		t.Fatalf("title not written over the newer one, or newer summary lost: %+v %v", got, err)
 	}
+	// History shows the title that was written over.
+	if len(changes) != 1 || !reflect.DeepEqual(differing(changes[0]), []string{"title"}) || changes[0].Before["title"] != renamed.Title {
+		t.Fatalf("recorded more than the title, or not the title it replaced: %+v", changes)
+	}
+	// Without a baseline the form also clears the summary, which it never held.
 	if err := st.Mutate(ctx, change); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := st.GetNovel(ctx, other.ID); err != nil || got.Title != edit.Title || got.Summary != nil {
 		t.Fatalf("change without a baseline not applied in full: %+v %v", got, err)
+	}
+
+	// Every field an edit altered is written over what the field holds by now:
+	// here the summary it cleared, and the cover, the status and the tags it
+	// replaced. The title it left alone keeps what it was given since.
+	ours, err := st.CreateTag(ctx, TagInput{Name: "baseline tag of the submitter"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := st.CreateTag(ctx, TagInput{Name: "baseline tag of someone else"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary, third := "Summary", "https://images.example.test/third.jpg"
+	held := NovelInput{PlatformID: s.platform, Title: "Contested", Summary: &summary, CoverURL: &first, Status: "ONGOING", TagIDs: []int32{}}
+	contested := s.novel(t, held)
+	revised := held
+	revised.Summary, revised.CoverURL, revised.Status, revised.TagIDs = nil, &second, "COMPLETED", []int32{ours.ID}
+	change = func(ctx context.Context) error { _, err := st.UpdateNovel(ctx, contested.ID, revised); return err }
+	baseline = s.rehearse(t, change)
+	// The baseline tells what the edit makes of each field, for showing the
+	// edit while it waits.
+	queued, err := SubmittedChanges(baseline, contested.ID)
+	if want := []SubmittedChange{{Entity: "Novel", Action: "UPDATE", ID: float64(contested.ID), Fields: []string{"coverUrl", "status", "summary", "tagIds"},
+		After: map[string]any{"coverUrl": second, "status": "COMPLETED", "summary": nil, "tagIds": []any{float64(ours.ID)}, "tagNames": []any{ours.Name}}}}; err != nil || !reflect.DeepEqual(queued, want) {
+		t.Fatalf("queued edit: %+v %v, want %+v", queued, err, want)
+	}
+	theirSummary := "Summary by someone else"
+	if _, err := st.UpdateNovel(ctx, contested.ID, NovelInput{PlatformID: s.platform, Title: "Contested, retitled by someone else",
+		Summary: &theirSummary, CoverURL: &third, Status: "ABANDONED", TagIDs: []int32{theirs.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	changes = s.applied(t, baseline, change)
+	if len(changes) != 1 || !reflect.DeepEqual(differing(changes[0]), []string{"coverUrl", "status", "summary", "tagIds", "tagNames"}) {
+		t.Fatalf("recorded other fields than the edit altered: %+v", changes)
+	}
+	got, err = st.GetNovel(ctx, contested.ID)
+	if err != nil || got.Title != "Contested, retitled by someone else" || got.Summary != nil || got.CoverURL == nil || *got.CoverURL != second ||
+		got.Status != "COMPLETED" || !reflect.DeepEqual(got.TagIDs, []int32{ours.ID}) {
+		t.Fatalf("altered fields not written over the newer ones, or newer title lost: %+v %v", got, err)
 	}
 
 	// A change that altered nothing when it was submitted alters nothing when
@@ -338,23 +386,69 @@ func (s *baselineSuite) chapters(t *testing.T) {
 		t.Fatalf("recorded more than the title: %+v", changes)
 	}
 
-	// A new body is refused when the body was rewritten in the meantime.
+	// A new body is written over a body that was rewritten in the meantime: of
+	// two changes to one body the one applied later stands.
 	current := s.chapter(t, novel.ID, 1).ChapterInput
 	edit = current
-	edit.Content = "Body revised by the submitter\n"
+	edit.Content = "Body revised by the submitter, at some length\n"
 	baseline = s.rehearse(t, change)
 	rewritten = current
 	rewritten.Content = "Body rewritten once more\n"
 	s.save(t, rewritten)
-	s.refused(t, baseline, change)
-	if got := s.chapter(t, novel.ID, 1); got.Content != rewritten.Content {
-		t.Fatalf("refused change altered the body: %+v", got)
+	changes = s.applied(t, baseline, change)
+	if got := s.chapter(t, novel.ID, 1); got.Content != edit.Content || got.Title != current.Title {
+		t.Fatalf("body not written over the newer one: %+v", got)
+	}
+	if len(changes) != 1 || !reflect.DeepEqual(differing(changes[0]), []string{"contentHash", "contentLength"}) || len(changes[0].BodyDiff) == 0 {
+		t.Fatalf("body change not recorded on its own: %+v", changes)
 	}
 
-	// It is applied when only the title was changed in the meantime, and
-	// leaves that title alone.
+	// A body is known by its hash and its length. Rewritten into a body of the
+	// same length, it alters the hash alone when it is rehearsed, and the length
+	// as well once the body it is written over has another length.
+	current = s.chapter(t, novel.ID, 1).ChapterInput
+	edit = current
+	edit.Content = strings.Replace(current.Content, "revised", "amended", 1)
+	if edit.Content == current.Content || len(edit.Content) != len(current.Content) {
+		t.Fatalf("body %q is no rewrite of the same length", edit.Content)
+	}
 	baseline = s.rehearse(t, change)
-	retitled := rewritten
+	if queued, err := SubmittedChanges(baseline, novel.ID); err != nil || len(queued) != 1 || !reflect.DeepEqual(queued[0].Fields, []string{"contentHash"}) {
+		t.Fatalf("rewrite of the same length: %+v %v", queued, err)
+	}
+	rewritten = current
+	rewritten.Content = "Shortened by someone else\n"
+	s.save(t, rewritten)
+	changes = s.applied(t, baseline, change)
+	if got := s.chapter(t, novel.ID, 1); got.Content != edit.Content {
+		t.Fatalf("body not written over a newer one of another length: %+v", got)
+	}
+	if len(changes) != 1 || !reflect.DeepEqual(differing(changes[0]), []string{"contentHash", "contentLength"}) {
+		t.Fatalf("body change not recorded on its own: %+v", changes)
+	}
+	// The other way round, a longer body alters the hash alone once the body
+	// it is written over is that long.
+	current = s.chapter(t, novel.ID, 1).ChapterInput
+	edit = current
+	edit.Content = current.Content + "And one more line\n"
+	baseline = s.rehearse(t, change)
+	rewritten = current
+	rewritten.Content = strings.Repeat("x", len(edit.Content)-1) + "\n"
+	s.save(t, rewritten)
+	changes = s.applied(t, baseline, change)
+	if got := s.chapter(t, novel.ID, 1); got.Content != edit.Content {
+		t.Fatalf("body not written over a newer one of the same length: %+v", got)
+	}
+	if len(changes) != 1 || !reflect.DeepEqual(differing(changes[0]), []string{"contentHash"}) {
+		t.Fatalf("body change not recorded on its own: %+v", changes)
+	}
+
+	// A new body leaves alone a title the chapter was given in the meantime.
+	current = s.chapter(t, novel.ID, 1).ChapterInput
+	edit = current
+	edit.Content = "Body revised by the submitter once more\n"
+	baseline = s.rehearse(t, change)
+	retitled := current
 	retitled.Title = "Retitled by someone else"
 	s.save(t, retitled)
 	changes = s.applied(t, baseline, change)
@@ -363,6 +457,28 @@ func (s *baselineSuite) chapters(t *testing.T) {
 	}
 	if len(changes) != 1 || len(changes[0].BodyDiff) == 0 || strings.Contains(strings.Join(differing(changes[0]), " "), "title") {
 		t.Fatalf("body change not recorded on its own: %+v", changes)
+	}
+
+	// A new title is written over a title the chapter was given in the
+	// meantime, and a chapter taken out of its volume leaves the volume it was
+	// moved to since. The body keeps what it holds.
+	current = s.chapter(t, novel.ID, 1).ChapterInput
+	edit = current
+	edit.Title, edit.VolumeID = "Retitled by the submitter", nil
+	baseline = s.rehearse(t, change)
+	elsewhere, err := st.SaveVolume(ctx, VolumeInput{NovelID: novel.ID, Order: 2, Title: "Another volume"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := current
+	moved.Title, moved.VolumeID, moved.Content = "Retitled by someone else, again", &elsewhere.ID, "Body rewritten after the retitling\n"
+	s.save(t, moved)
+	changes = s.applied(t, baseline, change)
+	if got := s.chapter(t, novel.ID, 1); got.Title != edit.Title || got.VolumeID != nil || got.Content != moved.Content {
+		t.Fatalf("title or volume not written over the newer ones, or newer body lost: %+v", got)
+	}
+	if len(changes) != 1 || !reflect.DeepEqual(differing(changes[0]), []string{"title", "volumeId"}) || changes[0].Before["title"] != moved.Title || len(changes[0].BodyDiff) != 0 {
+		t.Fatalf("recorded more than the title and the volume, or not the title it replaced: %+v", changes)
 	}
 
 	// A chapter that was removed and written anew is another chapter, even
@@ -685,18 +801,49 @@ func (s *baselineSuite) volumes(t *testing.T) {
 	}
 	title("Renamed by someone else")
 
+	// A new title is written over one the volume was given in the meantime.
 	input.Title = "Renamed by the submitter"
 	baseline = s.rehearse(t, change)
 	if _, err := st.SaveVolume(ctx, VolumeInput{NovelID: novel.ID, Order: 1, Title: "Renamed again by someone else"}); err != nil {
 		t.Fatal(err)
 	}
-	s.refused(t, baseline, change)
-	title("Renamed again by someone else")
-	baseline = s.rehearse(t, change)
-	if changes := s.applied(t, baseline, change); !reflect.DeepEqual(actions(changes), []string{"Volume UPDATE"}) {
-		t.Fatalf("rename not recorded: %+v", changes)
+	changes := s.applied(t, baseline, change)
+	if !reflect.DeepEqual(actions(changes), []string{"Volume UPDATE"}) || changes[0].Before["title"] != "Renamed again by someone else" {
+		t.Fatalf("rename not recorded over the newer title: %+v", changes)
 	}
 	title(input.Title)
+
+	// A volume that was removed is not brought back, and one that was removed
+	// and created again is another volume.
+	input.Title = "Renamed by the submitter again"
+	baseline = s.rehearse(t, change)
+	if err := st.DeleteVolume(ctx, novel.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	s.refused(t, baseline, change)
+	if _, err := st.GetVolume(ctx, novel.ID, 1); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("refused change brought a removed volume back: %v", err)
+	}
+	if _, err := st.SaveVolume(ctx, VolumeInput{NovelID: novel.ID, Order: 1, Title: "Created again by someone else"}); err != nil {
+		t.Fatal(err)
+	}
+	s.refused(t, baseline, change)
+	title("Created again by someone else")
+
+	// A new volume is refused when someone else has taken its place.
+	added := VolumeInput{NovelID: novel.ID, Order: 2, Title: "Volume two"}
+	add := func(ctx context.Context) error { _, err := st.SaveVolume(ctx, added); return err }
+	baseline = s.rehearse(t, add)
+	if _, err := st.GetVolume(ctx, novel.ID, 2); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("rehearsal kept the volume: %v", err)
+	}
+	if _, err := st.SaveVolume(ctx, VolumeInput{NovelID: novel.ID, Order: 2, Title: "Someone else's volume two"}); err != nil {
+		t.Fatal(err)
+	}
+	s.refused(t, baseline, add)
+	if got, err := st.GetVolume(ctx, novel.ID, 2); err != nil || got.Title != "Someone else's volume two" {
+		t.Fatalf("refused change overwrote the other volume: %+v %v", got, err)
+	}
 
 	remove := func(ctx context.Context) error { return st.DeleteVolume(ctx, novel.ID, 1) }
 	baseline = s.rehearse(t, remove)
@@ -748,14 +895,25 @@ func (s *baselineSuite) catalogRecords(t *testing.T) {
 		}
 	}
 
+	// A new name is written over one the tag was given in the meantime: of two
+	// renames the one applied later stands.
 	name.Name = "baseline tag, submitted again"
 	baseline = s.rehearse(t, rename)
 	if _, err := st.UpdateTag(ctx, tag.ID, TagInput{Name: "baseline tag, by someone else"}); err != nil {
 		t.Fatal(err)
 	}
-	s.refused(t, baseline, rename)
-	tagName("baseline tag, by someone else")
+	changes = s.applied(t, baseline, rename)
+	tagName(name.Name)
+	if len(changes) != 2 {
+		t.Fatalf("tag rename history: %+v", changes)
+	}
+	for _, change := range changes {
+		if !reflect.DeepEqual(differing(change), []string{"tagNames"}) || !reflect.DeepEqual(change.Before["tagNames"], []any{"baseline tag, by someone else"}) {
+			t.Fatalf("tag rename not recorded over the newer name: %+v", change)
+		}
+	}
 
+	// Removing a tag is refused once the tag is no longer what was removed.
 	unused, err := st.CreateTag(ctx, TagInput{Name: "baseline unused tag"})
 	if err != nil {
 		t.Fatal(err)
@@ -784,17 +942,17 @@ func (s *baselineSuite) catalogRecords(t *testing.T) {
 	}
 	signed := s.novel(t, NovelInput{Title: "Signed", AuthorID: &author.ID})
 	sign := func(ctx context.Context) error { _, err := st.UpdateAuthorName(ctx, author.ID, &submitted); return err }
+	// The new name of an author is written over a newer one in the same way.
 	baseline = s.rehearse(t, sign)
+	if got, err := st.GetAuthor(ctx, author.ID); err != nil || got.Name == nil || *got.Name != penName {
+		t.Fatalf("rehearsal renamed the author: %+v %v", got, err)
+	}
 	if _, err := st.UpdateAuthorName(ctx, author.ID, &theirs); err != nil {
 		t.Fatal(err)
 	}
-	s.refused(t, baseline, sign)
-	if got, err := st.GetAuthor(ctx, author.ID); err != nil || got.Name == nil || *got.Name != theirs {
-		t.Fatalf("refused rename altered the author: %+v %v", got, err)
-	}
-	baseline = s.rehearse(t, sign)
 	changes = s.applied(t, baseline, sign)
-	if len(changes) != 1 || !reflect.DeepEqual(differing(changes[0]), []string{"authorName"}) || s.recorded[len(s.recorded)-1][0].NovelID != signed.ID {
+	if len(changes) != 1 || !reflect.DeepEqual(differing(changes[0]), []string{"authorName"}) || changes[0].Before["authorName"] != theirs ||
+		s.recorded[len(s.recorded)-1][0].NovelID != signed.ID {
 		t.Fatalf("author rename history: %+v", changes)
 	}
 	if got, err := st.GetAuthor(ctx, author.ID); err != nil || got.Name == nil || *got.Name != submitted {
@@ -805,7 +963,7 @@ func (s *baselineSuite) catalogRecords(t *testing.T) {
 func (s *baselineSuite) illustrationDeletion(t *testing.T) {
 	st, ctx := s.st, s.ctx
 	novel := s.novel(t, NovelInput{Title: "Illustrated"})
-	var images [2]Illustration
+	var stored [2]Illustration
 	for i, digest := range []string{"c", "d"} {
 		image, err := st.AddIllustration(ctx, novel.ID, IllustrationInput{
 			URL: "https://images.example.test/" + digest + ".jpg", SHA256: strings.Repeat(digest, 64), Width: 320, Height: 240,
@@ -813,42 +971,81 @@ func (s *baselineSuite) illustrationDeletion(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		images[i] = image
+		stored[i] = image
 	}
 	layout, err := st.SaveIllustrationLayout(ctx, novel.ID, IllustrationLayout{Blocks: []IllustrationBlock{
-		{ImageID: images[0].ID, X: 0, Y: 0, Width: 0.5, Height: 0.25},
-		{ImageID: images[1].ID, X: 0.5, Y: 0, Width: 0.5, Height: 0.25},
+		{ImageID: stored[0].ID, X: 0, Y: 0, Width: 0.5, Height: 0.25},
+		{ImageID: stored[1].ID, X: 0.5, Y: 0, Width: 0.5, Height: 0.25},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	remove := func(ctx context.Context) error { return st.DeleteIllustration(ctx, novel.ID, images[0].ID) }
+	remove := func(id int32) func(context.Context) error {
+		return func(ctx context.Context) error { return st.DeleteIllustration(ctx, novel.ID, id) }
+	}
+	images := func(want int) {
+		t.Helper()
+		if got, err := st.ListIllustrations(ctx, novel.ID, 100, 0); err != nil || len(got) != want {
+			t.Fatalf("images %+v %v, want %d", got, err, want)
+		}
+	}
 
-	// Removing an image rewrites the layout that shows it. A layout that was
-	// rearranged in the meantime is not the one the submitter saw.
-	baseline := s.rehearse(t, remove)
+	// Removing an image rewrites the layout that shows it. The image is taken
+	// out of the layout as it is by now, however it was rearranged in the
+	// meantime.
+	baseline := s.rehearse(t, remove(stored[0].ID))
+	images(2)
 	rearranged, err := st.SaveIllustrationLayout(ctx, novel.ID, IllustrationLayout{Revision: layout.Revision, Blocks: []IllustrationBlock{
-		{ImageID: images[1].ID, X: 0, Y: 0, Width: 1, Height: 0.5},
-		{ImageID: images[0].ID, X: 0, Y: 0.5, Width: 1, Height: 0.5},
+		{ImageID: stored[1].ID, X: 0, Y: 0, Width: 1, Height: 0.5},
+		{ImageID: stored[0].ID, X: 0, Y: 0.5, Width: 1, Height: 0.5},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.refused(t, baseline, remove)
-	if got, err := st.GetIllustrationLayout(ctx, novel.ID); err != nil || got.Revision != rearranged.Revision || len(got.Blocks) != 2 {
-		t.Fatalf("refused removal altered the layout: %+v %v", got, err)
-	}
-	if got, err := st.ListIllustrations(ctx, novel.ID, 100, 0); err != nil || len(got) != 2 {
-		t.Fatalf("refused removal altered the images: %+v %v", got, err)
-	}
-
-	baseline = s.rehearse(t, remove)
-	if changes := s.applied(t, baseline, remove); !reflect.DeepEqual(actions(changes), []string{"Illustration DELETE", "IllustrationLayout UPDATE"}) {
+	if changes := s.applied(t, baseline, remove(stored[0].ID)); !reflect.DeepEqual(actions(changes), []string{"Illustration DELETE", "IllustrationLayout UPDATE"}) {
 		t.Fatalf("removal not recorded: %+v", changes)
 	}
-	if got, err := st.GetIllustrationLayout(ctx, novel.ID); err != nil || len(got.Blocks) != 1 || got.Blocks[0].ImageID != images[1].ID || got.Blocks[0].Height != 0.5 {
-		t.Fatalf("layout after removal: %+v %v", got, err)
+	current, err := st.GetIllustrationLayout(ctx, novel.ID)
+	if err != nil || current.Revision != rearranged.Revision+1 || len(current.Blocks) != 1 || current.Blocks[0].ImageID != stored[1].ID || current.Blocks[0].Height != 0.5 {
+		t.Fatalf("layout after removal: %+v %v", current, err)
 	}
+	images(1)
+
+	// An image that the layout did not show when its removal was submitted, and
+	// shows by now, stays: removing it would rewrite a layout the submitter
+	// never meant to touch.
+	placed, err := st.AddIllustration(ctx, novel.ID, IllustrationInput{
+		URL: "https://images.example.test/f.jpg", SHA256: strings.Repeat("f", 64), Width: 320, Height: 240,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseline = s.rehearse(t, remove(placed.ID))
+	shown, err := st.SaveIllustrationLayout(ctx, novel.ID, IllustrationLayout{Revision: current.Revision, Blocks: append(current.Blocks,
+		IllustrationBlock{ImageID: placed.ID, X: 0, Y: 0.5, Width: 1, Height: 0.5})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.refused(t, baseline, remove(placed.ID))
+	if got, err := st.GetIllustrationLayout(ctx, novel.ID); err != nil || got.Revision != shown.Revision || len(got.Blocks) != 2 {
+		t.Fatalf("refused removal altered the layout: %+v %v", got, err)
+	}
+	images(2)
+
+	// The other way round, an image that was taken out of the layout in the
+	// meantime is removed, and the layout stays as it is.
+	baseline = s.rehearse(t, remove(placed.ID))
+	cleared, err := st.SaveIllustrationLayout(ctx, novel.ID, IllustrationLayout{Revision: shown.Revision, Blocks: current.Blocks})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changes := s.applied(t, baseline, remove(placed.ID)); !reflect.DeepEqual(actions(changes), []string{"Illustration DELETE"}) {
+		t.Fatalf("removal not recorded on its own: %+v", changes)
+	}
+	if got, err := st.GetIllustrationLayout(ctx, novel.ID); err != nil || got.Revision != cleared.Revision || len(got.Blocks) != 1 || got.Blocks[0].ImageID != stored[1].ID {
+		t.Fatalf("removal altered a layout that no longer showed the image: %+v %v", got, err)
+	}
+	images(1)
 
 	// An image is added once, whoever adds it first.
 	input := IllustrationInput{URL: "https://images.example.test/e.jpg", SHA256: strings.Repeat("e", 64), Width: 320, Height: 240}
@@ -859,6 +1056,150 @@ func (s *baselineSuite) illustrationDeletion(t *testing.T) {
 	}
 	if changes := s.applied(t, baseline, add); len(changes) != 0 {
 		t.Fatalf("image that is already there was changed: %+v", changes)
+	}
+}
+
+func (s *baselineSuite) illustrationLayouts(t *testing.T) {
+	st, ctx := s.st, s.ctx
+	novel := s.novel(t, NovelInput{Title: "Laid out"})
+	var stored [3]Illustration
+	for i, digest := range []string{"1", "2", "3"} {
+		image, err := st.AddIllustration(ctx, novel.ID, IllustrationInput{
+			URL: "https://images.example.test/layout-" + digest + ".jpg", SHA256: strings.Repeat(digest, 64), Width: 320, Height: 240,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		stored[i] = image
+	}
+	block := func(image Illustration, y float64) IllustrationBlock {
+		return IllustrationBlock{ImageID: image.ID, X: 0, Y: y, Width: 400, Height: 300}
+	}
+	// What a baseline keeps of a block.
+	kept := func(image Illustration, y float64) map[string]any {
+		return map[string]any{"imageId": float64(image.ID), "x": 0.0, "y": y, "width": 400.0, "height": 300.0}
+	}
+	var input, saved IllustrationLayout
+	change := func(ctx context.Context) error {
+		var err error
+		saved, err = st.SaveIllustrationLayout(ctx, novel.ID, input)
+		return err
+	}
+	layout := func() IllustrationLayout {
+		t.Helper()
+		got, err := st.GetIllustrationLayout(ctx, novel.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	// direct stores a layout the way someone else does while a change is waiting.
+	direct := func(blocks ...IllustrationBlock) IllustrationLayout {
+		t.Helper()
+		got, err := st.SaveIllustrationLayout(ctx, novel.ID, IllustrationLayout{Revision: layout().Revision, Blocks: blocks})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+
+	// The first layout of a novel is written over one that was stored in the
+	// meantime: of two layouts the one applied later stands.
+	input = IllustrationLayout{Blocks: []IllustrationBlock{block(stored[0], 0)}}
+	baseline := s.rehearse(t, change)
+	if got := layout(); got.Revision != 0 || len(got.Blocks) != 0 {
+		t.Fatalf("rehearsal stored the layout: %+v", got)
+	}
+	// The baseline tells what the layout becomes, for showing it while it waits.
+	queued, err := SubmittedChanges(baseline, novel.ID)
+	if want := []SubmittedChange{{Entity: "IllustrationLayout", Action: "INSERT",
+		After: map[string]any{"novelId": float64(novel.ID), "blocks": []any{kept(stored[0], 0)}}}}; err != nil || !reflect.DeepEqual(queued, want) {
+		t.Fatalf("queued layout: %+v %v, want %+v", queued, err, want)
+	}
+	theirs := direct(block(stored[1], 0))
+	changes := s.applied(t, baseline, change)
+	if !reflect.DeepEqual(actions(changes), []string{"IllustrationLayout UPDATE"}) || !reflect.DeepEqual(differing(changes[0]), []string{"blocks"}) {
+		t.Fatalf("layout not recorded: %+v", changes)
+	}
+	if got := layout(); got.Revision != theirs.Revision+1 || !reflect.DeepEqual(got.Blocks, input.Blocks) || !reflect.DeepEqual(saved, got) {
+		t.Fatalf("layout not written over the newer one: %+v, saved %+v", got, saved)
+	}
+
+	// Two layouts that were submitted for the same revision are both applied,
+	// in the order they are approved in.
+	from := layout()
+	first := IllustrationLayout{Revision: from.Revision, Blocks: []IllustrationBlock{block(stored[1], 0), block(stored[2], 300)}}
+	second := IllustrationLayout{Revision: from.Revision, Blocks: []IllustrationBlock{block(stored[2], 0)}}
+	input = first
+	firstBaseline := s.rehearse(t, change)
+	input = second
+	secondBaseline := s.rehearse(t, change)
+	if got := layout(); !reflect.DeepEqual(got, from) {
+		t.Fatalf("rehearsal stored the layout: %+v", got)
+	}
+	queued, err = SubmittedChanges(secondBaseline, novel.ID)
+	if want := []SubmittedChange{{Entity: "IllustrationLayout", Action: "UPDATE", Fields: []string{"blocks"},
+		After: map[string]any{"blocks": []any{kept(stored[2], 0)}}}}; err != nil || !reflect.DeepEqual(queued, want) {
+		t.Fatalf("queued layout: %+v %v, want %+v", queued, err, want)
+	}
+	input = first
+	if changes := s.applied(t, firstBaseline, change); !reflect.DeepEqual(actions(changes), []string{"IllustrationLayout UPDATE"}) {
+		t.Fatalf("layout not recorded: %+v", changes)
+	}
+	if got := layout(); got.Revision != from.Revision+1 || !reflect.DeepEqual(got.Blocks, first.Blocks) {
+		t.Fatalf("first layout not applied: %+v", got)
+	}
+	input = second
+	if changes := s.applied(t, secondBaseline, change); !reflect.DeepEqual(actions(changes), []string{"IllustrationLayout UPDATE"}) {
+		t.Fatalf("layout not recorded: %+v", changes)
+	}
+	if got := layout(); got.Revision != from.Revision+2 || !reflect.DeepEqual(got.Blocks, second.Blocks) {
+		t.Fatalf("second layout not written over the first: %+v", got)
+	}
+
+	// The revision still tells a submitter that the layout it worked from has
+	// been replaced: an outdated layout is turned down when it is submitted,
+	// not while it waits.
+	input = IllustrationLayout{Revision: from.Revision, Blocks: []IllustrationBlock{block(stored[0], 0)}}
+	if _, err := st.SaveIllustrationLayout(ctx, novel.ID, input); !errors.Is(err, ErrConflict) {
+		t.Fatalf("outdated layout stored: %v", err)
+	}
+	rehearsing, rehearsal := WithRehearsal(ctx)
+	if err := st.Mutate(rehearsing, change); !errors.Is(err, ErrConflict) || rehearsal.Baseline() != nil {
+		t.Fatalf("outdated layout rehearsed: %v, baseline %s", err, rehearsal.Baseline())
+	}
+
+	// A layout that was submitted as it stood alters nothing when it is
+	// applied, whatever was stored in the meantime.
+	input = layout()
+	baseline = s.rehearse(t, change)
+	if queued, err := SubmittedChanges(baseline, novel.ID); err != nil || len(queued) != 0 {
+		t.Fatalf("unchanged layout is listed as a change: %+v %v", queued, err)
+	}
+	theirs = direct(block(stored[0], 0), block(stored[1], 300))
+	if changes := s.applied(t, baseline, change); len(changes) != 0 {
+		t.Fatalf("unchanged layout was changed: %+v", changes)
+	}
+	if got := layout(); !reflect.DeepEqual(got, theirs) || !reflect.DeepEqual(saved, got) {
+		t.Fatalf("unchanged layout written over the newer one: %+v, saved %+v", got, saved)
+	}
+
+	// A layout cannot show an image that was removed while it waited. Such a
+	// change is not outdated but impossible, and fails as that.
+	input = IllustrationLayout{Revision: theirs.Revision, Blocks: []IllustrationBlock{block(stored[2], 0)}}
+	baseline = s.rehearse(t, change)
+	if err := st.DeleteIllustration(ctx, novel.ID, stored[2].ID); err != nil {
+		t.Fatal(err)
+	}
+	recorded := len(s.recorded)
+	if err := s.approve(t, baseline, change); !errors.Is(err, ErrInvalidReference) {
+		t.Fatalf("layout showing a removed image: %v", err)
+	}
+	if len(s.recorded) != recorded {
+		t.Fatal("failed layout recorded a revision")
+	}
+	if got := layout(); !reflect.DeepEqual(got, theirs) {
+		t.Fatalf("failed layout altered the stored one: %+v", got)
 	}
 }
 
@@ -927,28 +1268,49 @@ func (s *baselineSuite) documents(t *testing.T) {
 		}
 		return rewritten
 	}
-	baseline := rewrite(s.rehearse(t, change))
-	renamed := form
-	renamed.Title = "Document, renamed by someone else"
-	if _, err := st.UpdateNovel(ctx, novel.ID, renamed); err != nil {
+	// A removal is compared with what the baseline kept, value by value, and
+	// the rewritten document still compares equal to the record it describes.
+	chapter := ChapterInput{NovelID: novel.ID, Order: 1, Title: "Chapter", Content: "Body\n"}
+	s.save(t, chapter)
+	remove := func(ctx context.Context) error { return st.DeleteChapter(ctx, novel.ID, 1) }
+	baseline := rewrite(s.rehearse(t, remove))
+	chapter.Title = "Chapter, retitled by someone else"
+	s.save(t, chapter)
+	s.refused(t, baseline, remove)
+	if got := s.chapter(t, novel.ID, 1); got.Title != chapter.Title {
+		t.Fatalf("refused removal altered the chapter: %+v", got)
+	}
+	baseline = rewrite(s.rehearse(t, remove))
+	if changes := s.applied(t, baseline, remove); !reflect.DeepEqual(actions(changes), []string{"Chapter DELETE"}) {
+		t.Fatalf("rewritten baseline of a removal: %+v", changes)
+	}
+
+	// An edit applied with a rewritten baseline writes what it altered, and
+	// leaves alone what it did not.
+	baseline = rewrite(s.rehearse(t, change))
+	cover := "https://images.example.test/document.jpg"
+	recovered := form
+	recovered.CoverURL = &cover
+	if _, err := st.UpdateNovel(ctx, novel.ID, recovered); err != nil {
 		t.Fatal(err)
 	}
-	s.refused(t, baseline, change)
-	title(renamed.Title)
-	baseline = rewrite(s.rehearse(t, change))
 	if changes := s.applied(t, baseline, change); len(changes) != 1 || !reflect.DeepEqual(differing(changes[0]), []string{"title"}) {
 		t.Fatalf("rewritten baseline: %+v", changes)
 	}
 	title(edit.Title)
+	if got, err := st.GetNovel(ctx, novel.ID); err != nil || got.CoverURL == nil || *got.CoverURL != cover {
+		t.Fatalf("newer cover lost: %+v %v", got, err)
+	}
 }
 
 func (s *baselineSuite) receipts(t *testing.T) {
 	st, ctx := s.st, s.ctx
-	form := NovelInput{PlatformID: s.platform, Title: "Receipt", Status: "ONGOING", TagIDs: []int32{}}
-	novel := s.novel(t, form)
-	edit := form
-	edit.Title = "Receipt, edited"
-	change := func(ctx context.Context) error { _, err := st.UpdateNovel(ctx, novel.ID, edit); return err }
+	novel := s.novel(t, NovelInput{Title: "Receipt"})
+	stored := ChapterInput{NovelID: novel.ID, Order: 1, Title: "Chapter", Content: "Body\n"}
+	s.save(t, stored)
+	edit := stored
+	edit.Title = "Chapter, retitled"
+	change := func(ctx context.Context) error { _, err := st.SaveChapter(ctx, edit); return err }
 	receipts := func(id string) (count int) {
 		t.Helper()
 		if err := st.pool.QueryRow(ctx, `SELECT count(*) FROM "MutationReceipt" WHERE id=$1::uuid`, id).Scan(&count); err != nil {
@@ -964,11 +1326,10 @@ func (s *baselineSuite) receipts(t *testing.T) {
 		return st.Mutate(approval, change)
 	}
 
-	// A refused change may be decided again: it left no receipt behind.
+	// A refused change may be decided again: it left no receipt behind. The
+	// chapter it retitles was removed in the meantime.
 	baseline := s.rehearse(t, change)
-	renamed := form
-	renamed.Title = "Receipt, renamed by someone else"
-	if _, err := st.UpdateNovel(ctx, novel.ID, renamed); err != nil {
+	if err := st.DeleteChapter(ctx, novel.ID, 1); err != nil {
 		t.Fatal(err)
 	}
 	id := uuid.NewString()
@@ -981,18 +1342,22 @@ func (s *baselineSuite) receipts(t *testing.T) {
 	}
 
 	// An applied change answers a repeated approval from its receipt, and is
-	// not compared with content that has moved on since.
+	// not written over content that has moved on since.
+	s.save(t, stored)
 	baseline = s.rehearse(t, change)
 	if err := approve(id, baseline); err != nil || receipts(id) != 1 || len(s.recorded) != recorded+1 {
 		t.Fatalf("change not applied once: %v", err)
 	}
-	if _, err := st.UpdateNovel(ctx, novel.ID, renamed); err != nil {
-		t.Fatal(err)
+	if got := s.chapter(t, novel.ID, 1); got.Title != edit.Title {
+		t.Fatalf("change not applied: %+v", got)
 	}
+	retitled := stored
+	retitled.Title = "Chapter, retitled by someone else"
+	s.save(t, retitled)
 	if err := approve(id, baseline); err != nil || len(s.recorded) != recorded+1 {
 		t.Fatalf("repeated approval: %v", err)
 	}
-	if got, err := st.GetNovel(ctx, novel.ID); err != nil || got.Title != renamed.Title {
-		t.Fatalf("repeated approval applied the change again: %+v %v", got, err)
+	if got := s.chapter(t, novel.ID, 1); got.Title != retitled.Title {
+		t.Fatalf("repeated approval applied the change again: %+v", got)
 	}
 }

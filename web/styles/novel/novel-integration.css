@@ -43,6 +43,8 @@
 .novel-inline-field { min-width: 0; max-width: 100%; border-radius: 4px; }
 .novel-inline-field.is-block { display: block; width: 100%; }
 .novel-inline-field[data-editable] { outline: 1px dashed color-mix(in srgb, var(--foreground) 22%, transparent); outline-offset: 5px; cursor: text; }
+/* A field that submissions awaiting review alter. Hovering an editable one still shows it as editable. */
+.novel-inline-field[data-pending]:not([data-active]) { outline: 1px dashed var(--ring); outline-offset: 5px; background: color-mix(in srgb, var(--primary) 9%, transparent); }
 .novel-inline-field[data-editable]:hover, .novel-inline-field[data-editable]:focus-visible { outline-color: var(--ring); background: color-mix(in srgb, var(--primary) 5%, transparent); }
 .novel-inline-field[data-active] { display: inline-block; width: 100%; outline: none; }
 .novel-demo .sidebar-heading > .novel-inline-field[data-active] { width: 130px; flex-shrink: 0; }
@@ -75,6 +77,36 @@
 .novel-inline-tag-entry button { flex-shrink: 0; color: var(--muted-foreground); }
 .novel-inline-tag-values .novel-inline-tag-new { width: 104px; height: 34px; border-style: dashed; }
 .novel-demo .novel-book-heading h1 .novel-inline-control input { height: auto; min-height: 44px; font-size: inherit; }
+/* Submissions awaiting review, listed next to what they alter while the novel is edited. */
+.novel-pending-removal { color: var(--foreground); }
+.novel-pending-notice { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.novel-pending-notice svg, .novel-pending-title svg { width: 14px; height: 14px; flex-shrink: 0; }
+.novel-demo .novel-pending-times { margin: 2px 0 0; padding: 0; color: var(--muted-foreground); font-variant-numeric: tabular-nums; list-style: none; }
+.novel-demo .novel-pending { --pending-muted: color-mix(in srgb, var(--card-foreground) 72%, var(--card)); align-self: stretch; min-width: 0; margin-top: 12px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--card-foreground) 16%, var(--card)); border-radius: 8px; background: color-mix(in srgb, var(--card-foreground) 5%, var(--card)); color: var(--card-foreground); font-size: 12px; font-weight: 400; line-height: 1.6; letter-spacing: 0; text-align: left; white-space: normal; }
+.novel-demo .novel-pending-title { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-weight: 600; }
+.novel-demo .novel-pending-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.novel-demo .novel-pending-list.is-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }
+.novel-pending-list > li { display: grid; gap: 4px; min-width: 0; }
+.novel-pending-list time { color: var(--pending-muted); font-variant-numeric: tabular-nums; }
+.novel-pending-value { min-width: 0; overflow-wrap: anywhere; }
+.novel-demo .novel-pending-text { margin: 0; white-space: pre-wrap; }
+.novel-pending-note { color: var(--pending-muted); }
+.novel-pending-cover { display: block; width: 96px; overflow: hidden; border-radius: 6px; background: var(--card); }
+.novel-pending-cover img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 4; object-fit: cover; }
+.novel-demo .novel-book-header .novel-pending-cover .library-cover-fallback { height: auto; padding: 6px; font-size: 11px; }
+.novel-demo .novel-pending .tag-cloud { margin: 0; gap: 6px; }
+.novel-pending-upload { width: 140px; }
+.novel-pending-upload-image { display: grid; place-items: center; height: 96px; overflow: hidden; border-radius: 6px; background: var(--card); }
+.novel-pending-upload-image img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.novel-pending-upload-image .novel-illustration-unavailable { min-height: 0; font-size: 12px; }
+.novel-pending-layout { width: min(100%, 360px); }
+.novel-pending-layout .illustration-canvas { background: var(--card); }
+.novel-demo .novel-book-header .novel-pending { font-size: 13px; }
+.novel-demo .novel-book-header .cover-area > .novel-pending { margin-top: 20px; }
+.novel-demo .novel-book-heading > .novel-pending { width: fit-content; min-width: min(100%, 260px); max-width: min(100%, 560px); }
+.novel-demo .sidebar .panel > .novel-pending { margin-top: -6px; }
+.novel-demo .sidebar dd > .novel-pending { margin-top: 8px; }
+.novel-demo .introduction > .novel-pending, .illustration-composer .novel-pending { margin-top: 16px; }
 .novel-illustration-edit-note { margin-top: 12px; color: var(--muted-foreground); font-size: 12px; }
 .novel-illustration-item { min-width: 0; }
 .novel-illustration-item > .novel-illustration-thumbnail { width: 100%; }

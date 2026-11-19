@@ -34,6 +34,10 @@ func (openAuthority) WithCreatorReviewAccess(_ context.Context, _ uuid.UUID, rea
 	return read()
 }
 
+func (openAuthority) WithCreatorEditAccess(_ context.Context, _ uuid.UUID, read func() error) error {
+	return read()
+}
+
 func (openAuthority) WithCreatorDecision(_ context.Context, _ uuid.UUID, _ store.ATHubReview, _ bool, apply func(json.RawMessage) error) error {
 	return apply(json.RawMessage(`{"name":"审核人"}`))
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Images, Loader2, Trash2, Upload } from "lucide-react";
 import { useNovelAccess } from "@/components/novel/novel-access";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { api } from "@/lib/api";
 import { safeContentURL, type NovelIllustration } from "@/lib/athub/athub-client";
 import { contentErrorMessage } from "@/lib/athub/athub-errors";
+import { pendingIllustrationDeletes, pendingTime } from "@/lib/athub/athub-pending";
 import { allowsEndpoint, type RolePolicy } from "@/lib/athub/athub-permissions";
 import { readAllContent } from "@/lib/novel/novel-view-models";
 import { ContentSectionHeading } from "./content-section-heading";
@@ -41,9 +42,14 @@ export function GallerySection({ novelId }: { novelId: number }) {
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [pendingDeletes, setPendingDeletes] = useState<number[]>([]);
+  // Removals submitted before this visit, by anyone, await review like the ones submitted here.
+  const queued = editor?.pending;
+  const queuedDeletes = useMemo(() => pendingIllustrationDeletes(queued || []), [queued]);
 
   useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current); }, []);
   useEffect(() => { if (!editing) setConfirmDelete(null); }, [editing]);
+  // Once the server returns a new snapshot, trust it instead of the local receipt.
+  useEffect(() => { setPendingDeletes([]); }, [queued]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -92,6 +98,7 @@ export function GallerySection({ novelId }: { novelId: number }) {
       setFailures(failed);
       setMessage([saved ? `${saved} 张插图已保存。` : "", pending ? `${pending} 张插图已提交审核，通过后显示。` : ""].filter(Boolean).join(" "));
       if (saved) setRevision(value => value + 1);
+      if (pending) void editor?.refreshPending();
     } catch (reason) {
       const message = contentErrorMessage(reason, "上传失败，请重试。");
       setFailures(files.map(file => ({ file, message })));
@@ -102,7 +109,7 @@ export function GallerySection({ novelId }: { novelId: number }) {
   }
 
   async function remove(image: NovelIllustration) {
-    if (!editing || uploading.current) return;
+    if (!editing || uploading.current || pendingDeletes.includes(image.id) || queuedDeletes.has(image.id)) return;
     uploading.current = true; setBusy(true); setMessage("");
     try {
       const current = await api<RolePolicy>("/api/v1/account/athub/permissions", { cache: "no-store" });
@@ -113,6 +120,7 @@ export function GallerySection({ novelId }: { novelId: number }) {
       if (result?.status === "pending" && result.review_id) {
         setPendingDeletes(value => [...value, image.id]);
         setMessage("删除已提交审核，通过后生效。");
+        void editor?.refreshPending();
       } else if (result === null) {
         setImages(value => value.filter(item => item.id !== image.id));
         setSelected(null);
@@ -160,13 +168,23 @@ export function GallerySection({ novelId }: { novelId: number }) {
             if (!editing && editor && policy && (canUpload(policy) || canDelete(policy) || allowsEndpoint(policy, "edit", "PUT", "/api/v2/illustration-layout"))) previewTimer.current = setTimeout(show, 280);
             else show();
           }}
-          resourceActions={(image, index) => editing && policy && canDelete(policy) && <div className="novel-illustration-item-actions">
-            {pendingDeletes.includes(image.id) ? <span role="status">删除待审核</span> : confirmDelete === image.id ? <>
-              <Button type="button" size="sm" variant="destructive" disabled={busy} onClick={() => { void remove(image); }}>确认删除</Button>
-              <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setConfirmDelete(null)}>取消</Button>
-            </> : <Button type="button" size="sm" variant="ghost" className="text-red-500 hover:text-red-600"
-              aria-label={`删除插图 ${index + 1}`} disabled={busy} onClick={() => setConfirmDelete(image.id)}><Trash2 className="size-4" aria-hidden="true" />删除</Button>}
-          </div>}
+          resourceActions={(image, index) => {
+            if (!editing) return null;
+            const entries = queuedDeletes.get(image.id);
+            const deleting = pendingDeletes.includes(image.id) || Boolean(entries?.length);
+            if (!deleting && !(policy && canDelete(policy))) return null;
+            return <div className="novel-illustration-item-actions">
+              {deleting ? <div className="novel-pending-removal">
+                <span>删除待审核</span>
+                {entries?.length ? <ul className="novel-pending-times">{entries.map(({ key, createdAt }) =>
+                  <li key={key}><time dateTime={createdAt}>{pendingTime(createdAt)}</time></li>)}</ul> : null}
+              </div> : confirmDelete === image.id ? <>
+                <Button type="button" size="sm" variant="destructive" disabled={busy} onClick={() => { void remove(image); }}>确认删除</Button>
+                <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setConfirmDelete(null)}>取消</Button>
+              </> : <Button type="button" size="sm" variant="ghost" className="text-red-500 hover:text-red-600"
+                aria-label={`删除插图 ${index + 1}`} disabled={busy} onClick={() => setConfirmDelete(image.id)}><Trash2 className="size-4" aria-hidden="true" />删除</Button>}
+            </div>;
+          }}
         />}
       <Dialog open={Boolean(active)} onOpenChange={open => { if (!open) setSelected(null); }}>
         <DialogContent className="novel-illustration-dialog" aria-describedby={undefined}>

@@ -48,6 +48,27 @@ type ATHubReviewStore interface {
 	DecideATHubReview(context.Context, uuid.UUID, uuid.UUID, string, string, ATHubReviewExecutor) (ATHubReview, error)
 }
 
+// ATHubPendingChange is a review awaiting a decision, as far as it concerns
+// one novel: Baseline is the baseline queued with it, cut down to that novel.
+// It names no submitter, because it is read by everyone who may edit the novel.
+type ATHubPendingChange struct {
+	ID        uuid.UUID
+	CreatedAt time.Time
+	Baseline  json.RawMessage
+}
+type ATHubPendingChangeList struct {
+	Items []ATHubPendingChange
+	Total int64
+}
+
+// ATHubPendingChangeStore tells which queued changes touch a novel. Only the
+// creator database can: the account database keeps no baselines.
+type ATHubPendingChangeStore interface {
+	// PendingATHubChanges lists them oldest first, for an actor who may edit
+	// novels, starting at the given offset.
+	PendingATHubChanges(ctx context.Context, actor uuid.UUID, novelID int32, offset int) (ATHubPendingChangeList, error)
+}
+
 const reviewColumns = `id,user_id,contributor,operation,method,path,query,payload,status,reviewer,note,result_status,result,created_at,reviewed_at`
 const reviewSummaryColumns = `id,user_id,contributor,operation,method,path,query,NULL::jsonb AS payload,status,reviewer,note,result_status,NULL::jsonb AS result,created_at,reviewed_at`
 

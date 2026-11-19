@@ -61,6 +61,41 @@ func (p *Postgres) WithCreatorReviewAccess(ctx context.Context, actor uuid.UUID,
 	return tx.Commit(ctx)
 }
 
+// WithCreatorEditAccess runs read for an account that may change an existing
+// novel through the creator platform in at least one way. That is what lets it
+// enter the edit mode of a novel's page, where it is shown what others have
+// submitted for the same novel.
+func (p *Postgres) WithCreatorEditAccess(ctx context.Context, actor uuid.UUID, read func() error) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var role string
+	var enabled bool
+	if err := tx.QueryRow(ctx, `SELECT role,is_active AND NOT athub_disabled FROM users WHERE id=$1 FOR SHARE`, actor).Scan(&role, &enabled); err != nil {
+		return err
+	}
+	if !enabled {
+		return ErrATHubPermissionDenied
+	}
+	policy, err := policyWith(ctx, tx, role, true)
+	if err != nil {
+		return err
+	}
+	allowed := false
+	for _, edit := range ATHubNovelEdits() {
+		allowed = allowed || policy.Rule(edit.Operation, edit.Method, edit.Path).Allowed
+	}
+	if !allowed {
+		return ErrATHubPermissionDenied
+	}
+	if err := read(); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 // WithCreatorDecision preserves the original reviewer/author policy and ban
 // checks while the creator module applies the approved content and persists its
 // result. A creator/content receipt makes retries safe after partial commits.

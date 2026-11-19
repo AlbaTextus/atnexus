@@ -146,6 +146,20 @@ func ATHubReviewQuery(method, path string) []string {
 	return nil
 }
 
+// ATHubNovelEdits lists the calls the creator platform makes for a signed-in
+// user to change a novel that exists: the submissions that name their novel in
+// the query. They are what the edit mode of a novel's page can do, so an
+// account that may make none of them has no use for that mode.
+func ATHubNovelEdits() []ATHubEndpoint {
+	var endpoints []ATHubEndpoint
+	for _, route := range athubRoutes {
+		if route.submission && len(route.reviewQuery) > 0 {
+			endpoints = append(endpoints, route.ATHubEndpoint)
+		}
+	}
+	return endpoints
+}
+
 // ATHubMutation reports whether an operation changes content and can be reviewed.
 func ATHubMutation(operation string) bool {
 	return operation == "upload" || operation == "edit" || operation == "delete"

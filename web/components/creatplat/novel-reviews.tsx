@@ -8,10 +8,11 @@ import { feedback } from "@/lib/feedback"
 import type { IllustrationBlock, NovelIllustration } from "@/lib/athub/athub-client"
 import { contentErrorMessage } from "@/lib/athub/athub-errors"
 import { type ReviewItem, type RolePolicy, allowsEndpoint, endpointNames, hasOperation, operationNames } from "@/lib/athub/athub-permissions"
-import { ILLUSTRATION_CANVAS_WIDTH as WIDTH } from "@/lib/novel/illustration-layout"
+import { isIllustrationBlock, isPositiveNumber } from "@/lib/novel/illustration-layout"
 import { readAllContent } from "@/lib/novel/novel-view-models"
 import type { AccountUser } from "@/components/account/account-shell"
 import { IllustrationImage } from "@/components/novel/illustration-image"
+import { IllustrationLayoutPreview } from "@/components/novel/illustration-layout-preview"
 import { useNovelAccess } from "@/components/novel/novel-access"
 import { UserAvatar } from "@/components/shared/user-avatar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -102,19 +103,13 @@ type IllustrationChange =
   | { kind: "upload"; image: Pick<NovelIllustration, "url" | "width" | "height"> }
   | { kind: "delete"; novelId: number; id: number }
   | { kind: "layout"; novelId: number; blocks: IllustrationBlock[] }
-const positive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0
-function isBlock(value: unknown): value is IllustrationBlock {
-  if (typeof value !== "object" || value === null) return false
-  const { imageId, x, y, width, height } = value as Record<string, unknown>
-  return positive(imageId) && positive(width) && positive(height) && [x, y].every(edge => edge === 0 || positive(edge))
-}
 // An illustration submission is only a URL, a pair of ids or coordinates. It is
 // shown as the picture or layout it stands for; one without the expected shape
 // is left to the plain field list.
 function illustrationChange(item: ReviewItem): IllustrationChange | null {
   if (item.path === "/api/v2/illustrations" && item.method === "POST") {
     const { url, width, height } = item.payload || {}
-    return typeof url === "string" && positive(width) && positive(height) ? { kind: "upload", image: { url, width, height } } : null
+    return typeof url === "string" && isPositiveNumber(width) && isPositiveNumber(height) ? { kind: "upload", image: { url, width, height } } : null
   }
   const query = new URLSearchParams(item.query)
   const novelId = Number(query.get("novelId")), id = Number(query.get("id"))
@@ -124,7 +119,7 @@ function illustrationChange(item: ReviewItem): IllustrationChange | null {
   }
   if (item.path === "/api/v2/illustration-layout" && item.method === "PUT") {
     const blocks = item.payload?.blocks
-    return Array.isArray(blocks) && blocks.every(isBlock) ? { kind: "layout", novelId, blocks } : null
+    return Array.isArray(blocks) && blocks.every(isIllustrationBlock) ? { kind: "layout", novelId, blocks } : null
   }
   return null
 }
@@ -155,21 +150,7 @@ function SubmittedIllustration({ item }: { item: ReviewItem }) {
     return image ? <div className={picture}><IllustrationImage image={image} label="申请删除的插图" preview /></div>
       : <p className="text-sm text-muted-foreground">这张插图已不在作品中。</p>
   }
-  if (!change.blocks.length) return <p className="text-sm text-muted-foreground">这次提交清空了展示画布。</p>
-  const height = Math.max(...change.blocks.map(block => block.y + block.height))
-  // A layout may be five times as tall as it is wide, so it scrolls in place.
-  return <div className="max-h-[32rem] overflow-y-auto rounded-lg border" role="group" aria-label="提交的插图布局" tabIndex={0}>
-    <div className="illustration-canvas" style={{ aspectRatio: `${WIDTH} / ${height}` }}>
-      {change.blocks.map((block, index) => {
-        const image = images.get(block.imageId)
-        return <div key={index} className="illustration-block"
-          style={{ cursor: "default", left: `${block.x / WIDTH * 100}%`, top: `${block.y / height * 100}%`, width: `${block.width / WIDTH * 100}%`, height: `${block.height / height * 100}%` }}>
-          {image ? <IllustrationImage image={image} label={`插图 #${block.imageId}`} />
-            : <span className="grid size-full place-items-center border border-dashed text-xs text-muted-foreground">插图已不在作品中</span>}
-        </div>
-      })}
-    </div>
-  </div>
+  return <IllustrationLayoutPreview blocks={change.blocks} images={images} label="提交的插图布局" />
 }
 
 const date = (value: string) => new Date(value).toLocaleString("zh-CN", { hour12: false })
@@ -177,14 +158,15 @@ const failure = (reason: unknown, login: string) => contentErrorMessage(reason, 
 const subject = (item: ReviewItem) => `${operationNames[item.operation]} · ${endpointNames[item.path] || "内容"}`
 // The content API explains a refused change only in English, so the status it
 // answered with is put into words; its own sentence follows for the exact cause.
-// A submission overtaken by later changes always has the same cause and the
-// same remedy, so it is given the remedy in place of that sentence.
+// A submission is refused as overtaken only when what it alters was removed or
+// replaced, or what it removes was changed. That always has the same remedy, so
+// it is given the remedy in place of that sentence.
 function failureReason(item: ReviewItem) {
   const status = item.result_status
   const cause = typeof item.result === "object" && item.result !== null && "error" in item.result ? String(item.result.error) : ""
   const reason = status === 404 ? "提交涉及的内容已不存在"
     : status === 409 ? "与书库中的现有内容冲突"
-    : status === 412 ? "提交改动的内容在提交后已有其他修改"
+    : status === 412 ? "提交要改动的内容在提交后已被删除或替换，或要删除的内容已有其他修改"
     : status === 413 ? "提交内容过大"
     : status === 422 ? "提交引用的封面或插图已不在图床中"
     : status !== undefined && status >= 400 && status < 500 ? "内容校验或引用检查未通过"
@@ -314,7 +296,7 @@ function ReviewBoard({ view }: { view: keyof typeof views }) {
       </div>
     </>}
     {!own && <Dialog open={Boolean(decision)} onOpenChange={open => { if (!open && !busy) setDecision(null) }}>
-      <DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>{decision === "approve" ? "通过这项提交？" : "驳回这项提交？"}</DialogTitle><DialogDescription>{decision === "approve" ? "通过后，只将这项提交改动的内容写入正式书库并记录变更历史；提交之后书库里的其他修改不会被覆盖。" : "提交内容不会写入书库，提交者可以查看驳回原因。"}</DialogDescription></DialogHeader>
+      <DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>{decision === "approve" ? "通过这项提交？" : "驳回这项提交？"}</DialogTitle><DialogDescription>{decision === "approve" ? "通过后，只将这项提交改动的内容写入正式书库并记录变更历史；同一处在提交之后已有其他修改时，以这项提交为准，其余修改不受影响。" : "提交内容不会写入书库，提交者可以查看驳回原因。"}</DialogDescription></DialogHeader>
         <label className="space-y-2 text-sm"><span>{decision === "reject" ? "驳回原因" : "审核备注（可选）"}</span><Textarea aria-label={decision === "reject" ? "驳回原因" : "审核备注"} maxLength={1000} value={note} disabled={busy} onChange={event => setNote(event.target.value)} /></label>
         {decisionError && <Alert variant="destructive"><AlertDescription>{decisionError}</AlertDescription></Alert>}
         <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setDecision(null)}>取消</Button><Button variant={decision === "reject" ? "destructive" : "default"} className={decision === "approve" ? approveButton : undefined} disabled={busy} onClick={() => void decide()}>{busy ? "处理中…" : decision === "approve" ? "确认通过" : "确认驳回"}</Button></DialogFooter>

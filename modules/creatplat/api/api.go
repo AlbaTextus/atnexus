@@ -28,6 +28,7 @@ type API struct {
 	athubIllustrationSubmitter    func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32)
 	athubIllustrationDeleter      func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32, int32)
 	athubIllustrationLayoutEditor func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID, int32)
+	athubChangeReader             func(baseline []byte, novelID int32) (any, error)
 	// Personal-key uploads: the ATHub access pipeline admits the call, then runs
 	// the given step to store the file.
 	athubKeyCoverUploader        func(http.ResponseWriter, *http.Request, func(http.ResponseWriter, *http.Request, uuid.UUID))
@@ -71,6 +72,7 @@ func (a *API) Router() http.Handler {
 	r.Delete("/api/v4/account/athub/novels/{id}/illustrations/{illustrationId}", a.deleteNovelIllustration)
 	r.Get("/api/v4/account/athub/novels/{id}/illustration-layout", a.readNovelIllustrationLayout)
 	r.Put("/api/v4/account/athub/novels/{id}/illustration-layout", a.editNovelIllustrationLayout)
+	r.Get("/api/v4/account/athub/novels/{id}/pending-changes", a.pendingNovelChanges)
 	r.Post("/api/v4/account/athub/cover", a.uploadNovelCover)
 	r.Get("/api/v4/account/athub/submissions/{id}", a.athubReviews)
 	return r

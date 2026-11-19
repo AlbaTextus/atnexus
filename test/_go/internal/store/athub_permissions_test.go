@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -79,5 +80,31 @@ func TestATHubUploadCannotBypassEditPermission(t *testing.T) {
 	}
 	if len(ATHubUploadEdits("/api/v2/upload", json.RawMessage(`{"novel":{"title":"新作品"},"chapters":[{}]}`))) != 0 {
 		t.Fatal("new novel upload incorrectly requires existing content")
+	}
+}
+
+// The edit mode of a novel's page changes its details, its illustrations and
+// their layout. These calls decide who is shown what others have submitted for
+// the novel, so the list is pinned here.
+func TestATHubNovelEditsAreWhatTheEditModeCanDo(t *testing.T) {
+	edits := ATHubNovelEdits()
+	want := []ATHubEndpoint{
+		{"POST", "/api/v2/illustrations", "upload"},
+		{"PUT", "/api/v2/novelinfo", "edit"},
+		{"PUT", "/api/v2/illustration-layout", "edit"},
+		{"DELETE", "/api/v2/illustrations", "delete"},
+	}
+	if !reflect.DeepEqual(edits, want) {
+		t.Fatalf("novel edits = %+v, want %+v", edits, want)
+	}
+	for _, edit := range edits {
+		if !ATHubSubmissionEndpoint(edit.Method, edit.Path) || len(ATHubReviewQuery(edit.Method, edit.Path)) == 0 || ATHubOperation(edit.Method, edit.Path) != edit.Operation {
+			t.Fatalf("%s %s is not a submission that names its novel", edit.Method, edit.Path)
+		}
+	}
+	// A batch upload is a submission as well, but it can create a novel and
+	// names none: being allowed to upload is not being allowed to edit.
+	if !ATHubSubmissionEndpoint("POST", "/api/v2/upload") || len(ATHubReviewQuery("POST", "/api/v2/upload")) != 0 {
+		t.Fatal("the batch upload no longer tells the two kinds of submission apart")
 	}
 }

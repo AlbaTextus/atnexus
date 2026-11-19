@@ -8,7 +8,7 @@
 
 | 入口 | 后端 | 说明 |
 | --- | --- | --- |
-| 账户前端 | Next.js `3288` | 将 `/api/v1/*`、`/api/v3/*`、`/oauth/*`、`/.well-known/*` 和 `/api/v4/*` 转发到聚合入口 |
+| 账户前端 | Next.js `3288` | 将 `/api/v1/*`、`/api/v2/*`、`/api/v3/*`、`/oauth/*`、`/.well-known/*` 和 `/api/v4/*` 转发到聚合入口 |
 | `NEXT_PUBLIC_ATHUB_API_URL` | 聚合入口 `8010` | 浏览器直连 `/api/v5/*`，不经过 Next.js |
 | `NEXT_PUBLIC_CREATPLAT_API_URL` | 聚合入口 `8010` | 浏览器直连 `/api/v4/*` 查询历史与贡献者 |
 | `IMAGE_PUBLIC_URL` | 聚合入口 `8010` | 图片地址 `/file/<ID>` 与上传接口 |

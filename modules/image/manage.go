@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"path"
@@ -507,36 +508,183 @@ func (m *Module) tagsAutocomplete(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, map[string]any{"tags": tags})
 }
 
+type spaceStat struct {
+	Key       string  `json:"key"`
+	Group     string  `json:"group"`
+	FileCount int64   `json:"fileCount"`
+	UsedBytes int64   `json:"usedBytes"`
+	UsedMB    float64 `json:"usedMB"`
+}
+
+func spaceGroup(key string) string {
+	if strings.HasPrefix(key, "user/") {
+		return "user"
+	}
+	if strings.HasPrefix(key, "book/") {
+		return "book"
+	}
+	return key
+}
+
+const fileSizeBytesExpr = `CASE WHEN metadata->>'FileSizeBytes' ~ '^[0-9]+$' THEN (metadata->>'FileSizeBytes')::numeric WHEN metadata->>'FileSize' ~ '^[0-9]+(\.[0-9]+)?$' THEN round((metadata->>'FileSize')::numeric * 1048576) ELSE 0 END`
+
 func (m *Module) quota(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet, http.MethodPost) {
 		return
 	}
-	rows, err := m.pool.Query(r.Context(), `SELECT COALESCE(metadata->>'ChannelName',''),count(*),COALESCE(sum(CASE WHEN metadata->>'FileSizeBytes' ~ '^[0-9]+$' THEN (metadata->>'FileSizeBytes')::numeric/1048576 WHEN metadata->>'FileSize' ~ '^[0-9]+(\.[0-9]+)?$' THEN (metadata->>'FileSize')::numeric ELSE 0 END),0) FROM image_files WHERE state='ready' GROUP BY metadata->>'ChannelName'`)
+	tx, err := m.pool.Begin(r.Context())
 	if err != nil {
 		m.failure(w, err)
 		return
 	}
-	defer rows.Close()
+	defer tx.Rollback(r.Context())
+	if _, err = tx.Exec(r.Context(), `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`); err != nil {
+		m.failure(w, err)
+		return
+	}
+	rows, err := tx.Query(r.Context(), `SELECT COALESCE(metadata->>'ChannelName',''),count(*),COALESCE(sum(`+fileSizeBytesExpr+`),0)::bigint FROM image_files WHERE state='ready' GROUP BY metadata->>'ChannelName'`)
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
 	stats := map[string]any{}
 	var count int64
-	var total float64
+	var totalBytes int64
 	for rows.Next() {
 		var name string
 		var n int64
-		var size float64
-		if err = rows.Scan(&name, &n, &size); err != nil {
+		var usedBytes int64
+		if err = rows.Scan(&name, &n, &usedBytes); err != nil {
+			rows.Close()
 			m.failure(w, err)
 			return
 		}
-		stats[name] = map[string]any{"usedMB": size, "fileCount": n}
+		stats[name] = map[string]any{"usedMB": float64(usedBytes) / 1048576, "usedBytes": usedBytes, "fileCount": n}
 		count += n
-		total += size
+		totalBytes += usedBytes
 	}
-	if rows.Err() != nil {
-		m.failure(w, rows.Err())
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		m.failure(w, err)
 		return
 	}
-	respond(w, 200, map[string]any{"success": true, "quotaStats": stats, "channelStats": stats, "totalSizeMB": total, "totalCount": count, "lastUpdated": time.Now().UnixMilli()})
+
+	spaceRows, err := tx.Query(r.Context(), `SELECT
+		CASE
+			WHEN starts_with(id, 'user/') THEN
+				CASE
+					WHEN split_part(id, '/', 2) = 'avatars' OR split_part(id, '/', 3) = 'avatars' THEN 'user/avatars'
+					WHEN split_part(id, '/', 2) = 'backgrounds' OR split_part(id, '/', 3) = 'backgrounds' THEN 'user/backgrounds'
+					ELSE 'user/other'
+				END
+			WHEN starts_with(id, 'book/') THEN
+				CASE
+					WHEN split_part(id, '/', 2) = 'covers' OR split_part(id, '/', 3) = 'covers' THEN 'book/covers'
+					WHEN split_part(id, '/', 2) = 'illustrations' OR split_part(id, '/', 3) = 'illustrations' THEN 'book/illustrations'
+					ELSE 'book/other'
+				END
+			WHEN starts_with(id, 'forum/') THEN 'forum'
+			WHEN strpos(id, '/') > 0 THEN split_part(id, '/', 1)
+			ELSE '_root'
+		END AS space_key,
+		count(*),
+		COALESCE(sum(`+fileSizeBytesExpr+`),0)::bigint
+	FROM image_files WHERE state='ready' GROUP BY space_key ORDER BY 3 DESC, space_key`)
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
+	spaces := []spaceStat{}
+	for spaceRows.Next() {
+		var key string
+		var n int64
+		var usedBytes int64
+		if err = spaceRows.Scan(&key, &n, &usedBytes); err != nil {
+			spaceRows.Close()
+			m.failure(w, err)
+			return
+		}
+		spaces = append(spaces, spaceStat{
+			Key:       key,
+			Group:     spaceGroup(key),
+			FileCount: n,
+			UsedBytes: usedBytes,
+			UsedMB:    float64(usedBytes) / 1048576,
+		})
+	}
+	err = spaceRows.Err()
+	spaceRows.Close()
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
+
+	stateRows, err := tx.Query(r.Context(), `SELECT state, COALESCE(metadata->>'ListType','None')='Block', count(*) FROM image_files GROUP BY state, COALESCE(metadata->>'ListType','None')='Block'`)
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
+	var readyCount, pendingCount, deletingCount, blockedCount int64
+	for stateRows.Next() {
+		var st string
+		var blocked bool
+		var n int64
+		if err = stateRows.Scan(&st, &blocked, &n); err != nil {
+			stateRows.Close()
+			m.failure(w, err)
+			return
+		}
+		switch st {
+		case "ready":
+			readyCount += n
+			if blocked {
+				blockedCount += n
+			}
+		case "pending":
+			pendingCount += n
+		case "deleting":
+			deletingCount += n
+		}
+	}
+	err = stateRows.Err()
+	stateRows.Close()
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
+
+	var activeSessions int64
+	if err = tx.QueryRow(r.Context(), `SELECT count(*) FROM image_uploads WHERE expires_at>now() AND NOT data ? 'result'`).Scan(&activeSessions); err != nil {
+		m.failure(w, err)
+		return
+	}
+
+	respond(w, 200, map[string]any{
+		"success":      true,
+		"quotaStats":   stats,
+		"channelStats": stats,
+		"spaceStats":   spaces,
+		"stateStats": map[string]int64{
+			"ready":                readyCount,
+			"pending":              pendingCount,
+			"deleting":             deletingCount,
+			"blocked":              blockedCount,
+			"activeUploadSessions": activeSessions,
+		},
+		"runtime": map[string]any{
+			"publicURL":           m.cfg.PublicURL,
+			"maxUploadBytes":      m.cfg.MaxUploadBytes,
+			"maxChunkBytes":       m.cfg.MaxChunkBytes,
+			"maxChunks":           m.cfg.MaxChunks,
+			"uploadTTLSeconds":    int64(m.cfg.UploadTTL.Seconds()),
+			"maxSessionsPerOwner": m.cfg.MaxSessionsPerOwner,
+		},
+		"totalSizeMB": float64(totalBytes) / 1048576,
+		"totalBytes":  totalBytes,
+		"totalCount":  count,
+		"lastUpdated": time.Now().UnixMilli(),
+	})
 }
 
 func (m *Module) channelList(w http.ResponseWriter, r *http.Request) {
@@ -563,6 +711,48 @@ func (m *Module) channelList(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, map[string]any{"cfr2": map[string]any{"channels": local}, "s3": map[string]any{"channels": remote}})
 }
 
+func validateUploadConfig(next *uploadConfig, existing uploadConfig) bool {
+	validQuota := func(c Channel) bool {
+		return !math.IsNaN(c.Quota.LimitGB) && !math.IsInf(c.Quota.LimitGB, 0) && c.Quota.LimitGB >= 0 &&
+			!math.IsNaN(c.Quota.Threshold) && !math.IsInf(c.Quota.Threshold, 0) && c.Quota.Threshold >= 0 && c.Quota.Threshold <= 100
+	}
+	seenLocal := map[string]bool{}
+	for i := range next.Local.Channels {
+		c := &next.Local.Channels[i]
+		if c.SavePath == "environment variable" || c.Name == "R2_env" {
+			c.Name = "R2_env"
+			c.SavePath = "environment variable"
+		}
+		if c.Name == "" || seenLocal[c.Name] || !validQuota(*c) {
+			return false
+		}
+		seenLocal[c.Name] = true
+	}
+	seen := map[string]bool{}
+	for i := range next.S3.Channels {
+		c := &next.S3.Channels[i]
+		if c.Name == "" || seen[c.Name] || !validQuota(*c) {
+			return false
+		}
+		seen[c.Name] = true
+		for _, old := range existing.S3.Channels {
+			if old.Name == c.Name {
+				if c.Secret == "" {
+					c.Secret = old.Secret
+				}
+				if c.AccessKey == "" {
+					c.AccessKey = old.AccessKey
+				}
+			}
+		}
+		u, e := url.Parse(c.Endpoint)
+		if e != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && u.Scheme != "http") || c.Bucket == "" || c.AccessKey == "" || c.Secret == "" {
+			return false
+		}
+	}
+	return true
+}
+
 func (m *Module) uploadSettings(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet, http.MethodPost) {
 		return
@@ -583,33 +773,9 @@ func (m *Module) uploadSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var next uploadConfig
-	if readBody(w, r, &next) != nil {
+	if readBody(w, r, &next) != nil || !validateUploadConfig(&next, cfg) {
 		m.failure(w, ErrInvalid)
 		return
-	}
-	seen := map[string]bool{}
-	for i := range next.S3.Channels {
-		c := &next.S3.Channels[i]
-		if c.Name == "" || seen[c.Name] {
-			m.failure(w, ErrInvalid)
-			return
-		}
-		seen[c.Name] = true
-		for _, old := range cfg.S3.Channels {
-			if old.Name == c.Name {
-				if c.Secret == "" {
-					c.Secret = old.Secret
-				}
-				if c.AccessKey == "" {
-					c.AccessKey = old.AccessKey
-				}
-			}
-		}
-		u, e := url.Parse(c.Endpoint)
-		if e != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && u.Scheme != "http") || c.Bucket == "" || c.AccessKey == "" || c.Secret == "" {
-			m.failure(w, ErrInvalid)
-			return
-		}
 	}
 	raw, err := json.Marshal(next)
 	if err == nil {
@@ -648,7 +814,17 @@ func (m *Module) blockedIPs(w http.ResponseWriter, r *http.Request) {
 		m.failure(w, ErrInvalid)
 		return
 	}
-	if err := m.setSetting(r.Context(), "manage@blockipList", strings.Join(body.IPs, ",")); err != nil {
+	cleaned := make([]string, 0, len(body.IPs))
+	seenIP := map[string]bool{}
+	for _, rawIP := range body.IPs {
+		ip := strings.TrimSpace(rawIP)
+		if ip == "" || strings.Contains(ip, ",") || seenIP[ip] {
+			continue
+		}
+		seenIP[ip] = true
+		cleaned = append(cleaned, ip)
+	}
+	if err := m.setSetting(r.Context(), "manage@blockipList", strings.Join(cleaned, ",")); err != nil {
 		m.failure(w, err)
 		return
 	}

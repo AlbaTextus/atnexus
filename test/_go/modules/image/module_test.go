@@ -199,3 +199,64 @@ func TestOnlyTheHealthProbeIsOpen(t *testing.T) {
 		}
 	}
 }
+
+func TestSpaceGroupAndUploadConfigValidation(t *testing.T) {
+	for key, want := range map[string]string{
+		"user/avatars":       "user",
+		"user/backgrounds":   "user",
+		"book/covers":        "book",
+		"book/illustrations": "book",
+		"forum":              "forum",
+		"_root":              "_root",
+		"custom":             "custom",
+	} {
+		if got := spaceGroup(key); got != want {
+			t.Errorf("spaceGroup(%q) = %q, want %q", key, got, want)
+		}
+	}
+
+	existing := uploadConfig{
+		S3: channelGroup{Channels: []Channel{{
+			Name:      "r2",
+			Enabled:   true,
+			Endpoint:  "https://s3.example.com",
+			Bucket:    "images",
+			AccessKey: "ak",
+			Secret:    "sk",
+		}}},
+	}
+
+	valid := uploadConfig{
+		Local: channelGroup{Channels: []Channel{{Name: "R2_env", Enabled: true}}},
+		S3: channelGroup{Channels: []Channel{{
+			Name:     "r2",
+			Enabled:  true,
+			Endpoint: "https://s3.example.com",
+			Bucket:   "images",
+		}}},
+	}
+	valid.Local.Channels[0].Quota.Enabled = true
+	valid.Local.Channels[0].Quota.LimitGB = 10
+	valid.Local.Channels[0].Quota.Threshold = 90
+	if !validateUploadConfig(&valid, existing) {
+		t.Fatal("expected valid upload config with preserved credentials to pass")
+	}
+	if valid.Local.Channels[0].SavePath != "environment variable" {
+		t.Errorf("SavePath = %q, want %q", valid.Local.Channels[0].SavePath, "environment variable")
+	}
+	if valid.S3.Channels[0].AccessKey != "ak" || valid.S3.Channels[0].Secret != "sk" {
+		t.Errorf("expected S3 credentials to be preserved when omitted")
+	}
+
+	badThreshold := valid
+	badThreshold.Local.Channels[0].Quota.Threshold = 120
+	if validateUploadConfig(&badThreshold, existing) {
+		t.Error("expected threshold > 100 to fail validation")
+	}
+
+	negativeQuota := valid
+	negativeQuota.Local.Channels[0].Quota.LimitGB = -1
+	if validateUploadConfig(&negativeQuota, existing) {
+		t.Error("expected negative limitGB to fail validation")
+	}
+}

@@ -14,6 +14,7 @@ export type NovelListItem = {
   synopsis: string
   chapterCount: number | null
   cover: string | null
+  publisher?: string
 }
 export type NovelDetailModel = Omit<NovelListItem, "synopsis"> & {
   synopsis: string[]
@@ -24,9 +25,10 @@ export type NovelDetailModel = Omit<NovelListItem, "synopsis"> & {
   contributions?: NovelContributors
 }
 
-export function mapNovelListItem(book: Novel, tags: ContentTag[], authors: ContentAuthor[] = []): NovelListItem {
+export function mapNovelListItem(book: Novel, tags: ContentTag[], authors: ContentAuthor[] = [], platforms: ContentPlatform[] = []): NovelListItem {
   const names = new Map(tags.map(tag => [tag.id, tag.name]))
   const author = authors.find(item => item.id === book.authorId && item.platformId === book.platformId)
+  const platform = platforms.find(item => item.id === book.platformId)
   return {
     id: String(book.id),
     title: book.title,
@@ -39,6 +41,7 @@ export function mapNovelListItem(book: Novel, tags: ContentTag[], authors: Conte
     synopsis: book.summary || "暂无简介",
     chapterCount: null,
     cover: safeContentURL(book.coverUrl),
+    publisher: platform?.name,
   }
 }
 

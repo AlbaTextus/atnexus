@@ -23,7 +23,7 @@
 | 删除 | `DELETE /manage/delete/<ID>`、`POST /manage/delete/batch` |
 | 移动、重命名、封禁 | `/manage/move/<ID>`、`rename/<ID>`、`block/<ID>`、`unblock/<ID>`，使用 POST/PATCH |
 | 元数据、标签 | `/manage/metadata/<ID>`、`tags/<ID>`、`tags/batch`、`tags/autocomplete` |
-| 容量 | `/manage/quota`，从真实记录计算 |
+| 容量 | `/manage/quota`，从真实记录计算各渠道、各业务空间占用、文件状态与运行参数 |
 | 存储配置 | `GET/POST /manage/sysConfig/upload`，读取隐藏 S3 凭据，修改时空凭据保留旧值 |
 | IP 黑名单 | `GET/PUT /manage/cusConfig/blockipList` |
 | 导出、记录恢复 | `/manage/batch/list`、`batch/settings`、`POST /manage/batch/restore/chunk` |

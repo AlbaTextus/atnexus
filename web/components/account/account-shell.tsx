@@ -6,7 +6,7 @@ import { Link } from "next-view-transitions"
 import { usePathname } from "next/navigation"
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from "react"
 import { motion, useAnimationControls, useReducedMotion } from "framer-motion"
-import { Activity, AlertCircle, House, KeyRound, LayoutGrid, LibraryBig, LogOut, Settings2, ShieldCheck, ShieldX, UserRound, Users } from "lucide-react"
+import { Activity, AlertCircle, HardDrive, House, KeyRound, LayoutGrid, LibraryBig, LogOut, Settings2, ShieldCheck, ShieldX, UserRound, Users } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import { isAdminRole, managementError } from "@/lib/admin/applications"
 import { profileSetupPath } from "@/lib/auth/profile-setup"
@@ -40,6 +40,7 @@ const adminNavigation: NavigationItem[] = [
   { href: "/admin/users", title: "用户管理", icon: Users, tone: "blue" },
   { href: "/admin/usage", title: "调用统计", icon: Activity, tone: "teal" },
   { href: "/admin/applications", title: "应用接入", icon: LayoutGrid, tone: "violet" },
+  { href: "/admin/imgbed", title: "图床管理", icon: HardDrive, tone: "orange" },
   { href: "/admin/settings", title: "配置", icon: Settings2, tone: "pink" },
 ]
 

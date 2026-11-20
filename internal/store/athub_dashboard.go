@@ -97,7 +97,7 @@ func (p *Postgres) ATHubDashboard(ctx context.Context, from, until time.Time, bu
 		return result, err
 	}
 	rows.Close()
-	calls, err := tx.Query(ctx, `SELECT c.id,c.user_id,c.key_id,c.request_id,c.method,c.path,c.port,c.authenticated,
+	calls, err := tx.Query(ctx, `SELECT c.id,c.user_id,c.key_id,c.request_id,c.method,c.path,c.authenticated,
 		c.status,c.duration_ms,c.response_bytes,c.started_at,c.completed_at,u.numeric_id,u.display_name,`+dashboardAvatarSQL+`
 		FROM athub_api_calls c LEFT JOIN users u ON u.id=c.user_id
 		WHERE c.key_id IS NOT NULL AND c.started_at >= $1 AND c.started_at < $2
@@ -109,7 +109,7 @@ func (p *Postgres) ATHubDashboard(ctx context.Context, from, until time.Time, bu
 	for calls.Next() {
 		var call ATHubAdminCall
 		if err := calls.Scan(&call.ID, &call.UserID, &call.KeyID, &call.RequestID, &call.Method,
-			&call.Path, &call.Port, &call.Authenticated, &call.Status, &call.DurationMS,
+			&call.Path, &call.Authenticated, &call.Status, &call.DurationMS,
 			&call.ResponseBytes, &call.StartedAt, &call.CompletedAt, &call.NumericID,
 			&call.DisplayName, &call.AvatarURL); err != nil {
 			return result, err

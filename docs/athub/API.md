@@ -33,7 +33,7 @@ Cookie 和用户身份请求头均不能替代新 Key。Key 默认永久有效�
 | GET | `/api/v1/account/key` | `keys` 数组只包含当前 Key 的前缀、停用状态、最后调用时间和调用次数，不返回明文或哈希。 |
 | POST | `/api/v1/account/key/reset` | 提交 `{}`，停用旧 Key 并生成新的永久 Key，返回一次性明文，保留历史调用记录。 |
 | DELETE | `/api/v1/account/key/{id}` | 停用自己的 Key，保留历史调用记录。 |
-| GET | `/api/v1/account/athub/usage` | 自己的总次数、成功/失败/待完成次数，按方法、接口、端口和状态码分组统计；可选 `days=1`、`7` 或 `30` 获取指定范围及按端口聚合的趋势。 |
+| GET | `/api/v1/account/athub/usage` | 自己的总次数、成功/失败/待完成次数，按方法、接口和状态码分组统计；可选 `days=1`、`7` 或 `30` 获取指定范围及按时间桶聚合的趋势。 |
 | GET | `/api/v1/account/athub/calls?limit=50&offset=0` | 自己的调用明细，`limit` 为 1–100，`offset` 为 0–1000000。 |
 
 首次生成或重置返回 `201`，结构为 `{"key":{...},"api_key":"ath_..."}`；明文只返回一次。

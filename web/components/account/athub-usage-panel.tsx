@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 type CallQuota = { total_call_limit: number | null; remaining_calls: number | null }
 export type ATHubUsage = {
   total_calls: number; successful_calls: number; failed_calls: number; pending_calls: number
-  endpoints: { method: string; path: string; port: number; status: number | null; calls: number }[]
+  endpoints: { method: string; path: string; status: number | null; calls: number }[]
   trend?: UsagePoint[]; from: string; until: string; bucket_seconds: number
   quota?: CallQuota
 }

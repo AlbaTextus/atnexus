@@ -34,7 +34,7 @@ func TestOAuthSessionAdmission(t *testing.T) {
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			st := &accessStore{}
-			a := accessFor(t, st)
+			a := accessFor(st)
 			identity := auth.Identity{UserID: uuid.New(), SessionID: uuid.New()}
 			a.EnableSessions(sessionVerifier{identity, scenario.err})
 			dispatched := false
@@ -57,10 +57,7 @@ func TestOAuthSessionAdmission(t *testing.T) {
 
 func TestCreatorHistoryUsesOAuthSession(t *testing.T) {
 	st, creator := &accessStore{}, &historyReads{}
-	access, err := New(st, ":8005", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	access := New(st, nil)
 	access.EnableCreatorStorage(creator)
 	identity := auth.Identity{UserID: uuid.New(), SessionID: uuid.New()}
 	access.EnableSessions(sessionVerifier{identity: identity})

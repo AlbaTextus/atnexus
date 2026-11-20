@@ -108,10 +108,7 @@ func run(logger *slog.Logger) error {
 	if err := creatorDB.RequireSeparateDatabases(ctx, cfg.DatabaseURL, cfg.ATHubDatabaseURL); err != nil {
 		return err
 	}
-	access, err := athubaccess.New(st, cfg.GatewayHTTPAddr, logger)
-	if err != nil {
-		return err
-	}
+	access := athubaccess.New(st, logger)
 	access.EnableSessions(sessions)
 	access.EnableAPIKeys(oauth.NewAPIKeys(st))
 	access.EnableCreatorStorage(creatorDB)

@@ -36,7 +36,7 @@ func TestReviewDecisionsAreSerializedAndChecked(t *testing.T) {
 	}
 	queue := func() store.ATHubReview {
 		t.Helper()
-		call := store.ATHubCall{ID: uuid.New(), RequestID: uuid.New(), UserID: &author, KeyID: &key.ID, Method: "POST", Path: "/api/v2/tags", Port: 8005, Authenticated: true}
+		call := store.ATHubCall{ID: uuid.New(), RequestID: uuid.New(), UserID: &author, KeyID: &key.ID, Method: "POST", Path: "/api/v2/tags", Authenticated: true}
 		if err := accounts.BeginATHubCall(ctx, call); err != nil {
 			t.Fatal(err)
 		}

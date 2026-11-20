@@ -44,10 +44,7 @@ func TestKeyCoverUploadIsAdmittedBeforeTheFileIsStored(t *testing.T) {
 				ReviewRequired: true,
 				Rules:          []store.ATHubAccessRule{{Operation: "upload", Allowed: true}},
 			}}
-			access, err := New(st, ":8003", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			access := New(st, nil)
 			access.EnableCreatorStorage(&st.queue)
 			// A signed-in browser must not stand in for a key that was refused.
 			access.EnableSessions(sessionVerifier{identity: auth.Identity{UserID: uuid.New(), SessionID: uuid.New()}})
@@ -85,7 +82,7 @@ func TestKeyCoverUploadIsAdmittedBeforeTheFileIsStored(t *testing.T) {
 			if !base.finished || base.status != scenario.want {
 				t.Fatalf("completion missing: finished=%v status=%d", base.finished, base.status)
 			}
-			if base.call.Method != "POST" || base.call.Path != store.ATHubCoverPath || base.call.Port != 8003 || base.call.SessionID != nil {
+			if base.call.Method != "POST" || base.call.Path != store.ATHubCoverPath || base.call.SessionID != nil {
 				t.Fatalf("unexpected audit labels: %+v", base.call)
 			}
 			if scenario.want == 200 && (base.call.KeyID == nil || *base.call.KeyID != base.identity.KeyID ||
@@ -126,10 +123,7 @@ func TestKeyIllustrationUploadFollowsPermissionsAndReview(t *testing.T) {
 				ReviewRequired: scenario.review,
 				Rules:          []store.ATHubAccessRule{{Operation: "upload", Allowed: scenario.allowed}},
 			}}
-			access, err := New(st, ":8003", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			access := New(st, nil)
 			access.EnableCreatorStorage(&st.queue)
 			dispatched := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +187,7 @@ func TestKeyIllustrationUploadNeedsTheContentAPI(t *testing.T) {
 	request := httptest.NewRequest("POST", "/api/v4/account/athub/novels/17/illustrations", strings.NewReader("image"))
 	request.Header.Set("Authorization", "Bearer "+uploadKey)
 	response := httptest.NewRecorder()
-	accessFor(t, st).UploadIllustrationWithKey(response, request, func(http.ResponseWriter, *http.Request, uuid.UUID) (int32, []byte, bool) {
+	accessFor(st).UploadIllustrationWithKey(response, request, func(http.ResponseWriter, *http.Request, uuid.UUID) (int32, []byte, bool) {
 		t.Fatal("illustration stored without a content API to record it")
 		return 0, nil, false
 	})

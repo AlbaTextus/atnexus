@@ -97,7 +97,6 @@ model ATHubAPICall {
   requestId String @unique @map("request_id") @db.Uuid
   method String @db.VarChar(16)
   path String @db.VarChar(255)
-  port Int
   authenticated Boolean
   status Int?
   durationMs BigInt? @map("duration_ms")

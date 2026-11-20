@@ -125,10 +125,7 @@ func newUploadFixture(t *testing.T) *uploadFixture {
 // wire connects the endpoints to a real ATHub access pipeline over st.
 func (f *uploadFixture) wire(t *testing.T, st store.ATHubStore) {
 	t.Helper()
-	access, err := athubaccess.New(st, ":8005", f.api.Log)
-	if err != nil {
-		t.Fatal(err)
-	}
+	access := athubaccess.New(st, f.api.Log)
 	access.EnableCreatorStorage(f.reviews)
 	access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// A reviewed change is rehearsed first; only a real call is recorded.

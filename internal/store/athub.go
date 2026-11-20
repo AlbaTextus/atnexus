@@ -25,7 +25,6 @@ type ATHubCall struct {
 	RequestID     uuid.UUID  `json:"request_id"`
 	Method        string     `json:"method"`
 	Path          string     `json:"path"`
-	Port          int        `json:"port"`
 	Authenticated bool       `json:"authenticated"`
 	Status        *int       `json:"status"`
 	DurationMS    *int64     `json:"duration_ms"`
@@ -37,7 +36,6 @@ type ATHubCall struct {
 type ATHubUsageGroup struct {
 	Method string `json:"method"`
 	Path   string `json:"path"`
-	Port   int    `json:"port"`
 	Status *int   `json:"status"`
 	Calls  int64  `json:"calls"`
 }
@@ -57,7 +55,6 @@ type ATHubUsage struct {
 
 type ATHubUsagePoint struct {
 	StartedAt time.Time `json:"started_at"`
-	Port      int       `json:"port"`
 	Calls     int64     `json:"calls"`
 }
 
@@ -81,6 +78,7 @@ type ATHubStore interface {
 }
 
 func (p *Postgres) CheckATHubSchema(ctx context.Context) error {
+	notReady := errors.New("ATHub authentication schema is not ready; run pnpm db:deploy")
 	for _, query := range []string{
 		`SELECT athub_disabled FROM users LIMIT 0`,
 		`SELECT role,total_call_limit,updated_by,updated_at FROM athub_key_limits LIMIT 0`,
@@ -88,13 +86,20 @@ func (p *Postgres) CheckATHubSchema(ctx context.Context) error {
 		`SELECT role,operation,method,path,allowed,total_call_limit FROM athub_access_rules LIMIT 0`,
 		`SELECT operation FROM athub_api_calls LIMIT 0`,
 		`SELECT id,user_id,name,token_hash,prefix,created_at,expires_at,revoked_at,last_used_at,is_current,authenticated_calls FROM athub_api_keys LIMIT 0`,
-		`SELECT id,user_id,key_id,request_id,method,path,port,authenticated,status,duration_ms,response_bytes,started_at,completed_at FROM athub_api_calls LIMIT 0`,
+		`SELECT id,user_id,key_id,request_id,method,path,authenticated,status,duration_ms,response_bytes,started_at,completed_at FROM athub_api_calls LIMIT 0`,
 	} {
 		rows, err := p.pool.Query(ctx, query)
 		if err != nil {
-			return errors.New("ATHub authentication schema is not ready; run pnpm db:deploy")
+			return notReady
 		}
 		rows.Close()
+	}
+	// Call records no longer carry a port. The column was NOT NULL, so a database
+	// that still has it refuses every record, and with it every call.
+	var portColumn bool
+	if err := p.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_attribute
+		WHERE attrelid=to_regclass('athub_api_calls') AND attname='port' AND NOT attisdropped)`).Scan(&portColumn); err != nil || portColumn {
+		return notReady
 	}
 	return nil
 }
@@ -135,12 +140,12 @@ func (p *Postgres) ResolveATHubKey(ctx context.Context, hash string) (ATHubIdent
 func athubRoleLock(role string) string { return `742190615,hashtext(` + role + `)` }
 
 func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
-	const record = `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,port,authenticated,operation)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`
+	const record = `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,authenticated,operation)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8)`
 	operation := ATHubOperation(call.Method, call.Path)
 	if !call.Authenticated {
 		// Nothing to recheck or lock: one statement records the anonymous call.
-		_, err := p.pool.Exec(ctx, record, call.ID, call.UserID, call.KeyID, call.RequestID, call.Method, call.Path, call.Port, false, operation)
+		_, err := p.pool.Exec(ctx, record, call.ID, call.UserID, call.KeyID, call.RequestID, call.Method, call.Path, false, operation)
 		return err
 	}
 	if call.UserID == nil || (call.KeyID == nil && call.SessionID == nil) {
@@ -243,7 +248,7 @@ func (p *Postgres) BeginATHubCall(ctx context.Context, call ATHubCall) error {
 	}
 	call.Authenticated = !denied && !limited && permissionErr == nil
 	writes := &pgx.Batch{}
-	writes.Queue(record, call.ID, call.UserID, call.KeyID, call.RequestID, call.Method, call.Path, call.Port, call.Authenticated, operation)
+	writes.Queue(record, call.ID, call.UserID, call.KeyID, call.RequestID, call.Method, call.Path, call.Authenticated, operation)
 	if call.Authenticated && call.KeyID != nil {
 		writes.Queue(`UPDATE athub_api_keys SET last_used_at=now(),authenticated_calls=authenticated_calls+1 WHERE id=$1`, call.KeyID)
 	}
@@ -274,7 +279,7 @@ func (p *Postgres) FinishATHubCall(ctx context.Context, id uuid.UUID, status int
 }
 
 func (p *Postgres) ListATHubCalls(ctx context.Context, userID uuid.UUID, limit, offset int) ([]ATHubCall, error) {
-	rows, err := p.pool.Query(ctx, `SELECT id,user_id,key_id,request_id,method,path,port,authenticated,status,duration_ms,response_bytes,started_at,completed_at
+	rows, err := p.pool.Query(ctx, `SELECT id,user_id,key_id,request_id,method,path,authenticated,status,duration_ms,response_bytes,started_at,completed_at
 		FROM athub_api_calls WHERE user_id=$1 AND key_id IS NOT NULL ORDER BY started_at DESC,id DESC LIMIT $2 OFFSET $3`, userID, limit, offset)
 	if err != nil {
 		return nil, err
@@ -283,7 +288,7 @@ func (p *Postgres) ListATHubCalls(ctx context.Context, userID uuid.UUID, limit, 
 	calls := make([]ATHubCall, 0)
 	for rows.Next() {
 		var c ATHubCall
-		if err := rows.Scan(&c.ID, &c.UserID, &c.KeyID, &c.RequestID, &c.Method, &c.Path, &c.Port, &c.Authenticated, &c.Status, &c.DurationMS, &c.ResponseBytes, &c.StartedAt, &c.CompletedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.UserID, &c.KeyID, &c.RequestID, &c.Method, &c.Path, &c.Authenticated, &c.Status, &c.DurationMS, &c.ResponseBytes, &c.StartedAt, &c.CompletedAt); err != nil {
 			return nil, err
 		}
 		calls = append(calls, c)
@@ -341,16 +346,16 @@ func athubUsageSnapshot(ctx context.Context, tx pgx.Tx, userID *uuid.UUID, from,
 		WHERE key_id IS NOT NULL AND ($1::uuid IS NULL OR user_id=$1) AND ($2::timestamptz IS NULL OR started_at >= $2) AND ($3::timestamptz IS NULL OR started_at < $3)`, userID, from, until).Scan(&result.Total, &result.Success, &result.Failed, &result.Pending); err != nil {
 		return result, err
 	}
-	rows, err := tx.Query(ctx, `SELECT method,path,port,status,COUNT(*) FROM athub_api_calls
+	rows, err := tx.Query(ctx, `SELECT method,path,status,COUNT(*) FROM athub_api_calls
 		WHERE key_id IS NOT NULL AND ($1::uuid IS NULL OR user_id=$1) AND ($2::timestamptz IS NULL OR started_at >= $2) AND ($3::timestamptz IS NULL OR started_at < $3)
-		GROUP BY method,path,port,status ORDER BY COUNT(*) DESC,method,path,port,status`, userID, from, until)
+		GROUP BY method,path,status ORDER BY COUNT(*) DESC,method,path,status`, userID, from, until)
 	if err != nil {
 		return result, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var g ATHubUsageGroup
-		if err := rows.Scan(&g.Method, &g.Path, &g.Port, &g.Status, &g.Calls); err != nil {
+		if err := rows.Scan(&g.Method, &g.Path, &g.Status, &g.Calls); err != nil {
 			return result, err
 		}
 		result.Endpoints = append(result.Endpoints, g)
@@ -361,16 +366,16 @@ func athubUsageSnapshot(ctx context.Context, tx pgx.Tx, userID *uuid.UUID, from,
 	rows.Close()
 	if from != nil {
 		result.Trend = make([]ATHubUsagePoint, 0)
-		points, err := tx.Query(ctx, `SELECT to_timestamp(floor(extract(epoch FROM started_at)/$4::int)*$4::int),port,COUNT(*)
+		points, err := tx.Query(ctx, `SELECT to_timestamp(floor(extract(epoch FROM started_at)/$4::int)*$4::int),COUNT(*)
 			FROM athub_api_calls WHERE key_id IS NOT NULL AND ($1::uuid IS NULL OR user_id=$1) AND started_at >= $2 AND started_at < $3
-			GROUP BY 1,port ORDER BY 1,port`, userID, from, until, bucketSeconds)
+			GROUP BY 1 ORDER BY 1`, userID, from, until, bucketSeconds)
 		if err != nil {
 			return result, err
 		}
 		defer points.Close()
 		for points.Next() {
 			var point ATHubUsagePoint
-			if err := points.Scan(&point.StartedAt, &point.Port, &point.Calls); err != nil {
+			if err := points.Scan(&point.StartedAt, &point.Calls); err != nil {
 				return result, err
 			}
 			result.Trend = append(result.Trend, point)

@@ -123,7 +123,7 @@ func TestSplitReviewLifecycleAndHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	call := store.ATHubCall{ID: uuid.New(), RequestID: uuid.New(), UserID: &author.ID, KeyID: &key.ID, Method: "POST", Path: "/api/v2/tags", Port: 8005, Authenticated: true}
+	call := store.ATHubCall{ID: uuid.New(), RequestID: uuid.New(), UserID: &author.ID, KeyID: &key.ID, Method: "POST", Path: "/api/v2/tags", Authenticated: true}
 	if err := accounts.BeginATHubCall(ctx, call); err != nil {
 		t.Fatal(err)
 	}

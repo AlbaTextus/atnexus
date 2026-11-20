@@ -57,10 +57,7 @@ func TestV3HistoryAuthenticatedRoutes(t *testing.T) {
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			st, creator := &accessStore{}, &historyReads{}
-			access, err := New(st, ":8003", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			access := New(st, nil)
 			access.EnableCreatorStorage(creator)
 			access.EnableSessions(sessionVerifier{identity: identity})
 			handler := access.Wrap(http.NotFoundHandler())
@@ -82,7 +79,7 @@ func TestV3HistoryAuthenticatedRoutes(t *testing.T) {
 			st.beginErr = store.ErrATHubAccessDenied
 			verifier = sessionVerifier{identity: identity}
 		}
-		access, _ := New(st, ":8003", nil)
+		access := New(st, nil)
 		access.EnableCreatorStorage(creator)
 		access.EnableSessions(verifier)
 		r := httptest.NewRequest("GET", "/api/v3/history?novelId=2", nil)
@@ -99,10 +96,7 @@ func TestV3HistoryAuthenticatedRoutes(t *testing.T) {
 func TestHistoryNeedsTheCreatorDatabase(t *testing.T) {
 	for _, path := range []string{"/api/v3/history?novelId=2", "/api/v3/contributors?novelId=2"} {
 		st := &accountHistory{}
-		access, err := New(st, ":8003", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
+		access := New(st, nil)
 		access.EnableSessions(sessionVerifier{identity: auth.Identity{UserID: uuid.New(), SessionID: uuid.New()}})
 		w := httptest.NewRecorder()
 		access.Wrap(http.NotFoundHandler()).ServeHTTP(w, httptest.NewRequest("GET", path, nil))

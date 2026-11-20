@@ -19,7 +19,7 @@ type APIKey = {
   revoked_at: string | null; last_used_at: string | null; total_calls: number
 }
 type KeyResult = { key: APIKey; api_key?: string }
-type Call = { id: string; method: string; path: string; port: number; status: number | null; duration_ms: number | null; started_at: string }
+type Call = { id: string; method: string; path: string; status: number | null; duration_ms: number | null; started_at: string }
 const keyPath = "/api/v1/account/key"
 const usagePath = "/api/v1/account/athub"
 const pageSize = 10

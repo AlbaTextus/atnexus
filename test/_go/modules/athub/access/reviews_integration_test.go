@@ -92,10 +92,7 @@ func TestModeratedContentIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(creator.Close)
-	access, err := New(p, ":8003", slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err != nil {
-		t.Fatal(err)
-	}
+	access := New(p, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	access.EnableCreatorStorage(creator)
 	hub, err := athub.New(ctx, athub.Config{DatabaseURL: contentURL, WrapHandler: access.Wrap, RecordChanges: access.RecordChanges}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {

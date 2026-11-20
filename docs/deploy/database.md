@@ -58,6 +58,7 @@ npm run db:image:deploy
 | 账户库 | `20261110000000_athub_user_keys`、`20261110010000_athub_single_key`、`20261110020000_athub_admin_disable` | 个人 Key、单 Key 模式与管理员禁用，见 [ATHub 密钥与权限](/oauth/athub-key) |
 | 账户库 | `20261117000000_athub_key_call_counter` | 个人 Key 的已放行调用计数列，迁移时按调用记录回填一次；新版本启动时要求该列存在。须在旧后端停止后执行，旧程序在迁移之后放行的调用不会计入额度 |
 | 账户库 | `20261120000000_drop_retired_tables` | 永久删除已没有程序读写的表及其数据：旧审核 `athub_reviews` 与旧历史 `novel_revisions`（数据已在创作者库）、图床 Key 导入标记 `image_key_imports`、旧钱包与支付表 `wallets`、`wallet_entries`、`wallet_settlements`、`payment_orders`，以及协议正文表 `legal_documents`。执行前确认创作者库的导入已经完成、钱包与支付数据不再需要或已另行备份。执行之后旧版本后端无法启动 |
+| 账户库 | `20261120010000_drop_athub_call_port` | 永久删除调用记录表 `athub_api_calls` 的 `port` 列，已记录的端口不可恢复，调用记录的其余内容不受影响；只修改表定义，不重写表。新版本启动时要求该列已删除：仍有该列的账户库无法写入调用记录。执行之后旧版本后端无法启动 |
 | 内容库 | `20261103000000_remove_user_api` | 删除旧 `ApiUser`、`ApiKey`、`ApiUsage` 表及数据，保留平台、作者、小说、卷与章节 |
 | 内容库 | `20261110030000_add_tags`、`20261110040000_add_author_name` | 标签库与作者姓名 |
 | 内容库 | `20261115000000_novel_illustrations`、`20261115010000_illustration_layout` | 插图与插图布局 |

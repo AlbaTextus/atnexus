@@ -24,7 +24,7 @@ func TestATHubKeyTotalLimitIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	makeCall := func() ATHubCall {
-		return ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Port: 8003, Authenticated: true}
+		return ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Authenticated: true}
 	}
 	limits, err := p.ATHubKeyLimits(ctx)
 	if err != nil || len(limits) != 4 {
@@ -147,7 +147,7 @@ func TestATHubUsageQuotaIntegration(t *testing.T) {
 	}
 	// Calls outside every chart range still consume the current key's allowance.
 	for _, status := range []int{200, 500, 0} {
-		call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Port: 8003, Authenticated: true}
+		call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Authenticated: true}
 		if err := p.BeginATHubCall(ctx, call); err != nil {
 			t.Fatal(err)
 		}
@@ -158,7 +158,7 @@ func TestATHubUsageQuotaIntegration(t *testing.T) {
 		}
 	}
 	// Rejected requests remain in the audit log but do not consume admitted-call quota.
-	if err := p.BeginATHubCall(ctx, ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Port: 8003}); err != nil {
+	if err := p.BeginATHubCall(ctx, ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := p.pool.Exec(ctx, `UPDATE athub_api_calls SET started_at=now()-interval '60 days' WHERE key_id=$1`, key.ID); err != nil {

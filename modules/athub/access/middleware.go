@@ -5,11 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -22,7 +19,6 @@ import (
 
 type Access struct {
 	store          store.ATHubStore
-	port           int
 	logger         *slog.Logger
 	content        http.Handler
 	wrapped        http.Handler
@@ -72,19 +68,11 @@ func (a *Access) EnableCreatorStorage(st interface {
 	a.creatorReviews = st
 }
 
-func New(st store.ATHubStore, addr string, logger *slog.Logger) (*Access, error) {
-	_, portText, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid ATHub audit address: %w", err)
-	}
-	port, err := strconv.Atoi(portText)
-	if err != nil || port < 1 || port > 65535 {
-		return nil, errors.New("ATHub audit address must specify a port between 1 and 65535")
-	}
+func New(st store.ATHubStore, logger *slog.Logger) *Access {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Access{store: st, port: port, logger: logger, keys: oauth.NewAPIKeys(st)}, nil
+	return &Access{store: st, logger: logger, keys: oauth.NewAPIKeys(st)}
 }
 
 func tokenFrom(r *http.Request) string {
@@ -170,7 +158,7 @@ func (a *Access) admit(serve func(http.ResponseWriter, *http.Request, store.ATHu
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		requestID := uuid.New()
 		w.Header().Set("X-Request-ID", requestID.String())
-		call := store.ATHubCall{ID: uuid.New(), RequestID: requestID, Method: method(r.Method), Path: endpoint(r.URL.Path), Port: a.port}
+		call := store.ATHubCall{ID: uuid.New(), RequestID: requestID, Method: method(r.Method), Path: endpoint(r.URL.Path)}
 		if identity, ok := r.Context().Value(submissionIdentityKey{}).(submissionIdentity); ok && store.ATHubSubmissionEndpoint(r.Method, r.URL.Path) {
 			call.UserID, call.SessionID = &identity.user, &identity.session
 			call.Authenticated = true

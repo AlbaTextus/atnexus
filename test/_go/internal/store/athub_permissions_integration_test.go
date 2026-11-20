@@ -23,7 +23,7 @@ func policyUser(t *testing.T, p *Postgres, role string) (uuid.UUID, ATHubKey) {
 	return user, key
 }
 func policyCall(user uuid.UUID, key ATHubKey, method, path string) ATHubCall {
-	return ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: method, Path: path, Port: 8003, Authenticated: true}
+	return ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: method, Path: path, Authenticated: true}
 }
 func TestATHubDefaultOperationPermissions(t *testing.T) {
 	p := athubTestStore(t)

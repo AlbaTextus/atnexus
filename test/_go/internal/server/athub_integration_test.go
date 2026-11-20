@@ -129,10 +129,7 @@ func TestATHubUserKeyContentFlowIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	v1 := account.Router()
-	access, err := athubaccess.New(st, ":8003", logger)
-	if err != nil {
-		t.Fatal(err)
-	}
+	access := athubaccess.New(st, logger)
 	content, err := athub.New(ctx, athub.Config{DatabaseURL: contentDSN, WrapHandler: access.Wrap}, logger)
 	if err != nil {
 		t.Fatal(err)
@@ -224,7 +221,7 @@ func TestATHubUserKeyContentFlowIntegration(t *testing.T) {
 		t.Fatal("missing call records")
 	}
 	for _, c := range recorded.Calls {
-		if c.Port != 8003 || c.UserID == nil || *c.UserID != user.ID || c.Status == nil || c.CompletedAt == nil {
+		if c.UserID == nil || *c.UserID != user.ID || c.Status == nil || c.CompletedAt == nil {
 			t.Fatalf("incomplete call: %+v", c)
 		}
 	}

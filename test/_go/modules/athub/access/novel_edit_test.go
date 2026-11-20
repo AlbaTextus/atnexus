@@ -43,10 +43,7 @@ func TestAccountNovelEditAdmissionAndReview(t *testing.T) {
 					Operation: "edit", Method: "PUT", Path: "/api/v2/novelinfo", Allowed: *scenario.override,
 				})
 			}
-			access, err := New(st, ":8003", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			access := New(st, nil)
 			access.EnableCreatorStorage(&st.queue)
 			dispatched := false
 			payload := `{"platformId":1,"title":"修改后的小说","status":"COMPLETED","tagIds":[2]}`
@@ -100,7 +97,7 @@ func boolPointer(value bool) *bool { return &value }
 
 func TestPublicNovelEditCannotImpersonateAccount(t *testing.T) {
 	st := &accessStore{}
-	access := accessFor(t, st)
+	access := accessFor(st)
 	handler := access.Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("untrusted edit dispatched")
 	}))

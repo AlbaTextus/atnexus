@@ -74,10 +74,7 @@ func TestAccountSubmissionAdmissionAndReview(t *testing.T) {
 				ReviewRequired: scenario.review,
 				Rules:          []store.ATHubAccessRule{{Operation: "upload", Allowed: scenario.allowed}},
 			}}
-			access, err := New(st, ":8003", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			access := New(st, nil)
 			access.EnableCreatorStorage(&st.queue)
 			dispatched := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -126,10 +123,7 @@ func TestReviewedChangeNeedsTheCreatorDatabase(t *testing.T) {
 		ReviewRequired: true,
 		Rules:          []store.ATHubAccessRule{{Operation: "upload", Allowed: true}},
 	}}}
-	access, err := New(st, ":8003", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	access := New(st, nil)
 	access.Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("a change that could not be queued reached the content API")
 	}))
@@ -150,7 +144,7 @@ func TestReviewedChangeNeedsTheCreatorDatabase(t *testing.T) {
 
 func TestPublicRequestCannotImpersonateAccountSubmission(t *testing.T) {
 	st := &accessStore{}
-	access := accessFor(t, st)
+	access := accessFor(st)
 	handler := access.Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("untrusted request dispatched")
 	}))

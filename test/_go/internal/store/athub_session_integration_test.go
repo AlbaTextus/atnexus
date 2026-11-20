@@ -41,7 +41,7 @@ func TestATHubSessionAccountingIntegration(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			call := ATHubCall{ID: uuid.New(), RequestID: uuid.New(), UserID: &userID, SessionID: &sessionID, Method: "GET", Path: "/api/v2/novelinfo", Port: 8003, Authenticated: true}
+			call := ATHubCall{ID: uuid.New(), RequestID: uuid.New(), UserID: &userID, SessionID: &sessionID, Method: "GET", Path: "/api/v2/novelinfo", Authenticated: true}
 			err := st.BeginATHubCall(ctx, call)
 			if tc.allowed && err != nil || !tc.allowed && !errors.Is(err, ErrATHubAccessDenied) {
 				t.Fatalf("allowed=%v error=%v", tc.allowed, err)
@@ -77,8 +77,8 @@ func TestPurgeATHubCallLogKeepsKeyCallsIntegration(t *testing.T) {
 	}
 	insert := func(keyID *uuid.UUID, userID *uuid.UUID, age string) {
 		t.Helper()
-		if _, err := st.pool.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,port,authenticated,started_at)
-			VALUES($1,$2,$3,$4,'GET','/api/v2/content',8003,true,now()-$5::interval)`, uuid.New(), userID, keyID, uuid.New(), age); err != nil {
+		if _, err := st.pool.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,authenticated,started_at)
+			VALUES($1,$2,$3,$4,'GET','/api/v2/content',true,now()-$5::interval)`, uuid.New(), userID, keyID, uuid.New(), age); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -32,7 +32,7 @@ func TestCreatorIllustrationReadsReuseATHubAdmission(t *testing.T) {
 				identity: store.ATHubIdentity{KeyID: uuid.New(), UserID: identity.UserID, Active: true},
 				beginErr: tc.beginErr,
 			}
-			access := accessFor(t, st)
+			access := accessFor(st)
 			access.EnableSessions(sessionVerifier{identity: identity})
 			dispatched := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -92,10 +92,7 @@ func TestIllustrationDeleteUsesSessionPermissionsAndReview(t *testing.T) {
 				ReviewRequired: scenario.review,
 				Rules:          []store.ATHubAccessRule{{Operation: "delete", Allowed: scenario.allowed}},
 			}}
-			access, err := New(st, ":8003", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			access := New(st, nil)
 			access.EnableCreatorStorage(&st.queue)
 			dispatched := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -147,10 +144,7 @@ func TestIllustrationLayoutUsesEditPermissionAndReview(t *testing.T) {
 				ReviewRequired: scenario.review,
 				Rules:          []store.ATHubAccessRule{{Operation: "edit", Allowed: scenario.allowed}},
 			}}
-			access, err := New(st, ":8003", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			access := New(st, nil)
 			access.EnableCreatorStorage(&st.queue)
 			called := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

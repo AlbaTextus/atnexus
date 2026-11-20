@@ -3,7 +3,7 @@
 import { useId } from "react"
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
-export type UsagePoint = { started_at: string; port: number; calls: number }
+export type UsagePoint = { started_at: string; calls: number }
 
 export function ATHubUsageChart({ trend, total, from, until, bucketSeconds }: {
   trend: UsagePoint[]

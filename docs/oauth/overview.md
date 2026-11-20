@@ -35,7 +35,7 @@ ATHub 公开入口改为 `/api/v5/*`，创作者平台为 `/api/v4/*`，邮件�
 本仓库曾使用 `AlbaTextus/connect`、`AlbaTextus/oauth` 名称，现统一命名为
 `AlbaTextus/atnexus`，负责账户、认证、OAuth 授权与 ATHub 内容存储。
 积分、支付、管理调整与 24 小时结算已迁移至独立仓库 [AlbaTextus/credit](https://github.com/AlbaTextus/credit)，使用独立数据库。
-账户中心的积分入口和旧支付页面跳转到 `NEXT_PUBLIC_CREDIT_URL`（本地默认 `http://localhost:3300`）。
+账户中心不再提供积分入口和旧支付页面的跳转。
 钱包及支付 API 不再由本服务提供；调用方应切换到 Credit。
 
 Credit 在应用管理中注册为机密 OAuth 客户端：回调地址 `http://localhost:3300/api/v1/auth/callback`，

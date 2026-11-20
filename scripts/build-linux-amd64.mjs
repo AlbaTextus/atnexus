@@ -22,7 +22,6 @@ Optional build environment:
   NEXT_PUBLIC_CREATPLAT_API_URL  public creator API origin
   CREATPLAT_BACKEND_URL     http://127.0.0.1:8010
   NEXT_PUBLIC_WIKI_URL      http://localhost:3200
-  NEXT_PUBLIC_CREDIT_URL    http://localhost:3300
 
 Local .env files are excluded. Public URLs must be set before building.`)
   process.exit(0)
@@ -84,7 +83,6 @@ const urls = {
   NEXT_PUBLIC_ATHUB_API_URL: process.env.NEXT_PUBLIC_ATHUB_API_URL || "http://localhost:8010",
   NEXT_PUBLIC_CREATPLAT_API_URL: process.env.NEXT_PUBLIC_CREATPLAT_API_URL || "http://localhost:8010",
   NEXT_PUBLIC_WIKI_URL: process.env.NEXT_PUBLIC_WIKI_URL || "http://localhost:3200",
-  NEXT_PUBLIC_CREDIT_URL: process.env.NEXT_PUBLIC_CREDIT_URL || "http://localhost:3300",
 }
 for (const [key, value] of Object.entries(urls)) {
   const parsed = new URL(value)

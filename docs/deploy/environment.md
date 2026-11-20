@@ -48,7 +48,6 @@ Go 服务从仓库根目录 `.env` 加载配置，已有进程环境变量优先
 | `HTTP_SHUTDOWN_TIMEOUT` | 停止服务时等待在途请求的期限，默认 `10s`，必须为正 |
 | `BCRYPT_COST` | 密码哈希强度，默认 `12`，取值 10 至 15 |
 | `WEBAUTHN_RP_NAME` | Passkey 显示的站点名称，默认 `ALBATEXTUS` |
-| `NEXT_PUBLIC_CREDIT_URL` | 积分服务地址，本地默认 `http://localhost:3300`；前端构建前配置 |
 
 按功能分组的变量在对应文档中说明：
 

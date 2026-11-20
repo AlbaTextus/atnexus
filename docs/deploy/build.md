@@ -45,7 +45,7 @@ Linux 可运行 `bash scripts/build-linux-amd64.sh`。Corepack 未安装时先�
 `npm install --global corepack`。构建时，`OAUTH_BACKEND_URL` 和 `CREATPLAT_BACKEND_URL`
 默认都指向聚合入口 `http://127.0.0.1:8010`；浏览器使用的 `NEXT_PUBLIC_ATHUB_API_URL`
 和 `NEXT_PUBLIC_CREATPLAT_API_URL` 默认都是 `http://localhost:8010`。
-`NEXT_PUBLIC_WIKI_URL` 和 `NEXT_PUBLIC_CREDIT_URL` 分别默认为 `http://localhost:3200`、`http://localhost:3300`。
+`NEXT_PUBLIC_WIKI_URL` 默认为 `http://localhost:3200`。
 本地 `.env` 文件不参与构建，公开地址和 Next.js 转发目标修改后需要重新构建。
 
 脚本复制当前工作目录源码（包括未提交的修改）到 `temp/`，安装锁定依赖并构建，

@@ -3,7 +3,7 @@
 账户与 OAuth 路由以 [modules/oauth/api/api.go](https://github.com/AlbaTextus/atnexus/blob/main/modules/oauth/api/api.go) 为准；
 创作路由见 [modules/creatplat/api/api.go](https://github.com/AlbaTextus/atnexus/blob/main/modules/creatplat/api/api.go)，
 内容路由见 [ATHub 模块接口](/athub/overview)。
-以下路径中的 `{id}`、`{provider}` 为参数；协议 `{slug}` 仅支持 `privacy`、`terms`。
+以下路径中的 `{id}`、`{provider}` 为参数。
 
 ## OAuth 与公开接口
 
@@ -17,7 +17,6 @@
 | POST | `/oauth/introspect` | 查询令牌状态 |
 | GET | `/api/v1/auth/providers` | 第三方平台开放状态 |
 | GET | `/api/v1/auth/verification` | Turnstile 公开配置 |
-| GET | `/api/v1/legal/{slug}` | 公开协议正文 |
 | GET | `/api/v1/profiles/{id}` | 用户公开资料 |
 
 ## 认证与个人账户
@@ -61,10 +60,9 @@
 | PATCH | `/api/v1/admin/users/{id}` | 修改昵称、角色与启停状态 |
 | POST | `/api/v1/admin/users/{id}/password` | 重置用户密码 |
 | POST | `/api/v1/admin/users/{id}/revoke-sessions` | 撤销用户登录与授权 |
-| GET / PUT | `/api/v1/admin/legal/{slug}` | 读取 / 更新协议 |
 | GET / PATCH | `/api/v1/admin/features` | 读取 / 更新站点功能开关 |
 
-用户列表支持 `q`、`role`、`status`、`page`、`page_size`；更新用户需提交读到的 `updated_at`。协议以 Markdown 保存，更新需提交 `revision`。版本冲突会返回 `409`，应重新读取后编辑。
+用户列表支持 `q`、`role`、`status`、`page`、`page_size`；更新用户需提交读到的 `updated_at`。版本冲突会返回 `409`，应重新读取后编辑。
 
 ## 其他接口
 

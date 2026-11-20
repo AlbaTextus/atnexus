@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/AlbaTextus/atnexus/internal/store"
+	"github.com/AlbaTextus/atnexus/pkg/auth"
 	"github.com/google/uuid"
 )
 
@@ -32,12 +32,7 @@ func (s *historyAccessStore) NovelContributors(_ context.Context, id int32) (jso
 }
 
 func TestV3HistoryAuthenticatedRoutes(t *testing.T) {
-	userID, sessionID := uuid.New(), uuid.New()
-	secret := "history-test-session-secret"
-	credential, _, err := IssueReadSession(secret, userID, sessionID, time.Now().Add(time.Minute))
-	if err != nil {
-		t.Fatal(err)
-	}
+	identity := auth.Identity{UserID: uuid.New(), SessionID: uuid.New()}
 	for _, tc := range []struct {
 		path   string
 		status int
@@ -57,10 +52,9 @@ func TestV3HistoryAuthenticatedRoutes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			access.EnableReadSessions(secret)
+			access.EnableSessions(sessionVerifier{identity: identity})
 			handler := access.Wrap(http.NotFoundHandler())
 			r := httptest.NewRequest("GET", tc.path, nil)
-			r.Header.Set("Authorization", "Bearer "+credential)
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, r)
 			if w.Code != tc.status || !st.finished {
@@ -73,15 +67,14 @@ func TestV3HistoryAuthenticatedRoutes(t *testing.T) {
 	}
 	for _, denied := range []bool{false, true} {
 		st := &historyAccessStore{}
+		verifier := sessionVerifier{err: auth.ErrUnauthenticated}
 		if denied {
 			st.beginErr = store.ErrATHubAccessDenied
+			verifier = sessionVerifier{identity: identity}
 		}
 		access, _ := New(st, ":8003", nil)
-		access.EnableReadSessions(secret)
+		access.EnableSessions(verifier)
 		r := httptest.NewRequest("GET", "/api/v3/history?novelId=2", nil)
-		if denied {
-			r.Header.Set("Authorization", "Bearer "+credential)
-		}
 		w := httptest.NewRecorder()
 		access.Wrap(http.NotFoundHandler()).ServeHTTP(w, r)
 		if w.Code != 401 || st.novelID != 0 {

@@ -32,7 +32,6 @@
 | POST | `/api/v1/auth/providers/{provider}/start` | 开始第三方登录或绑定 |
 | GET | `/api/v1/auth/providers/{provider}/callback` | 第三方回调 |
 | GET / DELETE | `/api/v1/account/identities` / `/api/v1/account/identities/{provider}` | 列出或解绑第三方账号 |
-| GET | `/api/v1/account/applications` | 当前用户可访问的应用信息 |
 | PATCH | `/api/v1/account/profile` | 更新昵称 |
 | POST | `/api/v1/account/setup` | 注册后完成首次用户名设置，见[邮件模块](/mail/overview) |
 | PATCH | `/api/v1/account/bio` | 更新个人简介 |

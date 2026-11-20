@@ -206,25 +206,3 @@ func TestATHubUsageQuotaIntegration(t *testing.T) {
 		t.Fatalf("LT2 quota=%+v error=%v", usage.Quota, err)
 	}
 }
-
-func TestLevelTwoAvailableApplicationsIntegration(t *testing.T) {
-	p := athubTestStore(t)
-	ctx := context.Background()
-	roles := []string{"USER", "LEVEL_2", "ADMIN", "SUPER_ADMIN"}
-	for _, role := range roles {
-		if _, err := p.pool.Exec(ctx, `INSERT INTO oauth_clients(id,name,minimum_role) VALUES($1,$2,$3)`, role, role, role); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for index, role := range roles {
-		apps, err := p.AvailableApplications(ctx, role)
-		if err != nil || len(apps) != index+1 {
-			t.Fatalf("role=%s apps=%+v error=%v", role, apps, err)
-		}
-		for _, app := range apps {
-			if !MeetsMinimumRole(role, app.ID) {
-				t.Fatalf("role=%s received inaccessible app=%s", role, app.ID)
-			}
-		}
-	}
-}

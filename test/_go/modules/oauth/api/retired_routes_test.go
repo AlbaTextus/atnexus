@@ -34,4 +34,13 @@ func TestRetiredMessageRoutes(t *testing.T) {
 			t.Errorf("retired email route remains registered: %s", route)
 		}
 	}
+	// The library reads with the login session, and the account page no longer lists applications.
+	for _, route := range []string{
+		"POST /api/v1/account/athub/session",
+		"GET /api/v1/account/applications",
+	} {
+		if routes[route] {
+			t.Errorf("retired account route remains registered: %s", route)
+		}
+	}
 }

@@ -114,7 +114,6 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	access.EnableReadSessions(cfg.ClientSecretEncryptionKey)
 	access.EnableSessions(sessions)
 	access.EnableAPIKeys(oauth.NewAPIKeys(st))
 	access.EnableCreatorStorage(creatorDB)

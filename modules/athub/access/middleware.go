@@ -24,7 +24,6 @@ type Access struct {
 	store          store.ATHubStore
 	port           int
 	logger         *slog.Logger
-	readSecret     string
 	content        http.Handler
 	wrapped        http.Handler
 	sessions       auth.Verifier
@@ -194,16 +193,6 @@ func (a *Access) admit(serve func(http.ResponseWriter, *http.Request, store.ATHu
 					return
 				}
 				call.UserID, call.SessionID, call.Authenticated = &identity.UserID, &identity.SessionID, true
-			}
-		}
-		if len(r.Header.Values("Authorization")) == 1 && r.Method == http.MethodGet && a.readSecret != "" {
-			scheme, credential, ok := strings.Cut(r.Header.Get("Authorization"), " ")
-			if ok && strings.EqualFold(scheme, "Bearer") {
-				if identity, valid := parseReadSession(a.readSecret, credential); valid {
-					call.UserID = &identity.UserID
-					call.SessionID = &identity.SessionID
-					call.Authenticated = true
-				}
 			}
 		}
 		if token != "" && !call.Authenticated {

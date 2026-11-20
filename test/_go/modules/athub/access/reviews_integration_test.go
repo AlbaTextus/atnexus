@@ -17,6 +17,7 @@ import (
 	"github.com/AlbaTextus/atnexus/internal/security"
 	"github.com/AlbaTextus/atnexus/internal/store"
 	"github.com/AlbaTextus/atnexus/modules/athub"
+	creatorstorage "github.com/AlbaTextus/atnexus/modules/creatplat/storage"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -77,16 +78,22 @@ func TestModeratedContentIntegration(t *testing.T) {
 	}
 	accountURL := moderationSchema(t, dsn, "account", "../../../prisma/oauth/migrations/*/migration.sql")
 	contentURL := moderationSchema(t, dsn, "content", "../../../prisma/athub/migrations/*/migration.sql")
+	creatorURL := moderationSchema(t, dsn, "creator", "../../../prisma/creatplat/migrations/*/migration.sql")
 	ctx := context.Background()
 	p, err := store.NewPostgres(ctx, accountURL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(p.Close)
-	access, err := New(p, ":8003", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	// Reviews and history live in the creator database; accounts decide who may
+	// submit and review.
+	creator, err := creatorstorage.New(ctx, creatorURL, p)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(creator.Close)
+	access := New(p, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	access.EnableCreatorStorage(creator)
 	hub, err := athub.New(ctx, athub.Config{DatabaseURL: contentURL, WrapHandler: access.Wrap, RecordChanges: access.RecordChanges}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -143,7 +150,7 @@ func TestModeratedContentIntegration(t *testing.T) {
 	if before.Code != 200 || strings.TrimSpace(before.Body.String()) != "[]" {
 		t.Fatal("pending content became public", before.Body)
 	}
-	result, err := p.DecideATHubReview(ctx, users["ADMIN"].ID, pending.ID, "approve", "资料完整", access.ApplyReview)
+	result, err := creator.DecideATHubReview(ctx, users["ADMIN"].ID, pending.ID, "approve", "资料完整", access.ApplyReview)
 	if err != nil || result.Status != "approved" {
 		t.Fatalf("approval=%+v err=%v", result, err)
 	}
@@ -157,7 +164,7 @@ func TestModeratedContentIntegration(t *testing.T) {
 	if visible.Code != 200 || !strings.Contains(visible.Body.String(), "等待审核的小说") {
 		t.Fatal("approved content not visible", visible.Body)
 	}
-	history, err := p.NovelHistory(ctx, novel.ID, 20, 0)
+	history, err := creator.NovelHistory(ctx, novel.ID, 20, 0)
 	if err != nil || history.Total != 1 || !strings.Contains(string(history.Revisions[0].Contributor), users["LEVEL_2"].ID.String()) {
 		t.Fatalf("original contributor lost history=%+v err=%v", history, err)
 	}
@@ -167,7 +174,7 @@ func TestModeratedContentIntegration(t *testing.T) {
 		t.Fatalf("edit=%d %s", edit.Code, edit.Body)
 	}
 	_ = json.Unmarshal(edit.Body.Bytes(), &pending)
-	if _, err := p.DecideATHubReview(ctx, users["ADMIN"].ID, pending.ID, "reject", "资料不完整", access.ApplyReview); err != nil {
+	if _, err := creator.DecideATHubReview(ctx, users["ADMIN"].ID, pending.ID, "reject", "资料不完整", access.ApplyReview); err != nil {
 		t.Fatal(err)
 	}
 	visible = call("USER", "GET", fmt.Sprintf("/api/v2/novelinfo?id=%d", novel.ID), "")
@@ -212,7 +219,7 @@ func TestModeratedContentIntegration(t *testing.T) {
 			if response.Code != 202 || json.Unmarshal(response.Body.Bytes(), &queued) != nil {
 				t.Fatalf("browser edit: %d %s", response.Code, response.Body)
 			}
-			item, err := p.ATHubReview(ctx, users["LEVEL_2"].ID, queued.ID, false)
+			item, err := creator.ATHubReview(ctx, users["LEVEL_2"].ID, queued.ID, false)
 			if err != nil || item.Operation != "edit" || item.Status != "pending" || item.Query != fmt.Sprintf("id=%d", book.ID) {
 				t.Fatalf("browser edit review: %+v %v", item, err)
 			}
@@ -230,20 +237,20 @@ func TestModeratedContentIntegration(t *testing.T) {
 		}
 		item := submitEdit("审核通过的浏览器编辑")
 		readTitle("等待审核的小说")
-		if _, err := p.DecideATHubReview(ctx, users["LEVEL_2"].ID, item.ID, "approve", "", access.ApplyReview); err == nil {
+		if _, err := creator.DecideATHubReview(ctx, users["LEVEL_2"].ID, item.ID, "approve", "", access.ApplyReview); err == nil {
 			t.Fatal("submitter approved own edit")
 		}
-		approved, err := p.DecideATHubReview(ctx, users["ADMIN"].ID, item.ID, "approve", "", access.ApplyReview)
+		approved, err := creator.DecideATHubReview(ctx, users["ADMIN"].ID, item.ID, "approve", "", access.ApplyReview)
 		if err != nil || approved.Status != "approved" {
 			t.Fatalf("browser edit approval: %+v %v", approved, err)
 		}
 		readTitle("审核通过的浏览器编辑")
-		history, err := p.NovelHistory(ctx, book.ID, 20, 0)
+		history, err := creator.NovelHistory(ctx, book.ID, 20, 0)
 		if err != nil || history.Total != 2 || !strings.Contains(string(history.Revisions[0].Contributor), users["LEVEL_2"].ID.String()) {
 			t.Fatalf("browser edit contributor lost: %+v %v", history, err)
 		}
 		item = submitEdit("驳回的浏览器编辑")
-		rejected, err := p.DecideATHubReview(ctx, users["ADMIN"].ID, item.ID, "reject", "资料不准确", access.ApplyReview)
+		rejected, err := creator.DecideATHubReview(ctx, users["ADMIN"].ID, item.ID, "reject", "资料不准确", access.ApplyReview)
 		if err != nil || rejected.Status != "rejected" {
 			t.Fatalf("browser edit rejection: %+v %v", rejected, err)
 		}
@@ -285,11 +292,11 @@ func TestModeratedContentIntegration(t *testing.T) {
 				if err := json.Unmarshal(body, &queued); err != nil {
 					t.Fatal(err)
 				}
-				item, err := p.ATHubReview(ctx, users[role].ID, queued.ID, false)
+				item, err := creator.ATHubReview(ctx, users[role].ID, queued.ID, false)
 				if err != nil || item.Status != "pending" || item.Path != "/api/v2/upload" {
 					t.Fatalf("browser submission missing from own reviews: %+v %v", item, err)
 				}
-				approved, err := p.DecideATHubReview(ctx, users["ADMIN"].ID, queued.ID, "approve", "", access.ApplyReview)
+				approved, err := creator.DecideATHubReview(ctx, users["ADMIN"].ID, queued.ID, "approve", "", access.ApplyReview)
 				if err != nil || approved.Status != "approved" {
 					t.Fatalf("browser approval: %+v %v", approved, err)
 				}
@@ -304,7 +311,7 @@ func TestModeratedContentIntegration(t *testing.T) {
 			if err := json.Unmarshal(body, &uploaded); err != nil || uploaded.Novel.ID <= 0 || uploaded.ChapterCount != 1 {
 				t.Fatalf("invalid upload result: %s err=%v", body, err)
 			}
-			history, err := p.NovelHistory(ctx, uploaded.Novel.ID, 20, 0)
+			history, err := creator.NovelHistory(ctx, uploaded.Novel.ID, 20, 0)
 			if err != nil || history.Total != 1 || !strings.Contains(string(history.Revisions[0].Contributor), users[role].ID.String()) {
 				t.Fatalf("browser contributor lost: %+v %v", history, err)
 			}

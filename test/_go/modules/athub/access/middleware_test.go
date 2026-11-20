@@ -46,13 +46,8 @@ func (s *accessStore) FinishATHubCall(ctx context.Context, _ uuid.UUID, status i
 	s.finished = true
 	return s.finishErr
 }
-func accessFor(t *testing.T, s *accessStore) *Access {
-	t.Helper()
-	a, err := New(s, ":8003", slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return a
+func accessFor(s *accessStore) *Access {
+	return New(s, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 func TestAuthenticationAndAccounting(t *testing.T) {
@@ -82,7 +77,7 @@ func TestAuthenticationAndAccounting(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &accessStore{identity: store.ATHubIdentity{KeyID: uuid.New(), UserID: uuid.New(), Active: tc.active}, resolveErr: tc.resolveErr, beginErr: tc.beginErr}
 			dispatched := false
-			handler := accessFor(t, s).Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := accessFor(s).Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				dispatched = true
 				if s.call.ID == uuid.Nil {
 					t.Fatal("content dispatched before audit started")
@@ -90,9 +85,7 @@ func TestAuthenticationAndAccounting(t *testing.T) {
 				w.WriteHeader(204)
 			}))
 			r := httptest.NewRequest("GET", "/api/v2/content?token=test-query-token", nil)
-			r.Host = "attacker.example:9999"
 			r.Header.Set("Authorization", tc.auth)
-			r.Header.Set("X-Forwarded-Port", "9999")
 			if tc.duplicate {
 				r.Header.Add("Authorization", tc.auth)
 			}
@@ -105,7 +98,7 @@ func TestAuthenticationAndAccounting(t *testing.T) {
 				if !s.finished || s.status != tc.status {
 					t.Fatalf("completion missing: %+v", s)
 				}
-				if s.call.Port != 8003 || s.call.Path != "/api/v2/content" {
+				if s.call.Path != "/api/v2/content" {
 					t.Fatalf("unsafe audit labels: %+v", s.call)
 				}
 			}
@@ -126,7 +119,7 @@ func TestCompletionSurvivesCancellationAndPanic(t *testing.T) {
 	for _, panics := range []bool{false, true} {
 		s := &accessStore{identity: store.ATHubIdentity{KeyID: uuid.New(), UserID: uuid.New(), Active: true}}
 		ctx, cancel := context.WithCancel(context.Background())
-		handler := accessFor(t, s).Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := accessFor(s).Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cancel()
 			if panics {
 				panic("private panic data")
@@ -153,7 +146,7 @@ func TestCompletionSurvivesCancellationAndPanic(t *testing.T) {
 func TestTagsUseAuthenticatedAccounting(t *testing.T) {
 	s := &accessStore{identity: store.ATHubIdentity{KeyID: uuid.New(), UserID: uuid.New(), Active: true}}
 	dispatched := false
-	handler := accessFor(t, s).Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := accessFor(s).Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		dispatched = true
 		w.WriteHeader(http.StatusNoContent)
 	}))

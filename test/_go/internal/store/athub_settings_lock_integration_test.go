@@ -35,8 +35,8 @@ func stalledATHubCall(t *testing.T, ctx context.Context, p *Postgres, user uuid.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO athub_api_calls(id,request_id,method,path,port,authenticated)
-		VALUES($1,$2,$3,$4,$5,false)`, call.ID, uuid.New(), call.Method, call.Path, call.Port); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO athub_api_calls(id,request_id,method,path,authenticated)
+		VALUES($1,$2,$3,$4,false)`, call.ID, uuid.New(), call.Method, call.Path); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&holder); err != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -56,11 +55,8 @@ func (a *API) athubReviews(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	st, ok := a.Store.(store.ATHubReviewStore)
-	if a.reviews != nil {
-		st, ok = a.reviews, true
-	}
-	if !ok {
+	st := a.reviews
+	if st == nil {
 		a.PolicyError(w, errors.New("review store unavailable"))
 		return
 	}
@@ -259,19 +255,9 @@ func (a *API) beginReviewAudit(w http.ResponseWriter, r *http.Request, user, ses
 		a.PolicyError(w, errors.New("audit store unavailable"))
 		return nil, false
 	}
-	_, portText, err := net.SplitHostPort(a.Config.GatewayHTTPAddr)
-	if err != nil {
-		writeJSON(w, 503, map[string]string{"error": "invalid_gateway_address"})
-		return nil, false
-	}
-	port, err := strconv.Atoi(portText)
-	if err != nil || port < 1 || port > 65535 {
-		writeJSON(w, 503, map[string]string{"error": "invalid_gateway_address"})
-		return nil, false
-	}
 	// The existing admission adapter still uses its persisted review operation label.
-	call := store.ATHubCall{ID: uuid.New(), RequestID: uuid.New(), UserID: &user, SessionID: &session, Method: "POST", Path: "/api/v3/reviews", Port: port, Authenticated: true}
-	err = st.BeginATHubCall(r.Context(), call)
+	call := store.ATHubCall{ID: uuid.New(), RequestID: uuid.New(), UserID: &user, SessionID: &session, Method: "POST", Path: "/api/v3/reviews", Authenticated: true}
+	err := st.BeginATHubCall(r.Context(), call)
 	if err != nil {
 		status, code := 503, "accounting_unavailable"
 		if errors.Is(err, store.ErrATHubPermissionDenied) || errors.Is(err, store.ErrATHubAccessDenied) {

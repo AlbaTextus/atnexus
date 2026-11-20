@@ -206,7 +206,7 @@ func TestPendingChangesRejectMalformedRequests(t *testing.T) {
 func TestPendingChangesNeedTheCreatorDatabaseAndTheContentLibrary(t *testing.T) {
 	for name, prepare := range map[string]func(*API, *keyStore){
 		"no creator database": func(a *API, _ *keyStore) { a.reviews = nil },
-		// The account database also keeps reviews, but no baselines.
+		// Such a queue cannot tell which of its changes touch a novel.
 		"a review store without baselines": func(a *API, keys *keyStore) { a.reviews = &policyAPIStore{keyStore: keys} },
 		"no content library":               func(a *API, _ *keyStore) { a.SetATHubChangeReader(nil) },
 	} {

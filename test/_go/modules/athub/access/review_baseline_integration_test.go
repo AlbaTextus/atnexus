@@ -45,10 +45,7 @@ func TestReviewBaselineIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(creator.Close)
-	access, err := New(accounts, ":8003", quiet)
-	if err != nil {
-		t.Fatal(err)
-	}
+	access := New(accounts, quiet)
 	access.EnableCreatorStorage(creator)
 	hub, err := athub.New(ctx, athub.Config{DatabaseURL: contentURL, WrapHandler: access.Wrap, RecordChanges: access.RecordChanges}, quiet)
 	if err != nil {

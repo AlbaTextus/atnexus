@@ -8,7 +8,6 @@
 @import "./code.css";
 @import "../auth/auth.css";
 @import "./stats.css";
-@import "./sidebar.css";
 @source "../../components";
 
 /* ATHub diagram sizing and interaction primitives; services own their topology. */

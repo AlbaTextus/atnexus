@@ -58,7 +58,7 @@ func athubTestStore(t *testing.T) *Postgres {
 		CONSTRAINT oauth_clients_minimum_role_check CHECK(minimum_role IN ('USER','ADMIN','SUPER_ADMIN')))`); err != nil {
 		t.Fatal(err)
 	}
-	for _, migration := range []string{"20261110000000_athub_user_keys", "20261110010000_athub_single_key", "20261110020000_athub_admin_disable", "20261111000000_athub_key_limits", "20261111010000_enable_level_2", "20261111020000_athub_permissions_reviews", "20261117000000_athub_key_call_counter"} {
+	for _, migration := range []string{"20261110000000_athub_user_keys", "20261110010000_athub_single_key", "20261110020000_athub_admin_disable", "20261111000000_athub_key_limits", "20261111010000_enable_level_2", "20261111020000_athub_permissions_reviews", "20261117000000_athub_key_call_counter", "20261120000000_drop_retired_tables", "20261120010000_drop_athub_call_port"} {
 		sql, err := os.ReadFile("../../prisma/oauth/migrations/" + migration + "/migration.sql")
 		if err != nil {
 			t.Fatal(err)
@@ -102,7 +102,7 @@ func TestATHubKeysAndAccountingIntegration(t *testing.T) {
 	}
 	statuses := []int{200, 401, 0}
 	for _, status := range statuses {
-		call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Port: 8003, Authenticated: status != 401}
+		call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Authenticated: status != 401}
 		if err := p.BeginATHubCall(ctx, call); err != nil {
 			t.Fatal(err)
 		}
@@ -117,7 +117,7 @@ func TestATHubKeysAndAccountingIntegration(t *testing.T) {
 		t.Fatalf("usage=%+v err=%v", usage, err)
 	}
 	for _, group := range usage.Endpoints {
-		if group.Port != 8003 || group.Path != "/api/v2/content" {
+		if group.Path != "/api/v2/content" {
 			t.Fatal("bad usage group")
 		}
 	}
@@ -253,7 +253,7 @@ func TestATHubSingleKeyLifecycleIntegration(t *testing.T) {
 		t.Fatalf("keys=%+v err=%v", keys, err)
 	}
 	oldID := keys[0].ID
-	call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &oldID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Port: 8003, Authenticated: true}
+	call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &oldID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Authenticated: true}
 	if err := p.BeginATHubCall(ctx, call); err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestATHubSingleKeyMigrationRetainsHistory(t *testing.T) {
 		      ($2,$3,'disabled',$5,'ath_new',now(),NULL,now())`, older, newer, user, security.HashToken(older.String()), security.HashToken(newer.String())); err != nil {
 		t.Fatal(err)
 	}
-	call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &newer, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Port: 8003}
+	call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &newer, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content"}
 	if err := p.BeginATHubCall(ctx, call); err != nil {
 		t.Fatal(err)
 	}
@@ -354,23 +354,23 @@ func TestATHubUsageRangeIntegration(t *testing.T) {
 	from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	until := from.Add(24 * time.Hour)
 	for _, c := range []struct {
-		user         uuid.UUID
-		at           time.Time
-		port, status int
+		user   uuid.UUID
+		at     time.Time
+		status int
 	}{
-		{user, from.Add(-time.Second), 8003, 200},
-		{user, from, 8003, 200},
-		{user, from.Add(30 * time.Minute), 8003, 500},
-		{user, from.Add(time.Hour), 8004, 0},
-		{user, until, 8003, 200},
-		{other, from, 8003, 200},
+		{user, from.Add(-time.Second), 200},
+		{user, from, 200},
+		{user, from.Add(30 * time.Minute), 500},
+		{user, from.Add(time.Hour), 0},
+		{user, until, 200},
+		{other, from, 200},
 	} {
 		var status *int
 		if c.status != 0 {
 			status = &c.status
 		}
-		if _, err := p.pool.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,port,authenticated,status,started_at)
-			VALUES($1,$2,$3,$4,'GET','/api/v2/content',$5,true,$6,$7)`, uuid.New(), c.user, keys[c.user], uuid.New(), c.port, status, c.at); err != nil {
+		if _, err := p.pool.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,key_id,request_id,method,path,authenticated,status,started_at)
+			VALUES($1,$2,$3,$4,'GET','/api/v2/content',true,$5,$6)`, uuid.New(), c.user, keys[c.user], uuid.New(), status, c.at); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -379,8 +379,8 @@ func TestATHubUsageRangeIntegration(t *testing.T) {
 	okStatus, failedStatus := 200, 401
 	for _, userID := range []*uuid.UUID{&user, &other, &browserOnly, nil} {
 		for _, status := range []*int{nil, &okStatus, &failedStatus} {
-			if _, err := p.pool.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,request_id,method,path,port,authenticated,status,started_at)
-				VALUES($1,$2,$3,'GET','/api/v2/novelinfo',8005,false,$4,$5)`, uuid.New(), userID, uuid.New(), status, from.Add(2*time.Hour)); err != nil {
+			if _, err := p.pool.Exec(ctx, `INSERT INTO athub_api_calls(id,user_id,request_id,method,path,authenticated,status,started_at)
+				VALUES($1,$2,$3,'GET','/api/v2/novelinfo',false,$4,$5)`, uuid.New(), userID, uuid.New(), status, from.Add(2*time.Hour)); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -402,11 +402,12 @@ func TestATHubUsageRangeIntegration(t *testing.T) {
 	if endpointCalls != usage.Total {
 		t.Fatalf("endpoint total=%d usage=%+v", endpointCalls, usage)
 	}
-	if usage.Trend[0].Calls != 2 || usage.Trend[0].Port != 8003 || !usage.Trend[0].StartedAt.Equal(from) || usage.Trend[1].Port != 8004 {
+	if usage.Trend[0].Calls != 2 || !usage.Trend[0].StartedAt.Equal(from) || usage.Trend[1].Calls != 1 || !usage.Trend[1].StartedAt.Equal(from.Add(time.Hour)) {
 		t.Fatalf("unexpected buckets: %+v", usage.Trend)
 	}
+	// Each bucket is one point: the day holds all three calls.
 	daily, err := p.ATHubUsageRange(ctx, user, from, until, 86400)
-	if err != nil || len(daily.Trend) != 2 {
+	if err != nil || len(daily.Trend) != 1 || daily.Trend[0].Calls != 3 || !daily.Trend[0].StartedAt.Equal(from) {
 		t.Fatalf("daily=%+v err=%v", daily, err)
 	}
 	total, err := p.ATHubUsage(ctx, user)
@@ -479,7 +480,7 @@ func TestATHubAdminBanBetweenLookupAndDispatch(t *testing.T) {
 	if _, err := p.pool.Exec(ctx, `UPDATE users SET athub_disabled=true WHERE id=$1`, user); err != nil {
 		t.Fatal(err)
 	}
-	call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Port: 8003, Authenticated: true}
+	call := ATHubCall{ID: uuid.New(), UserID: &user, KeyID: &key.ID, RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content", Authenticated: true}
 	if err := p.BeginATHubCall(ctx, call); !errors.Is(err, ErrATHubAccessDenied) {
 		t.Fatalf("stale authentication accepted: %v", err)
 	}
@@ -503,5 +504,35 @@ func TestATHubAdminBanBetweenLookupAndDispatch(t *testing.T) {
 	}
 	if _, _, err := p.EnsureATHubKey(ctx, ATHubKey{ID: uuid.New(), UserID: emptyUser}); !errors.Is(err, ErrATHubAdminDisabled) {
 		t.Fatal("blocked user without key obtained one")
+	}
+}
+
+// A database from before 20261120010000_drop_athub_call_port cannot take call
+// records, so the startup check has to turn it away.
+func TestATHubSchemaCheckRefusesCallPortColumn(t *testing.T) {
+	p := athubTestStore(t)
+	ctx := context.Background()
+	if _, err := p.pool.Exec(ctx, `ALTER TABLE athub_api_calls ADD COLUMN port INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535)`); err != nil {
+		t.Fatal(err)
+	}
+	call := ATHubCall{ID: uuid.New(), RequestID: uuid.New(), Method: "GET", Path: "/api/v2/content"}
+	if err := p.BeginATHubCall(ctx, call); err == nil {
+		t.Fatal("call recorded without a port")
+	}
+	if err := p.CheckATHubSchema(ctx); err == nil {
+		t.Fatal("startup check accepted a database that cannot record calls")
+	}
+	sql, err := os.ReadFile("../../prisma/oauth/migrations/20261120010000_drop_athub_call_port/migration.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.pool.Exec(ctx, string(sql), pgx.QueryExecModeSimpleProtocol); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.CheckATHubSchema(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.BeginATHubCall(ctx, call); err != nil {
+		t.Fatal(err)
 	}
 }

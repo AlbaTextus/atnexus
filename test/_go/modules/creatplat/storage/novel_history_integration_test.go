@@ -1,41 +1,32 @@
-package store
+package storage
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
+	"github.com/AlbaTextus/atnexus/internal/store"
+	"github.com/AlbaTextus/atnexus/modules/creatplat/repository"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 func TestNovelHistoryIntegration(t *testing.T) {
-	st := athubTestStore(t)
+	st, pool := creatorOnly(t)
 	ctx := context.Background()
-	migration, err := os.ReadFile("../../prisma/oauth/migrations/20261110050000_novel_history/migration.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.pool.Exec(ctx, string(migration), pgx.QueryExecModeSimpleProtocol); err != nil {
-		t.Fatal(err)
-	}
 	if err := st.CheckNovelHistorySchema(ctx); err != nil {
 		t.Fatal(err)
 	}
+	// Contributors are accounts of another database; history keeps their IDs.
 	creator, editor := uuid.New(), uuid.New()
-	if _, err := st.pool.Exec(ctx, `INSERT INTO users(id) VALUES($1),($2)`, creator, editor); err != nil {
-		t.Fatal(err)
-	}
-	makeRevision := func(user uuid.UUID, action string) NovelRevision {
+	makeRevision := func(user uuid.UUID, action string) repository.NovelRevision {
 		actor, _ := json.Marshal(map[string]string{"id": user.String(), "name": "贡献者", "avatar": ""})
 		changes, _ := json.Marshal([]map[string]any{{"entity": "Novel", "action": action, "before": nil, "after": map[string]string{"title": "小说"}}})
-		return NovelRevision{ID: uuid.New(), NovelID: 2, UserID: &user, Contributor: actor, Changes: changes}
+		return repository.NovelRevision{ID: uuid.New(), NovelID: 2, UserID: &user, Contributor: actor, Changes: changes}
 	}
 	batch := uuid.New()
-	if err := st.PrepareNovelRevisions(ctx, batch, []NovelRevision{makeRevision(creator, "INSERT")}); err != nil {
+	if err := st.PrepareNovelRevisions(ctx, batch, []repository.NovelRevision{makeRevision(creator, "INSERT")}); err != nil {
 		t.Fatal(err)
 	}
 	if history, err := st.NovelHistory(ctx, 2, 20, 0); err != nil || history.Total != 0 {
@@ -45,7 +36,7 @@ func TestNovelHistoryIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	batch = uuid.New()
-	if err := st.PrepareNovelRevisions(ctx, batch, []NovelRevision{makeRevision(editor, "UPDATE")}); err != nil {
+	if err := st.PrepareNovelRevisions(ctx, batch, []repository.NovelRevision{makeRevision(editor, "UPDATE")}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.FinishNovelRevisions(ctx, batch, true); err != nil {
@@ -73,7 +64,7 @@ func TestNovelHistoryIntegration(t *testing.T) {
 		t.Fatalf("contributors: %s %v", people, err)
 	}
 	batch = uuid.New()
-	if err := st.PrepareNovelRevisions(ctx, batch, []NovelRevision{makeRevision(editor, "UPDATE")}); err != nil {
+	if err := st.PrepareNovelRevisions(ctx, batch, []repository.NovelRevision{makeRevision(editor, "UPDATE")}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.FinishNovelRevisions(ctx, batch, false); err != nil {
@@ -86,7 +77,7 @@ func TestNovelHistoryIntegration(t *testing.T) {
 	revision := makeRevision(editor, "UPDATE")
 	revision.NovelID = 3
 	batch = uuid.New()
-	if err := st.PrepareNovelRevisions(ctx, batch, []NovelRevision{revision}); err != nil {
+	if err := st.PrepareNovelRevisions(ctx, batch, []repository.NovelRevision{revision}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.FinishNovelRevisions(ctx, batch, true); err != nil {
@@ -132,7 +123,7 @@ func TestNovelHistoryIntegration(t *testing.T) {
 				change = map[string]any{"entity": "Novel", "action": "INSERT", "before": nil, "after": map[string]any{"order": i}}
 			}
 			changes, _ := json.Marshal([]map[string]any{change})
-			if _, err := st.pool.Exec(ctx, `INSERT INTO novel_revisions
+			if _, err := pool.Exec(ctx, `INSERT INTO novel_revisions
 				(id,batch_id,novel_id,user_id,contributor,changes,status,created_at)
 				VALUES($1,$2,4,$3,$4,$5,$6,$7)`,
 				revision.ID, uuid.New(), user, revision.Contributor, changes, status, start.Add(time.Duration(i)*time.Hour)); err != nil {
@@ -141,7 +132,7 @@ func TestNovelHistoryIntegration(t *testing.T) {
 		}
 		// A different novel's editor must not split the import.
 		other := makeRevision(editor, "UPDATE")
-		if _, err := st.pool.Exec(ctx, `INSERT INTO novel_revisions
+		if _, err := pool.Exec(ctx, `INSERT INTO novel_revisions
 			(id,batch_id,novel_id,user_id,contributor,changes,status,created_at)
 			VALUES($1,$2,5,$3,$4,$5,'completed',$6)`,
 			other.ID, uuid.New(), editor, other.Contributor, other.Changes, start.Add(10*time.Hour)); err != nil {
@@ -202,7 +193,7 @@ func TestNovelHistoryIntegration(t *testing.T) {
 			t.Fatalf("empty grouped page lost total: %+v, %v", history, err)
 		}
 		var rawCount int
-		if err := st.pool.QueryRow(ctx, `SELECT COUNT(*) FROM novel_revisions WHERE novel_id=4`).Scan(&rawCount); err != nil || rawCount != 30 {
+		if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM novel_revisions WHERE novel_id=4`).Scan(&rawCount); err != nil || rawCount != 30 {
 			t.Fatal("original audit records changed", rawCount, err)
 		}
 	})
@@ -210,7 +201,7 @@ func TestNovelHistoryIntegration(t *testing.T) {
 	t.Run("unknown contributors stay separate with stable timestamp ordering", func(t *testing.T) {
 		stamp := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 		for _, id := range []string{"00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"} {
-			if _, err := st.pool.Exec(ctx, `INSERT INTO novel_revisions
+			if _, err := pool.Exec(ctx, `INSERT INTO novel_revisions
 				(id,batch_id,novel_id,contributor,changes,status,created_at)
 				VALUES($1,$2,6,'{"name":"未记录账号"}','[]','completed',$3)`, id, uuid.New(), stamp); err != nil {
 				t.Fatal(err)
@@ -227,9 +218,6 @@ func TestNovelHistoryIntegration(t *testing.T) {
 
 	t.Run("large entries are listed bounded and read by page", func(t *testing.T) {
 		author := uuid.New()
-		if _, err := st.pool.Exec(ctx, `INSERT INTO users(id) VALUES($1)`, author); err != nil {
-			t.Fatal(err)
-		}
 		actor, _ := json.Marshal(map[string]string{"id": author.String(), "name": "作者", "avatar": ""})
 		var newest uuid.UUID
 		// Two consecutive revisions by one account: 150 chapter edits, then 30 more.
@@ -243,14 +231,14 @@ func TestNovelHistoryIntegration(t *testing.T) {
 				changes[0]["entity"], changes[0]["action"] = "Volume", "INSERT"
 			}
 			raw, _ := json.Marshal(changes)
-			batch, revision := uuid.New(), NovelRevision{ID: uuid.New(), NovelID: 8, UserID: &author, Contributor: actor, Changes: raw}
-			if err := st.PrepareNovelRevisions(ctx, batch, []NovelRevision{revision}); err != nil {
+			batch, revision := uuid.New(), repository.NovelRevision{ID: uuid.New(), NovelID: 8, UserID: &author, Contributor: actor, Changes: raw}
+			if err := st.PrepareNovelRevisions(ctx, batch, []repository.NovelRevision{revision}); err != nil {
 				t.Fatal(err)
 			}
 			if err := st.FinishNovelRevisions(ctx, batch, true); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := st.pool.Exec(ctx, `UPDATE novel_revisions SET created_at=$2 WHERE id=$1`, revision.ID,
+			if _, err := pool.Exec(ctx, `UPDATE novel_revisions SET created_at=$2 WHERE id=$1`, revision.ID,
 				time.Date(2026, 11, 2, 0, round, 0, 0, time.UTC)); err != nil {
 				t.Fatal(err)
 			}
@@ -290,10 +278,10 @@ func TestNovelHistoryIntegration(t *testing.T) {
 		if first["round"] != float64(0) || first["index"] != float64(100) || rest[0]["bodyDiff"] == nil || rest[50]["entity"] != "Volume" {
 			t.Fatalf("page starts at %+v", rest[0])
 		}
-		if _, err := st.NovelRevisionChanges(ctx, 8, uuid.New(), 100, 0); !errors.Is(err, ErrNotFound) {
+		if _, err := st.NovelRevisionChanges(ctx, 8, uuid.New(), 100, 0); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("unknown revision: %v", err)
 		}
-		if _, err := st.NovelRevisionChanges(ctx, 9, newest, 100, 0); !errors.Is(err, ErrNotFound) {
+		if _, err := st.NovelRevisionChanges(ctx, 9, newest, 100, 0); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("revision of another novel: %v", err)
 		}
 	})

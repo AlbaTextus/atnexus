@@ -32,7 +32,7 @@ func TestCreatorIllustrationReadsReuseATHubAdmission(t *testing.T) {
 				identity: store.ATHubIdentity{KeyID: uuid.New(), UserID: identity.UserID, Active: true},
 				beginErr: tc.beginErr,
 			}
-			access := accessFor(t, st)
+			access := accessFor(st)
 			access.EnableSessions(sessionVerifier{identity: identity})
 			dispatched := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -92,10 +92,8 @@ func TestIllustrationDeleteUsesSessionPermissionsAndReview(t *testing.T) {
 				ReviewRequired: scenario.review,
 				Rules:          []store.ATHubAccessRule{{Operation: "delete", Allowed: scenario.allowed}},
 			}}
-			access, err := New(st, ":8003", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			access := New(st, nil)
+			access.EnableCreatorStorage(&st.queue)
 			dispatched := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// A reviewed change is rehearsed first; only a real call counts.
@@ -122,8 +120,8 @@ func TestIllustrationDeleteUsesSessionPermissionsAndReview(t *testing.T) {
 			if base.call.UserID == nil || *base.call.UserID != user || base.call.SessionID == nil || *base.call.SessionID != session || !base.finished {
 				t.Fatal("delete lost account session or audit")
 			}
-			if scenario.review && (st.queued == nil || st.queued.Method != "DELETE" ||
-				st.queued.Path != "/api/v2/illustrations" || st.queued.Query != "id=23&novelId=17") {
+			if queued := st.queue.queued; scenario.review && (queued == nil || queued.Method != "DELETE" ||
+				queued.Path != "/api/v2/illustrations" || queued.Query != "id=23&novelId=17") {
 				t.Fatal("delete lost parent/image identity in review")
 			}
 		})
@@ -146,10 +144,8 @@ func TestIllustrationLayoutUsesEditPermissionAndReview(t *testing.T) {
 				ReviewRequired: scenario.review,
 				Rules:          []store.ATHubAccessRule{{Operation: "edit", Allowed: scenario.allowed}},
 			}}
-			access, err := New(st, ":8003", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			access := New(st, nil)
+			access.EnableCreatorStorage(&st.queue)
 			called := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// A reviewed change is rehearsed first; only a real call counts.
@@ -175,7 +171,7 @@ func TestIllustrationLayoutUsesEditPermissionAndReview(t *testing.T) {
 			if base.call.UserID == nil || *base.call.UserID != user || base.call.SessionID == nil || *base.call.SessionID != session || !base.finished {
 				t.Fatal("layout lost account session or audit")
 			}
-			if scenario.review && (st.queued == nil || st.queued.Query != "novelId=17" || st.queued.Method != "PUT" || st.queued.Path != "/api/v2/illustration-layout") {
+			if queued := st.queue.queued; scenario.review && (queued == nil || queued.Query != "novelId=17" || queued.Method != "PUT" || queued.Path != "/api/v2/illustration-layout") {
 				t.Fatal("layout did not enter review queue")
 			}
 		})

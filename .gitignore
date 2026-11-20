@@ -8,21 +8,10 @@ coverage.out
 node_modules/
 web/.next/
 web/node_modules/
-web/.vercel/
 *.tsbuildinfo
-oauth.exe
 atnexus
 atnexus.exe
-connect.exe
-seed.exe
-server.exe
 .codegraph/
-temps/
 release/
 temp/
-web/temp/
 
-# Keep the shared UI package available for independent installs.
-!/release/
-/release/*
-!/release/albatextus-ui-0.1.0.tgz

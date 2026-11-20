@@ -4,7 +4,7 @@
 
 后端按业务模块维护，由根 Go module、`cmd/server` 和统一发布产物装配。当前统一进程部署；目录边界及依赖注入保留以后拆分服务的可能，本轮不增加独立服务部署。
 
-library 已取消，`8003/api/v3` 不再注册。正式书库归 ATHub；投稿、审核、历史和修订归创作者平台 creatplat；外部 Key 与统一 session 归 OAuth；图片和对象存储归 image。
+library 已取消，旧 `8003` 端口不再监听；`/api/v3` 现由邮件模块使用。正式书库归 ATHub；投稿、审核、历史和修订归创作者平台 creatplat；外部 Key 与统一 session 归 OAuth；图片和对象存储归 image。
 
 最新图床任务只包含 **后端 Go 改写与 SQLite → PostgreSQL 迁移**。原 imgbed 前端、页面和构建保持原样，本轮不做前端接入。
 
@@ -14,20 +14,21 @@ library 已取消，`8003/api/v3` 不再注册。正式书库归 ATHub；投稿�
 | --- | --- | --- |
 | `modules/oauth` | `/api/v1` | 账户、session、OAuth、外部 Key 管理与验证 |
 | `modules/image` | `/api/v2` | 图片元数据、上传、文件管理、本地/S3 存储 |
+| `modules/mail` | `/api/v3` | SMTP 发信、邮箱验证码、绑定与更换邮箱；使用账户库 |
 | `modules/creatplat` | `/api/v4` | 投稿、审核、历史、修订及创作者素材调用 |
 | `modules/athub` | `/api/v5` | 书库、正式内容、内容变更执行 |
 | `modules/other` | 预留 `/api/v6` | 业务未明确，不启动占位服务 |
 
-Go 后端只监听聚合端口 `8010`，按路径前缀分发到四个模块。OAuth 标准路径 `/oauth/*`、`/.well-known/*` 不变，各模块仍提供 `/api/v{n}/healthz`。图片文件通过 `/file/<ID>` 或 `/api/v2/file/<ID>` 读取，不再启动旧文件端口。前端端口 `3288` 不变。
+Go 后端只监听聚合端口 `8010`，按路径前缀分发到五个模块。OAuth 标准路径 `/oauth/*`、`/.well-known/*` 不变，各模块仍提供 `/api/v{n}/healthz`。图片文件通过 `/file/<ID>` 或 `/api/v2/file/<ID>` 读取，不再启动旧文件端口。前端端口 `3288` 不变。
 
 ## 3. 目录与依赖
 
 ```text
 cmd/server/             统一配置、依赖注入、监听及优雅退出
-cmd/migrate-creatplat/  创作者独立库导入工具
-cmd/migrate-image/      图床只读 SQLite 导入工具
+cmd/create-creatplat-db/ 创作者独立库建库工具（只建库，不建表）
 modules/oauth/          账户、认证、session、Key
-modules/image/          图床 Go API、存储、独立数据库与迁移
+modules/image/          图床 Go API、存储与独立数据库
+modules/mail/           SMTP 发信、邮箱验证码与邮箱变更
 modules/creatplat/      创作流程、审核和历史
 modules/athub/          正式内容 API、执行和存储
 pkg/auth/               模块共享身份契约
@@ -63,7 +64,7 @@ creatplat 与 ATHub 保留变更 ID、pending/确认流程和执行回执。审�
 
 ## 6. 已完成的模块迁移
 
-账户与统一身份归 OAuth。正式内容由聚合入口的 `/api/v5` 提供；历史和贡献者由创作者 `/api/v4` 提供。创作者使用独立数据库，原审核/历史保留为导入来源。
+账户与统一身份归 OAuth。正式内容由聚合入口的 `/api/v5` 提供；历史和贡献者由创作者 `/api/v4` 提供。创作者使用独立数据库；账户库中原来的审核与历史表在导入完成后已删除（迁移 `20261120000000_drop_retired_tables`）。
 
 图床本轮实现独立 Go 模块，纳入统一进程。覆盖普通/分类/分块上传、目录和筛选、文件 GET/HEAD/Range、删除与批量操作、标签、封禁、元数据修改、存储渠道、容量统计及文件记录导出/恢复。支持本地目录和 S3 兼容存储。
 
@@ -72,6 +73,8 @@ creatplat 与 ATHub 保留变更 ID、pending/确认流程和执行回执。审�
 OAuth 头像与创作者封面/插图的 **Go 后端调用** 已切换到新分类路径，站点前端调用账户和创作者 API 的方式保持不变。
 
 ## 7. 图床迁移步骤与保护
+
+迁移已经完成。2026-11-20 起，导入工具（`cmd/migrate-image`、`cmd/migrate-creatplat`）、启动时的旧数据核对，以及只为导入留下的归档与标记表（`image_legacy_rows`、`image_imports`、`image_key_imports`、`creator_migration_state`）都已移除；本节和下一节只作为当时的记录保留。
 
 1. 核对真实源数据、存储渠道、Key 和活跃分块；不明确的业务先确认。
 2. 在已有 PG 实例中创建独立 image 库和专用账号，应用账户 Key 表及 image 表结构。

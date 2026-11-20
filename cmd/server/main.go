@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -87,7 +86,6 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	defer imageKeys.Close()
 	images, err := imagebackend.New(ctx, imagebackend.Config{DatabaseURL: cfg.ImageDatabaseURL, LocalRoot: cfg.ImageLocalRoot, TempRoot: cfg.ImageTempRoot, PublicURL: cfg.ImagePublicURL, MaxUploadBytes: cfg.ImageMaxUploadBytes, MaxChunkBytes: cfg.ImageMaxChunkBytes, MaxChunks: cfg.ImageMaxChunks, UploadTTL: cfg.ImageUploadTTL, MaxSessionsPerOwner: cfg.ImageMaxUploadSessions, MaxConns: int32(cfg.ImageDatabaseMaxConns)}, imagebackend.Dependencies{Sessions: sessions, Keys: imageKeys, Logger: logger})
 	if err != nil {
 		return fmt.Errorf("image initialization failed: %w", err)
@@ -110,11 +108,7 @@ func run(logger *slog.Logger) error {
 	if err := creatorDB.RequireSeparateDatabases(ctx, cfg.DatabaseURL, cfg.ATHubDatabaseURL); err != nil {
 		return err
 	}
-	access, err := athubaccess.New(st, cfg.GatewayHTTPAddr, logger)
-	if err != nil {
-		return err
-	}
-	access.EnableReadSessions(cfg.ClientSecretEncryptionKey)
+	access := athubaccess.New(st, logger)
 	access.EnableSessions(sessions)
 	access.EnableAPIKeys(oauth.NewAPIKeys(st))
 	access.EnableCreatorStorage(creatorDB)
@@ -130,11 +124,6 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("ATHub initialization failed: %w", err)
 	}
 	defer hub.Close()
-	// Startup compares only row counts; the full row-by-row digest runs in the
-	// background once the gateway is up.
-	if err = creatorDB.CheckLegacyMigrationCounts(ctx, cfg.DatabaseURL); err != nil {
-		return fmt.Errorf("creator migration check failed: %w", err)
-	}
 	creators := creatorapi.New(cfg, st, logger)
 	creators.Images = images
 	creators.SetStorage(creatorDB)
@@ -191,32 +180,8 @@ func run(logger *slog.Logger) error {
 	defer stop()
 	background.Go(func() { st.RunExpiryPurge(signalCtx, logger, cfg.ATHubCallLogRetention) })
 	background.Go(func() { access.ReconcileRevisions(signalCtx, hub) })
-	// Edited legacy rows mean the old service is still writing: stop serving,
-	// exactly as the startup check used to refuse to start.
-	var legacyMismatch error
-	background.Go(func() {
-		logger.Info("verifying legacy creator data", "timeout", cfg.CreatplatMigrationCheckTimeout)
-		checkCtx, cancel := context.WithTimeout(signalCtx, cfg.CreatplatMigrationCheckTimeout)
-		defer cancel()
-		err := creatorDB.CheckLegacyMigration(checkCtx, cfg.DatabaseURL)
-		switch {
-		case err == nil:
-			logger.Info("legacy creator data verified")
-		case errors.Is(err, creatorstorage.ErrLegacyDataMismatch):
-			legacyMismatch = fmt.Errorf("creator migration check failed: %w", err)
-			logger.Error("legacy creator data mismatch; stopping", "error", err)
-			stop()
-		case signalCtx.Err() == nil:
-			// Could not finish (timeout, connectivity): not evidence of a mismatch.
-			logger.Error("legacy creator data verification did not complete", "error", err)
-		}
-	})
 	if err := server.Run(signalCtx, cfg.HTTPShutdownTimeout, logger, gatewayServer); err != nil {
 		return err
-	}
-	background.Wait()
-	if legacyMismatch != nil {
-		return legacyMismatch
 	}
 	logger.Info("server stopped")
 	return nil

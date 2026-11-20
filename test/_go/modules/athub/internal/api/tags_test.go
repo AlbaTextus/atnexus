@@ -55,7 +55,7 @@ func TestTagRoutes(t *testing.T) {
 	} {
 		t.Run(tc.method+tc.path+tc.body, func(t *testing.T) {
 			store := &fakeStore{}
-			w := request(testHandler(t, store), tc.method, tc.path, tc.body, "Bearer "+testToken)
+			w := request(testHandler(t, store), tc.method, tc.path, tc.body)
 			if w.Code != tc.status || store.called != tc.called {
 				t.Fatalf("status=%d called=%s body=%s", w.Code, store.called, w.Body)
 			}
@@ -78,13 +78,10 @@ func TestTagRoutes(t *testing.T) {
 	}{
 		{storage.ErrNotFound, 404}, {storage.ErrConflict, 409}, {storage.ErrTagInUse, 409},
 	} {
-		w := request(testHandler(t, &fakeStore{err: tc.err}), "DELETE", "/api/v2/tags?id=9", "", "Bearer "+testToken)
+		w := request(testHandler(t, &fakeStore{err: tc.err}), "DELETE", "/api/v2/tags?id=9", "")
 		if w.Code != tc.status {
 			t.Fatalf("error %v: status=%d", tc.err, w.Code)
 		}
-	}
-	if w := request(testHandler(t, nil), "GET", "/api/v2/tags", "", ""); w.Code != 401 {
-		t.Fatal("tags must require authentication")
 	}
 }
 
@@ -98,7 +95,7 @@ func TestNovelTagReferences(t *testing.T) {
 			t.Run(tc.method+tc.path+ids, func(t *testing.T) {
 				store := &fakeStore{}
 				body := tc.prefix + `{"platformId":1,"title":"Book","tagIds":` + ids + `}` + tc.suffix
-				w := request(testHandler(t, store), tc.method, tc.path, body, "Bearer "+testToken)
+				w := request(testHandler(t, store), tc.method, tc.path, body)
 				valid := ids == `[3,9]` || ids == `[]` || ids == `null`
 				if !valid {
 					if w.Code != 400 || store.called != "" {
@@ -127,12 +124,12 @@ func TestNovelTagReferences(t *testing.T) {
 		}
 	}
 	store := &fakeStore{}
-	w := request(testHandler(t, store), "GET", "/api/v2/novelinfo?tagId=9&platformId=2&limit=3", "", "Bearer "+testToken)
+	w := request(testHandler(t, store), "GET", "/api/v2/novelinfo?tagId=9&platformId=2&limit=3", "")
 	if w.Code != 200 || store.filter.TagID != 9 || store.filter.PlatformID != 2 || store.filter.Limit != 3 {
 		t.Fatalf("filter not forwarded: %+v status=%d", store.filter, w.Code)
 	}
 	for _, path := range []string{"/api/v2/novelinfo?tagId=0", "/api/v2/novelinfo?id=1&tagId=9"} {
-		if w := request(testHandler(t, nil), "GET", path, "", "Bearer "+testToken); w.Code != 400 {
+		if w := request(testHandler(t, nil), "GET", path, ""); w.Code != 400 {
 			t.Fatalf("%s: status=%d", path, w.Code)
 		}
 	}

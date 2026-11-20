@@ -34,7 +34,7 @@ func TestOAuthSessionAdmission(t *testing.T) {
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			st := &accessStore{}
-			a := accessFor(t, st)
+			a := accessFor(st)
 			identity := auth.Identity{UserID: uuid.New(), SessionID: uuid.New()}
 			a.EnableSessions(sessionVerifier{identity, scenario.err})
 			dispatched := false
@@ -56,17 +56,15 @@ func TestOAuthSessionAdmission(t *testing.T) {
 }
 
 func TestCreatorHistoryUsesOAuthSession(t *testing.T) {
-	st := &historyAccessStore{}
-	access, err := New(st, ":8005", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	st, creator := &accessStore{}, &historyReads{}
+	access := New(st, nil)
+	access.EnableCreatorStorage(creator)
 	identity := auth.Identity{UserID: uuid.New(), SessionID: uuid.New()}
 	access.EnableSessions(sessionVerifier{identity: identity})
 	access.Wrap(http.NotFoundHandler())
 	w := httptest.NewRecorder()
 	access.ServeHistory(w, httptest.NewRequest("GET", "/api/v4/history?novelId=7&limit=10", nil))
-	if w.Code != 200 || st.novelID != 7 || st.call.Path != "/api/v3/history" || !st.finished || st.call.KeyID != nil || st.call.SessionID == nil || *st.call.SessionID != identity.SessionID {
+	if w.Code != 200 || creator.novelID != 7 || st.call.Path != "/api/v3/history" || !st.finished || st.call.KeyID != nil || st.call.SessionID == nil || *st.call.SessionID != identity.SessionID {
 		t.Fatalf("status=%d audit=%+v body=%s", w.Code, st.call, w.Body)
 	}
 }

@@ -83,10 +83,7 @@ func (c *creatorRecords) PendingReviewMentions(_ context.Context, text string) (
 
 func imageAccess(t *testing.T, images *storedImages, creator *creatorRecords) *Access {
 	t.Helper()
-	access, err := New(&accessStore{}, ":8003", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	access := New(&accessStore{}, nil)
 	access.EnableCreatorStorage(creator)
 	access.EnableImageCleanup(images, images)
 	return access
@@ -168,7 +165,7 @@ func TestReleasedImageIsKeptWhileItIsReferred(t *testing.T) {
 	// Nothing to release, and a host that keeps no reviews, leave files alone.
 	images := &storedImages{}
 	imageAccess(t, images, &creatorRecords{}).ReleaseImage(context.Background(), "book/illustrations", "17", "")
-	access, _ := New(&accessStore{}, ":8003", nil)
+	access := New(&accessStore{}, nil)
 	access.EnableImageCleanup(images, images)
 	access.ReleaseImage(context.Background(), "book/illustrations", "17", image)
 	if len(images.events) != 0 {
@@ -243,7 +240,7 @@ func TestChangeCannotStartPointingAtARemovedImage(t *testing.T) {
 		}
 	}
 	// Without an image host the adapter records changes as before.
-	access, _ := New(&accessStore{}, ":8003", nil)
+	access := New(&accessStore{}, nil)
 	creator := &creatorRecords{}
 	access.EnableCreatorStorage(creator)
 	if _, err := access.RecordChanges(context.Background(), uuid.NewString(), []athub.RevisionDraft{coverChange(nil, removed)}); err != nil || creator.prepared != 1 {

@@ -18,32 +18,6 @@ func (a *API) accountStore(w http.ResponseWriter) (store.AccountStore, bool) {
 	return st, ok
 }
 
-func (a *API) availableApplications(w http.ResponseWriter, r *http.Request) {
-	user, ok := a.AccountActor(w, r)
-	if !ok {
-		return
-	}
-	st, ok := a.accountStore(w)
-	if !ok {
-		return
-	}
-	apps, err := st.AvailableApplications(r.Context(), user.Role)
-	if err != nil {
-		a.ApplicationError(w, err)
-		return
-	}
-	// Older seeded clients may have missing or unvalidated homepage/icon URLs.
-	for i := range apps {
-		if !validApplicationURL(apps[i].HomepageURL) {
-			apps[i].HomepageURL = ""
-		}
-		if !validApplicationURL(apps[i].IconURL) {
-			apps[i].IconURL = ""
-		}
-	}
-	writeJSON(w, 200, map[string]any{"applications": apps})
-}
-
 func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 	user, ok := a.AccountActor(w, r)
 	if !ok {

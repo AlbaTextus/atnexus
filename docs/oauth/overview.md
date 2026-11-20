@@ -35,13 +35,14 @@ ATHub 公开入口改为 `/api/v5/*`，创作者平台为 `/api/v4/*`，邮件�
 本仓库曾使用 `AlbaTextus/connect`、`AlbaTextus/oauth` 名称，现统一命名为
 `AlbaTextus/atnexus`，负责账户、认证、OAuth 授权与 ATHub 内容存储。
 积分、支付、管理调整与 24 小时结算已迁移至独立仓库 [AlbaTextus/credit](https://github.com/AlbaTextus/credit)，使用独立数据库。
-账户中心的积分入口和旧支付页面跳转到 `NEXT_PUBLIC_CREDIT_URL`（本地默认 `http://localhost:3300`）。
+账户中心不再提供积分入口和旧支付页面的跳转。
 钱包及支付 API 不再由本服务提供；调用方应切换到 Credit。
 
 Credit 在应用管理中注册为机密 OAuth 客户端：回调地址 `http://localhost:3300/api/v1/auth/callback`，
 授权类型 `authorization_code`，scope `profile`，生产环境将地址换为 Credit 的 HTTPS 域名。
 `profile` 用户信息包含稳定 UUID、数字用户编号、昵称、头像及角色；Credit 不接收账户密码或登录 Cookie。
 
-历史迁移文件保持原样，升级使用 `pnpm db:deploy`。旧钱包表保留为只读迁移来源，
-不会自动删除、清空或在本服务继续结算。迁移步骤见 Credit 的 `MIGRATION.md`。
-旧数据库的 `prisma migrate dev` 可能提出删除已移出的表，完成迁移及核对前不要接受这种删除。
+历史迁移文件保持原样，升级使用 `pnpm db:deploy`。旧钱包与支付表（`wallets`、`wallet_entries`、
+`wallet_settlements`、`payment_orders`）曾保留为只读迁移来源，现由迁移
+`20261120000000_drop_retired_tables` 删除，其中的数据不可恢复；仍需要这些数据时，
+在执行迁移前备份或完成迁出，见[数据库与迁移](/deploy/database)。

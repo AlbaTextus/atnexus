@@ -14,5 +14,5 @@ func (a *Access) queueMutation(w http.ResponseWriter, r *http.Request, call stor
 }
 
 func (a *Access) ApplyReview(ctx context.Context, item store.ATHubReview) (store.ATHubReviewResult, error) {
-	return creatplat.NewGovernance(a.store, a.content).ApplyReview(ctx, item)
+	return creatplat.NewGovernance(a.store, a.content, a.creatorReviews).ApplyReview(ctx, item)
 }

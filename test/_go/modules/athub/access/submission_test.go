@@ -14,20 +14,43 @@ import (
 	"github.com/google/uuid"
 )
 
+// submissionStore is the account store of a level whose changes may need
+// review. What it sends to review is kept by queue, which stands in for the
+// creator database and is attached to the pipeline separately.
 type submissionStore struct {
 	*accessStore
 	store.ATHubPolicyStore
-	store.ATHubReviewStore
 	policy store.ATHubRolePolicy
-	queued *store.ATHubReview
+	queue  reviewQueue
 }
 
 func (s *submissionStore) ATHubPolicy(context.Context, string) (store.ATHubRolePolicy, error) {
 	return s.policy, nil
 }
 
-func (s *submissionStore) QueueATHubReview(_ context.Context, item store.ATHubReview) (store.ATHubReview, error) {
-	s.queued = &item
+// reviewQueue is the creator database as far as these tests reach it: it keeps
+// the change that was last sent to review.
+type reviewQueue struct {
+	store.NovelHistoryStore
+	store.ATHubReviewStore
+	queued *store.ATHubReview
+}
+
+func (q *reviewQueue) QueueATHubReview(_ context.Context, item store.ATHubReview) (store.ATHubReview, error) {
+	q.queued = &item
+	return item, nil
+}
+
+// accountReviewQueue is an account store that could keep reviews itself, as
+// the account database once did.
+type accountReviewQueue struct {
+	*submissionStore
+	store.ATHubReviewStore
+	asked bool
+}
+
+func (s *accountReviewQueue) QueueATHubReview(_ context.Context, item store.ATHubReview) (store.ATHubReview, error) {
+	s.asked = true
 	return item, nil
 }
 
@@ -51,10 +74,8 @@ func TestAccountSubmissionAdmissionAndReview(t *testing.T) {
 				ReviewRequired: scenario.review,
 				Rules:          []store.ATHubAccessRule{{Operation: "upload", Allowed: scenario.allowed}},
 			}}
-			access, err := New(st, ":8003", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			access := New(st, nil)
+			access.EnableCreatorStorage(&st.queue)
 			dispatched := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// A reviewed change is rehearsed first; only a real call counts.
@@ -84,18 +105,46 @@ func TestAccountSubmissionAdmissionAndReview(t *testing.T) {
 				t.Fatal("submission lost session ownership or audit completion")
 			}
 			if scenario.want == 202 {
-				if st.queued == nil || st.queued.UserID == nil || *st.queued.UserID != user || st.queued.Path != "/api/v2/upload" ||
-					!json.Valid(st.queued.Payload) || st.queued.ID != base.call.ID {
-					t.Fatal("submission did not enter the existing review queue")
+				if queued := st.queue.queued; queued == nil || queued.UserID == nil || *queued.UserID != user || queued.Path != "/api/v2/upload" ||
+					!json.Valid(queued.Payload) || queued.ID != base.call.ID {
+					t.Fatal("submission did not enter the review queue")
 				}
 			}
 		})
 	}
 }
 
+// Reviews are kept by the creator database only. A pipeline without one
+// refuses a change that needs review: it neither applies the change nor hands
+// it to an account store that could keep it.
+func TestReviewedChangeNeedsTheCreatorDatabase(t *testing.T) {
+	base := &accessStore{}
+	st := &accountReviewQueue{submissionStore: &submissionStore{accessStore: base, policy: store.ATHubRolePolicy{
+		ReviewRequired: true,
+		Rules:          []store.ATHubAccessRule{{Operation: "upload", Allowed: true}},
+	}}}
+	access := New(st, nil)
+	access.Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("a change that could not be queued reached the content API")
+	}))
+	request := httptest.NewRequest("POST", "/api/v1/account/athub/submissions", strings.NewReader(`{"novel":{"title":"测试小说"}}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	access.SubmitUpload(response, request, uuid.New(), uuid.New())
+	if response.Code != 503 || !strings.Contains(response.Body.String(), "reviews_unavailable") {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body)
+	}
+	if st.asked || st.queue.queued != nil {
+		t.Fatal("the change was queued outside the creator database")
+	}
+	if !base.finished || base.status != 503 {
+		t.Fatalf("refusal was not recorded: finished=%v status=%d", base.finished, base.status)
+	}
+}
+
 func TestPublicRequestCannotImpersonateAccountSubmission(t *testing.T) {
 	st := &accessStore{}
-	access := accessFor(t, st)
+	access := accessFor(st)
 	handler := access.Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("untrusted request dispatched")
 	}))

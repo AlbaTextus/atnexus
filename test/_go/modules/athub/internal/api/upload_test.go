@@ -77,7 +77,7 @@ func TestCatalogAndVolumeRoutes(t *testing.T) {
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			store := &fakeStore{}
-			w := request(testHandler(t, store), tc.method, tc.path, tc.body, "Bearer "+testToken)
+			w := request(testHandler(t, store), tc.method, tc.path, tc.body)
 			if w.Code != tc.status || store.called != tc.called || w.Header().Get("Location") != tc.location {
 				t.Fatalf("status=%d called=%s body=%s", w.Code, store.called, w.Body.String())
 			}
@@ -137,17 +137,14 @@ func TestNewRouteRejections(t *testing.T) {
 	} {
 		t.Run(tc.method+tc.path+tc.body, func(t *testing.T) {
 			store := &fakeStore{}
-			w := request(testHandler(t, store), tc.method, tc.path, tc.body, "Bearer "+testToken)
+			w := request(testHandler(t, store), tc.method, tc.path, tc.body)
 			if w.Code != 400 || store.called != "" {
 				t.Fatalf("status=%d called=%s body=%s", w.Code, store.called, w.Body.String())
 			}
 		})
 	}
 	for _, path := range []string{"/api/v2/platforms", "/api/v2/authors", "/api/v2/volumes", "/api/v2/upload"} {
-		if w := request(testHandler(t, nil), "GET", path, "", ""); w.Code != 401 {
-			t.Fatalf("%s did not require authentication", path)
-		}
-		if w := request(testHandler(t, nil), "PATCH", path, "", "Bearer "+testToken); w.Code != 405 || w.Header().Get("Allow") == "" {
+		if w := request(testHandler(t, nil), "PATCH", path, ""); w.Code != 405 || w.Header().Get("Allow") == "" {
 			t.Fatalf("%s allowed unsupported method", path)
 		}
 	}
@@ -163,7 +160,7 @@ func TestUploadValidationAndResponse(t *testing.T) {
 		{`{"novel":{"platformId":2,"title":"Book"}}`, 201},
 	} {
 		store := &fakeStore{}
-		w := request(testHandler(t, store), "POST", "/api/v2/upload", tc.body, "Bearer "+testToken)
+		w := request(testHandler(t, store), "POST", "/api/v2/upload", tc.body)
 		if w.Code != tc.status || store.called != "upload" {
 			t.Fatalf("status=%d called=%s body=%s", w.Code, store.called, w.Body.String())
 		}
@@ -182,7 +179,7 @@ func TestUploadValidationAndResponse(t *testing.T) {
 			Volumes: make([]storage.UploadVolume, size.volumes), Chapters: make([]storage.UploadChapter, size.chapters)}
 		data, _ := json.Marshal(input)
 		store := &fakeStore{}
-		if w := request(testHandler(t, store), "POST", "/api/v2/upload", string(data), "Bearer "+testToken); w.Code != 400 || store.called != "" {
+		if w := request(testHandler(t, store), "POST", "/api/v2/upload", string(data)); w.Code != 400 || store.called != "" {
 			t.Fatalf("accepted oversized batch: %d", w.Code)
 		}
 	}
@@ -194,7 +191,6 @@ func TestUploadValidationAndResponse(t *testing.T) {
 		{strings.Repeat(" ", int(MaxBodyBytes)+1), "application/json", 413},
 	} {
 		r := httptest.NewRequest("POST", "/api/v2/upload", strings.NewReader(tc.body))
-		r.Header.Set("Authorization", "Bearer "+testToken)
 		r.Header.Set("Content-Type", tc.media)
 		w := httptest.NewRecorder()
 		testHandler(t, nil).ServeHTTP(w, r)
@@ -202,7 +198,7 @@ func TestUploadValidationAndResponse(t *testing.T) {
 			t.Fatalf("upload media/limit: status=%d", w.Code)
 		}
 	}
-	w := request(testHandler(t, &fakeStore{err: storage.ErrVolumeNotEmpty}), "DELETE", "/api/v2/volumes?novelId=7&order=1", "", "Bearer "+testToken)
+	w := request(testHandler(t, &fakeStore{err: storage.ErrVolumeNotEmpty}), "DELETE", "/api/v2/volumes?novelId=7&order=1", "")
 	if w.Code != 409 {
 		t.Fatalf("nonempty volume: %d", w.Code)
 	}
@@ -223,7 +219,7 @@ func TestUploadAuthorName(t *testing.T) {
 		}
 	}
 	w := request(testHandler(t, &fakeStore{}), "POST", "/api/v2/upload",
-		`{"novel":{"platformId":2,"title":"Book"},"authorName":"EPUB 作者"}`, "Bearer "+testToken)
+		`{"novel":{"platformId":2,"title":"Book"},"authorName":"EPUB 作者"}`)
 	if w.Code != 201 {
 		t.Fatalf("upload rejected authorName: %d %s", w.Code, w.Body.String())
 	}

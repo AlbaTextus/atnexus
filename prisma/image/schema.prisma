@@ -20,24 +20,6 @@ model ImageSetting {
   @@map("image_settings")
 }
 
-model ImageLegacyRow {
-  sourceTable String @map("source_table")
-  rowKey      String @map("row_key")
-  ciphertext  String
-  digest      String @db.Char(64)
-  @@id([sourceTable, rowKey])
-  @@map("image_legacy_rows")
-}
-
-model ImageImport {
-  key       String   @id
-  source    String
-  digest    String   @db.Char(64)
-  counts    Json
-  completed DateTime @default(now()) @db.Timestamptz(6)
-  @@map("image_imports")
-}
-
 model ImageUpload {
   id        String   @id
   owner     String

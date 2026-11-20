@@ -49,7 +49,7 @@ WEBAUTHN_RP_ORIGINS=http://localhost:3288
 docker compose up -d postgres athub-postgres creatplat-postgres
 ```
 
-创作者数据库先执行 `npm run db:creatplat:deploy`；已有安装须停止旧后端后执行 `npm run db:creatplat:import`，核对通过再启动新版本。完整步骤见[创作者平台数据库](/creatplat/database)。数据库就绪后执行：
+创作者数据库执行 `npm run db:creatplat:deploy`，完整步骤见[创作者平台数据库](/creatplat/database)。数据库就绪后执行：
 
 ```bash
 pnpm db:deploy
@@ -59,7 +59,7 @@ pnpm db:seed
 
 `db:deploy` 应用账户库全部已提交的迁移。`db:athub:deploy` 只迁移内容库。迁移前备份数据库；其中保留的
 `20261103000000_remove_user_api` 会删除旧 `ApiUser`、`ApiKey` 和 `ApiUsage` 表及数据，
-保留内容数据。图床库按 [图床迁移说明](/image/migration) 建在现有 PostgreSQL 实例中，设置 `IMAGE_DATABASE_URL` 和已有对象目录后执行 `npm run db:image:deploy`；升级现有 SQLite 图床还需停写备份并执行 `npm run db:image:import`。统一服务检查账户、内容、创作者和图床四套数据库，任何一套初始化失败都不会开始监听。
+保留内容数据。图床库按 [图床迁移说明](/image/migration) 建在现有 PostgreSQL 实例中，设置 `IMAGE_DATABASE_URL` 和已有对象目录后执行 `npm run db:image:deploy`。统一服务检查账户、内容、创作者和图床四套数据库，任何一套初始化失败都不会开始监听。
 
 `db:seed` 是开发初始化命令，会创建或更新以下账户和示例客户端：
 
@@ -72,7 +72,7 @@ pnpm db:seed
 | 示例 Client Secret | `development-secret-change-me` |
 | 示例回调 | `http://localhost:3288/auth/callback` |
 
-可用 `SEED_ADMIN_EMAIL`、`SEED_ADMIN_PASSWORD`、`SEED_ADMIN_NAME`、`SEED_CLIENT_ID`、`SEED_CLIENT_SECRET`、`SEED_CLIENT_REDIRECT_URIS` 覆盖默认值。Seed 会输出开发凭据，也会更新已有记录；不要把它作为每次部署必跑的迁移步骤。
+可用 `SEED_ADMIN_EMAIL`、`SEED_ADMIN_PASSWORD`、`SEED_ADMIN_NAME`、`SEED_CLIENT_ID`、`SEED_CLIENT_SECRET`、`SEED_CLIENT_REDIRECT_URIS`、`SEED_CLIENT_NAME`、`SEED_CLIENT_GRANT_TYPES`、`SEED_CLIENT_SCOPES`、`SEED_ACCESS_TOKEN_TTL`、`SEED_REFRESH_TOKEN_TTL` 覆盖默认值。Seed 会输出开发凭据，也会更新已有记录；不要把它作为每次部署必跑的迁移步骤。
 
 示例回调只是登记值，本项目没有实现 `/auth/callback` 应用页面，实际接入时需替换。
 

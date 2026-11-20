@@ -6,14 +6,11 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 )
-
-var ErrInvalidSecret = errors.New("invalid secret")
 
 func RandomToken(bytes int) (string, error) {
 	b := make([]byte, bytes)

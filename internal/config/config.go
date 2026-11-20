@@ -12,24 +12,23 @@ import (
 )
 
 type Config struct {
-	TrustedProxyCIDRs              []string
-	Env                            string
-	GatewayHTTPAddr                string
-	ImageDatabaseURL               string
-	ImageLocalRoot                 string
-	ImageTempRoot                  string
-	ImagePublicURL                 string
-	ImageMaxUploadBytes            int64
-	ImageMaxChunkBytes             int64
-	ImageMaxChunks                 int
-	ImageUploadTTL                 time.Duration
-	ImageHTTPTimeout               time.Duration
-	ImageMaxUploadSessions         int
-	ImageDatabaseMaxConns          int
-	DatabaseURL                    string
-	ATHubDatabaseURL               string
-	CreatplatDatabaseURL           string
-	CreatplatMigrationCheckTimeout time.Duration
+	TrustedProxyCIDRs      []string
+	Env                    string
+	GatewayHTTPAddr        string
+	ImageDatabaseURL       string
+	ImageLocalRoot         string
+	ImageTempRoot          string
+	ImagePublicURL         string
+	ImageMaxUploadBytes    int64
+	ImageMaxChunkBytes     int64
+	ImageMaxChunks         int
+	ImageUploadTTL         time.Duration
+	ImageHTTPTimeout       time.Duration
+	ImageMaxUploadSessions int
+	ImageDatabaseMaxConns  int
+	DatabaseURL            string
+	ATHubDatabaseURL       string
+	CreatplatDatabaseURL   string
 	// How long ATHub call records made without a personal key are kept. Zero keeps them forever.
 	ATHubCallLogRetention     time.Duration
 	IssuerURL                 string
@@ -56,41 +55,40 @@ type Config struct {
 func Load() (Config, error) {
 	var env envReader
 	c := Config{
-		TrustedProxyCIDRs:              getList("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128"),
-		Env:                            getenv("APP_ENV", "development"),
-		GatewayHTTPAddr:                getenv("GATEWAY_HTTP_ADDR", ":8010"),
-		ImageDatabaseURL:               strings.TrimSpace(os.Getenv("IMAGE_DATABASE_URL")),
-		ImageLocalRoot:                 strings.TrimSpace(os.Getenv("IMAGE_LOCAL_ROOT")),
-		ImageTempRoot:                  getenv("IMAGE_TEMP_ROOT", "temp/image"),
-		ImagePublicURL:                 strings.TrimRight(getenv("IMAGE_PUBLIC_URL", "http://localhost:8010"), "/"),
-		ImageMaxUploadBytes:            int64(env.int("IMAGE_MAX_UPLOAD_BYTES", 512<<20)),
-		ImageMaxChunkBytes:             int64(env.int("IMAGE_MAX_CHUNK_BYTES", 20<<20)),
-		ImageMaxChunks:                 env.int("IMAGE_MAX_CHUNKS", 1000),
-		ImageUploadTTL:                 env.duration("IMAGE_UPLOAD_TTL", 24*time.Hour),
-		ImageHTTPTimeout:               env.duration("IMAGE_HTTP_TIMEOUT", 10*time.Minute),
-		ImageMaxUploadSessions:         env.int("IMAGE_MAX_UPLOAD_SESSIONS", 20),
-		ImageDatabaseMaxConns:          env.int("IMAGE_DATABASE_MAX_CONNS", 0),
-		DatabaseURL:                    os.Getenv("DATABASE_URL"),
-		ATHubDatabaseURL:               os.Getenv("ATHUB_DATABASE_URL"),
-		CreatplatDatabaseURL:           strings.TrimSpace(os.Getenv("CREATPLAT_DATABASE_URL")),
-		CreatplatMigrationCheckTimeout: env.duration("CREATPLAT_MIGRATION_CHECK_TIMEOUT", 10*time.Minute),
-		ATHubCallLogRetention:          env.duration("ATHUB_CALL_LOG_RETENTION", 30*24*time.Hour),
-		IssuerURL:                      strings.TrimRight(getenv("ISSUER_URL", "http://localhost:3288"), "/"),
-		AuthUIURL:                      strings.TrimRight(getenv("AUTH_UI_URL", "http://localhost:3288"), "/"),
-		SessionTTL:                     env.duration("SESSION_TTL", 24*time.Hour),
-		LoginFailureLimit:              env.int("LOGIN_FAILURE_LIMIT", 10),
-		LoginFailureWindow:             env.duration("LOGIN_FAILURE_WINDOW", 15*time.Minute),
-		AuthorizationCodeTTL:           env.duration("AUTHORIZATION_CODE_TTL", 5*time.Minute),
-		HTTPRequestTimeout:             env.duration("HTTP_REQUEST_TIMEOUT", 15*time.Second),
-		HTTPShutdownTimeout:            env.duration("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
-		BCryptCost:                     env.int("BCRYPT_COST", 12),
-		SessionCookieName:              getenv("SESSION_COOKIE_NAME", "albatextus_session"),
-		WebAuthnRPID:                   getenv("WEBAUTHN_RP_ID", "localhost"),
-		WebAuthnRPName:                 getenv("WEBAUTHN_RP_NAME", "ALBATEXTUS"),
-		WebAuthnRPOrigins:              getList("WEBAUTHN_RP_ORIGINS", "http://localhost:3288"),
-		PasskeyChallengeTTL:            env.duration("PASSKEY_CHALLENGE_TTL", 5*time.Minute),
-		ClientSecretEncryptionKey:      strings.TrimSpace(os.Getenv("CLIENT_SECRET_ENCRYPTION_KEY")),
-		LoginProviders:                 loadLoginProviders(),
+		TrustedProxyCIDRs:         getList("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128"),
+		Env:                       getenv("APP_ENV", "development"),
+		GatewayHTTPAddr:           getenv("GATEWAY_HTTP_ADDR", ":8010"),
+		ImageDatabaseURL:          strings.TrimSpace(os.Getenv("IMAGE_DATABASE_URL")),
+		ImageLocalRoot:            strings.TrimSpace(os.Getenv("IMAGE_LOCAL_ROOT")),
+		ImageTempRoot:             getenv("IMAGE_TEMP_ROOT", "temp/image"),
+		ImagePublicURL:            strings.TrimRight(getenv("IMAGE_PUBLIC_URL", "http://localhost:8010"), "/"),
+		ImageMaxUploadBytes:       int64(env.int("IMAGE_MAX_UPLOAD_BYTES", 512<<20)),
+		ImageMaxChunkBytes:        int64(env.int("IMAGE_MAX_CHUNK_BYTES", 20<<20)),
+		ImageMaxChunks:            env.int("IMAGE_MAX_CHUNKS", 1000),
+		ImageUploadTTL:            env.duration("IMAGE_UPLOAD_TTL", 24*time.Hour),
+		ImageHTTPTimeout:          env.duration("IMAGE_HTTP_TIMEOUT", 10*time.Minute),
+		ImageMaxUploadSessions:    env.int("IMAGE_MAX_UPLOAD_SESSIONS", 20),
+		ImageDatabaseMaxConns:     env.int("IMAGE_DATABASE_MAX_CONNS", 0),
+		DatabaseURL:               os.Getenv("DATABASE_URL"),
+		ATHubDatabaseURL:          os.Getenv("ATHUB_DATABASE_URL"),
+		CreatplatDatabaseURL:      strings.TrimSpace(os.Getenv("CREATPLAT_DATABASE_URL")),
+		ATHubCallLogRetention:     env.duration("ATHUB_CALL_LOG_RETENTION", 30*24*time.Hour),
+		IssuerURL:                 strings.TrimRight(getenv("ISSUER_URL", "http://localhost:3288"), "/"),
+		AuthUIURL:                 strings.TrimRight(getenv("AUTH_UI_URL", "http://localhost:3288"), "/"),
+		SessionTTL:                env.duration("SESSION_TTL", 24*time.Hour),
+		LoginFailureLimit:         env.int("LOGIN_FAILURE_LIMIT", 10),
+		LoginFailureWindow:        env.duration("LOGIN_FAILURE_WINDOW", 15*time.Minute),
+		AuthorizationCodeTTL:      env.duration("AUTHORIZATION_CODE_TTL", 5*time.Minute),
+		HTTPRequestTimeout:        env.duration("HTTP_REQUEST_TIMEOUT", 15*time.Second),
+		HTTPShutdownTimeout:       env.duration("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
+		BCryptCost:                env.int("BCRYPT_COST", 12),
+		SessionCookieName:         getenv("SESSION_COOKIE_NAME", "albatextus_session"),
+		WebAuthnRPID:              getenv("WEBAUTHN_RP_ID", "localhost"),
+		WebAuthnRPName:            getenv("WEBAUTHN_RP_NAME", "ALBATEXTUS"),
+		WebAuthnRPOrigins:         getList("WEBAUTHN_RP_ORIGINS", "http://localhost:3288"),
+		PasskeyChallengeTTL:       env.duration("PASSKEY_CHALLENGE_TTL", 5*time.Minute),
+		ClientSecretEncryptionKey: strings.TrimSpace(os.Getenv("CLIENT_SECRET_ENCRYPTION_KEY")),
+		LoginProviders:            loadLoginProviders(),
 	}
 	var err error
 	if err = errors.Join(env.errs...); err != nil {
@@ -125,9 +123,6 @@ func Load() (Config, error) {
 	}
 	if c.ATHubCallLogRetention < 0 {
 		return Config{}, errors.New("ATHUB_CALL_LOG_RETENTION must not be negative")
-	}
-	if c.CreatplatMigrationCheckTimeout <= 0 {
-		return Config{}, errors.New("CREATPLAT_MIGRATION_CHECK_TIMEOUT must be positive")
 	}
 	if _, err := security.NewSecretCipher(c.ClientSecretEncryptionKey); err != nil {
 		return Config{}, err

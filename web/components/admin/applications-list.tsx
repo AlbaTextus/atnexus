@@ -2,16 +2,15 @@
 
 import { Link } from "next-view-transitions"
 import { useEffect, useRef, useState } from "react"
-import { AlertCircle, ArrowUpRight, Check, ChevronRight, Circle, LayoutGrid, Plus, Search, Settings2 } from "lucide-react"
+import { AlertCircle, Check, ChevronRight, Circle, LayoutGrid, Plus, Search, Settings2 } from "lucide-react"
 import { api } from "@/lib/api"
 import { type Application, managementError } from "@/lib/admin/applications"
 import { feedback } from "@/lib/feedback"
-import { wikiUrl } from "@/lib/wiki"
 import { ApplicationIcon } from "@/components/admin/application-icon"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, StatCard } from "@/components/ui/card"
+import { Card, CardContent, StatCard } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -86,6 +85,5 @@ export function ApplicationsList() {
       description={apps.length ? "试试其他搜索词或状态筛选。" : "创建应用，配置回调地址，即可使用统一账户登录你的子系统。"}>
       {apps.length ? <Button variant="outline" onClick={() => { setSearch(""); setFilter("all") }}>清除筛选</Button> : <Button nativeButton={false} role="link" render={<Link href="/admin/applications/new" />}><Plus data-icon="inline-start" />创建应用</Button>}
     </EmptyState></CardContent></Card>}
-    <Card><CardHeader><CardTitle>第一次接入？</CardTitle><CardDescription>查看授权流程、接口地址和回调处理说明。</CardDescription></CardHeader><CardContent><Button variant="link" nativeButton={false} role="link" render={<a href={wikiUrl("/integration")} />} className="px-0">阅读接入指南<ArrowUpRight data-icon="inline-end" /></Button></CardContent></Card>
   </div>
 }

@@ -49,7 +49,8 @@ func TestDecidedIllustrationReviewReleasesItsImage(t *testing.T) {
 			keys.user.Role = "ADMIN"
 			decided := illustration
 			scenario.review(&decided)
-			a.Store = &decidedReviewStore{policyAPIStore: &policyAPIStore{keyStore: keys}, decided: decided}
+			s := &decidedReviewStore{policyAPIStore: &policyAPIStore{keyStore: keys}, decided: decided}
+			a.Store, a.reviews = s, s
 			var released []string
 			a.SetImageRelease(func(_ context.Context, category, entityID, location string) {
 				released = append(released, category+" "+entityID+" "+location)

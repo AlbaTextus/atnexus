@@ -43,7 +43,7 @@ func (a *API) volumes(w http.ResponseWriter, r *http.Request) error {
 		return writeJSON(w, http.StatusOK, items)
 	case http.MethodPut:
 		if len(query) != 0 {
-			return badRequest("PUT /api/v2/volumes does not accept query parameters")
+			return badRequest("PUT /api/v5/volumes does not accept query parameters")
 		}
 		var input storage.VolumeInput
 		if err := decodeJSON(w, r, &input); err != nil {

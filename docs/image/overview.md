@@ -4,7 +4,7 @@
 
 图片元数据使用独立 PostgreSQL 数据库；本地文件仍使用已有存储目录，S3 对象继续按渠道及原对象键读取。独立数据库可以建在已有 PostgreSQL 实例中，无需另开数据库服务。启动时检查实际数据库身份，拒绝将图床指向账户、内容或创作者库。
 
-配置项见[配置](/image/config)，从原 SQLite 图床升级见[迁移与升级](/image/migration)，故障处理见[兼容边界与失败恢复](/image/recovery)。
+配置项见[配置](/image/config)，建库、升级和已退役的 SQLite 导入见[迁移与升级](/image/migration)，故障处理见[兼容边界与失败恢复](/image/recovery)。
 
 ## 认证与接口
 

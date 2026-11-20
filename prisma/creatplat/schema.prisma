@@ -49,16 +49,3 @@ model NovelRevision {
   @@index([userId], map: "novel_revisions_user_id_idx")
   @@map("novel_revisions")
 }
-
-model CreatorMigrationState {
-  key            String   @id @db.VarChar(32)
-  sourceDatabase String   @map("source_database") @db.Text
-  sourceServer   String   @map("source_server") @db.Text
-  reviewDigest   String   @map("review_digest") @db.Char(64)
-  historyDigest  String   @map("history_digest") @db.Char(64)
-  reviewCount    BigInt   @map("review_count")
-  historyCount   BigInt   @map("history_count")
-  completedAt    DateTime @default(now()) @map("completed_at") @db.Timestamptz(6)
-
-  @@map("creator_migration_state")
-}

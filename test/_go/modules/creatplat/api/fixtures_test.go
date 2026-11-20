@@ -75,7 +75,7 @@ func (s *keyStore) ListATHubCalls(_ context.Context, user uuid.UUID, _, _ int) (
 func keyAPI(t *testing.T) (*API, *keyStore) {
 	t.Helper()
 	s := &keyStore{user: store.User{ID: uuid.New(), IsActive: true}}
-	return &API{Base: &apibase.Base{Store: s, Config: config.Config{SessionCookieName: "session", GatewayHTTPAddr: ":8010"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}}, s
+	return &API{Base: &apibase.Base{Store: s, Config: config.Config{SessionCookieName: "session"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}}, s
 }
 func keyRequest(method, body string) *http.Request {
 	r := httptest.NewRequest(method, "/", strings.NewReader(body))

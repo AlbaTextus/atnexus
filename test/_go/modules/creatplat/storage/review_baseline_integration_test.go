@@ -3,11 +3,8 @@ package storage
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -217,113 +214,5 @@ func TestReviewBaselineNeedsItsMigration(t *testing.T) {
 	})
 	if err != nil || decided.Status != "approved" || handed != nil {
 		t.Fatalf("decided=%+v handed=%s err=%v", decided, handed, err)
-	}
-}
-
-// legacyDigest hashes a table the way imports did before reviews had a
-// baseline.
-func legacyDigest(t *testing.T, pool *pgxpool.Pool, table string) tableDigest {
-	t.Helper()
-	ctx := context.Background()
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SET LOCAL TIME ZONE 'UTC'`); err != nil {
-		t.Fatal(err)
-	}
-	rows, err := tx.Query(ctx, `SELECT to_jsonb(t)::text FROM `+pgx.Identifier{table}.Sanitize()+` t ORDER BY id`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	hash := sha256.New()
-	var count int64
-	for rows.Next() {
-		var raw string
-		if err := rows.Scan(&raw); err != nil {
-			t.Fatal(err)
-		}
-		_, _ = io.WriteString(hash, raw)
-		_, _ = io.WriteString(hash, "\n")
-		count++
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
-	}
-	return tableDigest{Sum: hex.EncodeToString(hash.Sum(nil)), Count: count}
-}
-
-// Reviews in the creator database have a baseline, which the legacy table
-// never had. The import still verifies what it copied, the marker it leaves is
-// the digest earlier versions computed, and baselines recorded afterwards do
-// not read as changed legacy data.
-func TestImportIgnoresReviewBaselines(t *testing.T) {
-	accounts, creator, source, target, sourceURL, _ := splitFixture(t)
-	ctx := context.Background()
-	user, err := accounts.CreateUser(ctx, "baseline-import@example.test", "unused", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	id := uuid.New()
-	contributor, _ := json.Marshal(map[string]string{"id": user.ID.String(), "name": "迁移前的投稿者"})
-	if _, err := source.Exec(ctx, `INSERT INTO athub_reviews(id,user_id,contributor,operation,method,path,payload,note) VALUES($1,$2,$3,'upload','POST','/api/v2/tags','{"name":"迁移前的标签"}','迁移前的备注')`, id, user.ID, contributor); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := source.Exec(ctx, `INSERT INTO novel_revisions(id,batch_id,novel_id,user_id,contributor,changes,status) VALUES($1,$2,7,$3,$4,'[{"entity":"Novel","action":"INSERT","after":{"title":"迁移前的作品"}}]','completed')`, uuid.New(), uuid.New(), user.ID, contributor); err != nil {
-		t.Fatal(err)
-	}
-	reviews, history := legacyDigest(t, source, "athub_reviews"), legacyDigest(t, source, "novel_revisions")
-	if result, err := ImportLegacy(ctx, source, target); err != nil || result.Reviews != 1 || result.History != 1 || result.AlreadyImported {
-		t.Fatalf("import=%+v err=%v", result, err)
-	}
-	var markedReviews, markedHistory tableDigest
-	if err := target.QueryRow(ctx, `SELECT review_digest,history_digest,review_count,history_count FROM creator_migration_state WHERE key='legacy_account'`).Scan(&markedReviews.Sum, &markedHistory.Sum, &markedReviews.Count, &markedHistory.Count); err != nil {
-		t.Fatal(err)
-	}
-	if markedReviews != reviews || markedHistory != history {
-		t.Fatalf("import marker %+v %+v is not the digest of earlier versions %+v %+v", markedReviews, markedHistory, reviews, history)
-	}
-	var imported bool
-	if err := target.QueryRow(ctx, `SELECT baseline IS NULL FROM athub_reviews WHERE id=$1`, id).Scan(&imported); err != nil || !imported {
-		t.Fatalf("an imported review has a baseline: %v %v", imported, err)
-	}
-	// The digest leaves out the baseline and nothing else.
-	tx, err := target.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SET LOCAL TIME ZONE 'UTC'`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tx.Exec(ctx, `UPDATE athub_reviews SET baseline='{"v":1}' WHERE id=$1`, id); err != nil {
-		t.Fatal(err)
-	}
-	if copied, err := digest(ctx, tx, "athub_reviews"); err != nil || copied != reviews {
-		t.Fatalf("a baseline changed the digest: %+v, want %+v, err=%v", copied, reviews, err)
-	}
-	if _, err := tx.Exec(ctx, `UPDATE athub_reviews SET note='迁移后被改动' WHERE id=$1`, id); err != nil {
-		t.Fatal(err)
-	}
-	if copied, err := digest(ctx, tx, "athub_reviews"); err != nil || copied == reviews {
-		t.Fatalf("an edited note left the digest unchanged: %+v, err=%v", copied, err)
-	}
-	if err := tx.Rollback(ctx); err != nil {
-		t.Fatal(err)
-	}
-	// After the cutover new submissions are queued with baselines.
-	if _, err := target.Exec(ctx, `INSERT INTO athub_reviews(id,user_id,contributor,operation,method,path,query,payload,baseline) VALUES($1,$2,$3,'edit','PUT','/api/v2/novelinfo','id=7','{"title":"切换后的修改"}','{"v":1}')`, uuid.New(), user.ID, contributor); err != nil {
-		t.Fatal(err)
-	}
-	if err := creator.CheckLegacyMigration(ctx, sourceURL); err != nil {
-		t.Fatal(err)
-	}
-	if err := creator.CheckLegacyMigrationCounts(ctx, sourceURL); err != nil {
-		t.Fatal(err)
-	}
-	if result, err := ImportLegacy(ctx, source, target); err != nil || !result.AlreadyImported {
-		t.Fatalf("repeat import=%+v err=%v", result, err)
 	}
 }

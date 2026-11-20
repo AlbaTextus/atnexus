@@ -74,43 +74,6 @@ export type QuotaResponse = {
   lastUpdated: number
 }
 
-export type ImageKeyPermission = "upload" | "list" | "delete" | "manage"
-
-export type ImageApiKey = {
-  id: string
-  name: string
-  owner: string
-  permissions: ImageKeyPermission[]
-  expiresAt: string | null
-  disabled: boolean
-  createdAt: string
-  updatedAt: string
-  autoDelete: boolean
-}
-
-export type CreatedImageApiKey = {
-  id: string
-  name: string
-  owner: string
-  token: string
-  permissions: ImageKeyPermission[]
-  expiresAt: string | null
-}
-
-export const imageKeyPermissions: { value: ImageKeyPermission; label: string; description: string }[] = [
-  { value: "upload", label: "上传 (upload)", description: "允许普通与分块上传" },
-  { value: "list", label: "列表 (list)", description: "允许查询目录树与文件列表" },
-  { value: "delete", label: "删除 (delete)", description: "允许删除单个或批量文件" },
-  { value: "manage", label: "管理 (manage)", description: "允许修改配置、配额、标签、封禁状态与预览" },
-]
-
-export const permissionShortLabels: Record<ImageKeyPermission, string> = {
-  upload: "上传",
-  list: "列表",
-  delete: "删除",
-  manage: "管理",
-}
-
 const spaceLabels: Record<string, string> = {
   "user/avatars": "用户头像",
   "user/backgrounds": "用户背景",
@@ -153,14 +116,6 @@ export function channelBytes(usage?: ChannelUsage): number {
   if (!usage) return 0
   if (typeof usage.usedBytes === "number" && Number.isFinite(usage.usedBytes)) return usage.usedBytes
   return Math.round((usage.usedMB || 0) * 1048576)
-}
-
-export function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "—"
-  if (seconds % 86400 === 0) return `${seconds / 86400} 天`
-  if (seconds % 3600 === 0) return `${seconds / 3600} 小时`
-  if (seconds % 60 === 0) return `${seconds / 60} 分钟`
-  return `${seconds} 秒`
 }
 
 export function formatDateTime(value: string | number | null | undefined): string {

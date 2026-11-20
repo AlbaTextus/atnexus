@@ -507,9 +507,7 @@ func TestATHubAdminBanBetweenLookupAndDispatch(t *testing.T) {
 	}
 }
 
-// A database from before 20261120010000_drop_athub_call_port cannot take call
-// records, so the startup check has to turn it away.
-func TestATHubSchemaCheckRefusesCallPortColumn(t *testing.T) {
+func TestATHubCallPortMigrationRemovesLegacyColumn(t *testing.T) {
 	p := athubTestStore(t)
 	ctx := context.Background()
 	if _, err := p.pool.Exec(ctx, `ALTER TABLE athub_api_calls ADD COLUMN port INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535)`); err != nil {
@@ -519,8 +517,8 @@ func TestATHubSchemaCheckRefusesCallPortColumn(t *testing.T) {
 	if err := p.BeginATHubCall(ctx, call); err == nil {
 		t.Fatal("call recorded without a port")
 	}
-	if err := p.CheckATHubSchema(ctx); err == nil {
-		t.Fatal("startup check accepted a database that cannot record calls")
+	if err := p.CheckATHubSchema(ctx); err != nil {
+		t.Fatalf("legacy column prevented startup: %v", err)
 	}
 	sql, err := os.ReadFile("../../prisma/oauth/migrations/20261120010000_drop_athub_call_port/migration.sql")
 	if err != nil {

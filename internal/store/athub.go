@@ -94,13 +94,6 @@ func (p *Postgres) CheckATHubSchema(ctx context.Context) error {
 		}
 		rows.Close()
 	}
-	// Call records no longer carry a port. The column was NOT NULL, so a database
-	// that still has it refuses every record, and with it every call.
-	var portColumn bool
-	if err := p.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_attribute
-		WHERE attrelid=to_regclass('athub_api_calls') AND attname='port' AND NOT attisdropped)`).Scan(&portColumn); err != nil || portColumn {
-		return notReady
-	}
 	return nil
 }
 

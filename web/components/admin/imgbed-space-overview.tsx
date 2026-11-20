@@ -32,12 +32,10 @@ const number = (value: number) => value.toLocaleString("zh-CN")
 export function ImgbedSpaceOverview({
   quota,
   config,
-  blockedIPCount,
   loading,
 }: {
   quota: QuotaResponse | null
   config: UploadConfig | null
-  blockedIPCount: number
   loading: boolean
 }) {
   const [spaceView, setSpaceView] = useState<"detail" | "group">("detail")
@@ -161,7 +159,7 @@ export function ImgbedSpaceOverview({
           value={stateStats ? number(stateStats.activeUploadSessions) : "—"}
           icon={<Layers size={18} />}
           tone="muted"
-          note={`IP 黑名单 ${number(blockedIPCount)} 条`}
+          note="未过期的分块上传任务"
         />
       </div>
 

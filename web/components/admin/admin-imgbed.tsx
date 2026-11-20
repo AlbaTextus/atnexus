@@ -5,14 +5,10 @@ import { AlertCircle, RefreshCw } from "lucide-react"
 import { api } from "@/lib/api"
 import {
   imgbedError,
-  type ImageApiKey,
   type QuotaResponse,
   type UploadConfig,
 } from "@/lib/admin/imgbed"
-import { ImgbedApiKeys } from "@/components/admin/imgbed-api-keys"
 import { ImgbedChannelConfig } from "@/components/admin/imgbed-channel-config"
-import { ImgbedIPBlacklist } from "@/components/admin/imgbed-ip-blacklist"
-import { ImgbedRuntimeCard } from "@/components/admin/imgbed-runtime-card"
 import { ImgbedSpaceOverview } from "@/components/admin/imgbed-space-overview"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -22,8 +18,6 @@ export function AdminImgbed() {
   const [healthy, setHealthy] = useState<boolean | null>(null)
   const [quota, setQuota] = useState<QuotaResponse | null>(null)
   const [config, setConfig] = useState<UploadConfig | null>(null)
-  const [ips, setIPs] = useState<string[] | null>(null)
-  const [keys, setKeys] = useState<ImageApiKey[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [revision, setRevision] = useState(0)
@@ -37,9 +31,7 @@ export function AdminImgbed() {
       api<{ status: string }>("/api/v2/healthz", { signal: controller.signal, cache: "no-store" }),
       api<QuotaResponse>("/api/v2/manage/quota", { signal: controller.signal, cache: "no-store" }),
       api<UploadConfig>("/api/v2/manage/sysConfig/upload", { signal: controller.signal, cache: "no-store" }),
-      api<{ ips: string[] }>("/api/v2/manage/cusConfig/blockipList", { signal: controller.signal, cache: "no-store" }),
-      api<{ tokens: ImageApiKey[] }>("/api/v1/admin/image/keys", { signal: controller.signal, cache: "no-store" }),
-    ]).then(([healthRes, quotaRes, configRes, ipRes, keysRes]) => {
+    ]).then(([healthRes, quotaRes, configRes]) => {
       if (controller.signal.aborted) return
 
       const errors: string[] = []
@@ -54,12 +46,6 @@ export function AdminImgbed() {
 
       if (configRes.status === "fulfilled") setConfig(configRes.value)
       else errors.push(`渠道配置：${imgbedError(configRes.reason)}`)
-
-      if (ipRes.status === "fulfilled") setIPs(ipRes.value.ips || [])
-      else errors.push(`IP 黑名单：${imgbedError(ipRes.reason)}`)
-
-      if (keysRes.status === "fulfilled") setKeys(keysRes.value.tokens || [])
-      else errors.push(`API Key：${imgbedError(keysRes.reason)}`)
 
       if (errors.length > 0) setError(errors.join("；"))
     }).finally(() => {
@@ -98,7 +84,6 @@ export function AdminImgbed() {
       <ImgbedSpaceOverview
         quota={quota}
         config={config}
-        blockedIPCount={ips?.length ?? 0}
         loading={loading}
       />
 
@@ -107,24 +92,6 @@ export function AdminImgbed() {
         quota={quota}
         loading={loading}
         onSaved={refresh}
-      />
-
-      <div className="grid gap-5 lg:grid-cols-2">
-        <ImgbedIPBlacklist
-          ips={ips}
-          loading={loading}
-          onSaved={next => setIPs(next)}
-        />
-        <ImgbedApiKeys
-          keys={keys}
-          loading={loading}
-          onChanged={refresh}
-        />
-      </div>
-
-      <ImgbedRuntimeCard
-        runtime={quota?.runtime ?? null}
-        loading={loading}
       />
     </section>
   )

@@ -61,7 +61,6 @@ services:
       DATABASE_URL: postgresql://oauth:oauth@postgres:5432/oauth?sslmode=disable
       ATHUB_DATABASE_URL: postgresql://athub:athub@athub-postgres:5432/athub?sslmode=disable
       CREATPLAT_DATABASE_URL: ${CREATPLAT_COMPOSE_DATABASE_URL:?Set CREATPLAT_COMPOSE_DATABASE_URL using the creatplat-postgres host}
-      CREATPLAT_MIGRATION_CHECK_TIMEOUT: ${CREATPLAT_MIGRATION_CHECK_TIMEOUT:-10m}
       ISSUER_URL: http://localhost:3288
       AUTH_UI_URL: http://localhost:3288
       WEBAUTHN_RP_ORIGINS: http://localhost:3288
@@ -115,7 +114,6 @@ services:
       args:
         OAUTH_BACKEND_URL: http://atnexus:8010
         CREATPLAT_BACKEND_URL: http://atnexus:8010
-        NEXT_PUBLIC_WIKI_URL: ${NEXT_PUBLIC_WIKI_URL:-http://localhost:3200}
         NEXT_PUBLIC_ATHUB_API_URL: ${NEXT_PUBLIC_ATHUB_API_URL:-http://localhost:8010}
         NEXT_PUBLIC_CREATPLAT_API_URL: ${NEXT_PUBLIC_CREATPLAT_API_URL:-http://localhost:8010}
     environment:

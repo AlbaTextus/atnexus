@@ -58,7 +58,7 @@ func athubTestStore(t *testing.T) *Postgres {
 		CONSTRAINT oauth_clients_minimum_role_check CHECK(minimum_role IN ('USER','ADMIN','SUPER_ADMIN')))`); err != nil {
 		t.Fatal(err)
 	}
-	for _, migration := range []string{"20261110000000_athub_user_keys", "20261110010000_athub_single_key", "20261110020000_athub_admin_disable", "20261111000000_athub_key_limits", "20261111010000_enable_level_2", "20261111020000_athub_permissions_reviews", "20261117000000_athub_key_call_counter"} {
+	for _, migration := range []string{"20261110000000_athub_user_keys", "20261110010000_athub_single_key", "20261110020000_athub_admin_disable", "20261111000000_athub_key_limits", "20261111010000_enable_level_2", "20261111020000_athub_permissions_reviews", "20261117000000_athub_key_call_counter", "20261120000000_drop_retired_tables"} {
 		sql, err := os.ReadFile("../../prisma/oauth/migrations/" + migration + "/migration.sql")
 		if err != nil {
 			t.Fatal(err)

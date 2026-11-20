@@ -43,7 +43,8 @@ func TestReviewEndpointsNeverServeTheBaseline(t *testing.T) {
 				Payload: json.RawMessage(`{"title":"新标题"}`), Status: "pending",
 				Baseline: json.RawMessage(`{"v":1,"novels":{"17":[{"before":{"title":"only-in-the-baseline"}}]}}`),
 			}
-			a.Store = &baselineReviewStore{&reviewAvatarStore{policyAPIStore: &policyAPIStore{keyStore: keys}, review: review}}
+			s := &baselineReviewStore{&reviewAvatarStore{policyAPIStore: &policyAPIStore{keyStore: keys}, review: review}}
+			a.Store, a.reviews = s, s
 			request := keyRequest(scenario.method, scenario.body)
 			request.URL.Path = scenario.path
 			if scenario.single {

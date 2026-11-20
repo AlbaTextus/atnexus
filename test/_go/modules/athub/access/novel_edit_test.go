@@ -47,6 +47,7 @@ func TestAccountNovelEditAdmissionAndReview(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			access.EnableCreatorStorage(&st.queue)
 			dispatched := false
 			payload := `{"platformId":1,"title":"修改后的小说","status":"COMPLETED","tagIds":[2]}`
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +78,7 @@ func TestAccountNovelEditAdmissionAndReview(t *testing.T) {
 				t.Fatal("edit lost session ownership or audit completion")
 			}
 			if scenario.want == 202 {
-				item := st.queued
+				item := st.queue.queued
 				if item == nil || item.Operation != "edit" || item.Method != "PUT" || item.Query != "id=17" ||
 					item.Path != "/api/v2/novelinfo" || item.UserID == nil || *item.UserID != user ||
 					!json.Valid(item.Payload) || string(item.Payload) != payload || item.ID != base.call.ID {
@@ -88,7 +89,7 @@ func TestAccountNovelEditAdmissionAndReview(t *testing.T) {
 				if err != nil || result.Status != 200 || !dispatched {
 					t.Fatalf("approved edit not applied: result=%+v err=%v", result, err)
 				}
-			} else if st.queued != nil {
+			} else if st.queue.queued != nil {
 				t.Fatal("unexpected queued edit")
 			}
 		})

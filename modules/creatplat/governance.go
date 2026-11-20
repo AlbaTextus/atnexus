@@ -17,19 +17,17 @@ import (
 )
 
 // Governance owns admission to the creator review queue and application of
-// approved changes. The host injects the private content executor.
+// approved changes. The host injects the private content executor and the
+// creator database's review queue; without a queue, reviewed changes are
+// refused rather than stored anywhere else.
 type Governance struct {
 	store   store.ATHubStore
 	content http.Handler
 	reviews store.ATHubReviewStore
 }
 
-func NewGovernance(st store.ATHubStore, content http.Handler, reviews ...store.ATHubReviewStore) *Governance {
-	result := &Governance{store: st, content: content}
-	if len(reviews) > 0 {
-		result.reviews = reviews[0]
-	}
-	return result
+func NewGovernance(st store.ATHubStore, content http.Handler, reviews store.ATHubReviewStore) *Governance {
+	return &Governance{store: st, content: content, reviews: reviews}
 }
 
 func (a *Governance) QueueMutation(w http.ResponseWriter, r *http.Request, call store.ATHubCall, actor athub.Contributor) bool {
@@ -88,11 +86,7 @@ func (a *Governance) QueueMutation(w http.ResponseWriter, r *http.Request, call 
 	if !policy.ReviewRequired {
 		return false
 	}
-	reviews, ok := a.store.(store.ATHubReviewStore)
-	if a.reviews != nil {
-		reviews, ok = a.reviews, true
-	}
-	if !ok {
+	if a.reviews == nil {
 		apibase.WriteError(w, 503, "reviews_unavailable")
 		return true
 	}
@@ -145,7 +139,7 @@ func (a *Governance) QueueMutation(w http.ResponseWriter, r *http.Request, call 
 		return true
 	}
 	contributor, _ := json.Marshal(actor)
-	item, err := reviews.QueueATHubReview(r.Context(), store.ATHubReview{
+	item, err := a.reviews.QueueATHubReview(r.Context(), store.ATHubReview{
 		ID: call.ID, UserID: call.UserID, Contributor: contributor, Operation: op, Method: r.Method, Path: r.URL.Path, Query: r.URL.RawQuery, Payload: payload, Baseline: baseline,
 	})
 	if err != nil {

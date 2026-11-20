@@ -2,8 +2,6 @@ package oauth
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -19,11 +17,9 @@ import (
 )
 
 // ImageKeys owns external image credentials in the OAuth account database.
-// Imported credentials are hashed without changing their existing values/scopes.
 type ImageKeys struct {
 	pool     *pgxpool.Pool
 	sessions auth.Verifier
-	owned    bool
 }
 type ImageKey struct {
 	ID          string     `json:"id"`
@@ -36,26 +32,8 @@ type ImageKey struct {
 	UpdatedAt   time.Time  `json:"updatedAt"`
 	AutoDelete  bool       `json:"autoDelete"`
 }
-type LegacyImageKey struct {
-	ImageKey
-	Token string `json:"token"`
-}
 
-func NewImageKeys(ctx context.Context, databaseURL string, sessions auth.Verifier) (*ImageKeys, error) {
-	p, err := pgxpool.New(ctx, databaseURL)
-	if err != nil {
-		return nil, errors.New("OAuth image key pool unavailable")
-	}
-	keys, err := NewImageKeysWithPool(ctx, p, sessions)
-	if err != nil {
-		p.Close()
-		return nil, err
-	}
-	keys.owned = true
-	return keys, nil
-}
-
-// NewImageKeysWithPool uses the caller's account-database pool; Close leaves it open.
+// NewImageKeysWithPool uses the caller's account-database pool and never closes it.
 func NewImageKeysWithPool(ctx context.Context, p *pgxpool.Pool, sessions auth.Verifier) (*ImageKeys, error) {
 	rows, err := p.Query(ctx, `SELECT id,token_hash,permissions,disabled FROM image_api_keys LIMIT 0`)
 	if err != nil {
@@ -63,11 +41,6 @@ func NewImageKeysWithPool(ctx context.Context, p *pgxpool.Pool, sessions auth.Ve
 	}
 	rows.Close()
 	return &ImageKeys{pool: p, sessions: sessions}, nil
-}
-func (s *ImageKeys) Close() {
-	if s.owned {
-		s.pool.Close()
-	}
 }
 func (s *ImageKeys) AuthorizeImageKey(ctx context.Context, raw, permission string) (string, error) {
 	var id string
@@ -95,61 +68,6 @@ func validImagePermissions(scopes []string) bool {
 		}
 	}
 	return true
-}
-
-func (s *ImageKeys) Import(ctx context.Context, keys []LegacyImageKey, sourceDigest string) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(context.WithoutCancel(ctx))
-	if _, err = tx.Exec(ctx, `LOCK TABLE image_api_keys,image_key_imports IN EXCLUSIVE MODE`); err != nil {
-		return err
-	}
-	// Deterministic verification covers every imported hash and permission.
-	snapshots := make([]any, 0, len(keys))
-	for _, k := range keys {
-		if k.ID == "" || k.Token == "" || !validImagePermissions(k.Permissions) {
-			return errors.New("legacy image key is invalid; source retained")
-		}
-		snapshots = append(snapshots, []any{k.ImageKey, security.HashToken(k.Token)})
-	}
-	encoded, err := json.Marshal(snapshots)
-	if err != nil {
-		return err
-	}
-	sum := sha256.Sum256(encoded)
-	keyDigest := hex.EncodeToString(sum[:])
-	var previous string
-	err = tx.QueryRow(ctx, `SELECT key_digest FROM image_key_imports WHERE source_digest=$1`, sourceDigest).Scan(&previous)
-	if err == nil {
-		if previous != keyDigest {
-			return errors.New("legacy image key import conflicts with prior state")
-		}
-		return nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return err
-	}
-	for _, k := range keys {
-		var stored string
-		err = tx.QueryRow(ctx, `SELECT token_hash FROM image_api_keys WHERE id=$1`, k.ID).Scan(&stored)
-		if err == nil {
-			return errors.New("legacy image key ID already exists; refusing overwrite")
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO image_api_keys(id,name,owner,token_hash,permissions,expires_at,disabled,created_at,updated_at,auto_delete) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, k.ID, k.Name, k.Owner, security.HashToken(k.Token), k.Permissions, k.ExpiresAt, k.Disabled, k.CreatedAt, k.UpdatedAt, k.AutoDelete)
-		if err != nil {
-			return err
-		}
-	}
-	_, err = tx.Exec(ctx, `INSERT INTO image_key_imports(source_digest,key_digest,key_count) VALUES($1,$2,$3)`, sourceDigest, keyDigest, len(keys))
-	if err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
 }
 
 func (s *ImageKeys) ServeHTTP(w http.ResponseWriter, r *http.Request) {

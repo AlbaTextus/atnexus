@@ -69,7 +69,7 @@ func openPool(ctx context.Context, raw string, maxConns int32) (*pgxpool.Pool, e
 		p.Close()
 		return nil, errors.New("image database unavailable")
 	}
-	for _, q := range []string{`SELECT id,metadata,state,revision FROM image_files LIMIT 0`, `SELECT key,value FROM image_settings LIMIT 0`, `SELECT id,owner,data,expires_at FROM image_uploads LIMIT 0`, `SELECT upload_id,number,size,digest FROM image_upload_parts LIMIT 0`, `SELECT key,source,digest,counts FROM image_imports LIMIT 0`} {
+	for _, q := range []string{`SELECT id,metadata,state,revision FROM image_files LIMIT 0`, `SELECT key,value FROM image_settings LIMIT 0`, `SELECT id,owner,data,expires_at FROM image_uploads LIMIT 0`, `SELECT upload_id,number,size,digest FROM image_upload_parts LIMIT 0`} {
 		rows, e := p.Query(ctx, q)
 		if e != nil {
 			p.Close()

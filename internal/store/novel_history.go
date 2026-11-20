@@ -1,34 +1,9 @@
-// Transitional account-database adapter. History business and SQL are owned
-// by the creator platform; existing callers retain their persistence contract.
 package store
 
-import (
-	"context"
-	"encoding/json"
+import "github.com/AlbaTextus/atnexus/modules/creatplat/repository"
 
-	"github.com/AlbaTextus/atnexus/modules/creatplat/repository"
-	"github.com/google/uuid"
-)
-
+// Novel history is stored by the creator platform. These aliases keep the
+// names the admission pipeline uses for that contract.
 type NovelRevision = repository.NovelRevision
 type NovelHistory = repository.NovelHistory
 type NovelHistoryStore = repository.NovelHistoryStore
-
-func (p *Postgres) CheckNovelHistorySchema(ctx context.Context) error {
-	return repository.NewHistory(p.pool, ErrNotFound).CheckNovelHistorySchema(ctx)
-}
-func (p *Postgres) PrepareNovelRevisions(ctx context.Context, batch uuid.UUID, revisions []NovelRevision) error {
-	return repository.NewHistory(p.pool, ErrNotFound).PrepareNovelRevisions(ctx, batch, revisions)
-}
-func (p *Postgres) FinishNovelRevisions(ctx context.Context, batch uuid.UUID, committed bool) error {
-	return repository.NewHistory(p.pool, ErrNotFound).FinishNovelRevisions(ctx, batch, committed)
-}
-func (p *Postgres) NovelHistory(ctx context.Context, id int32, limit, offset int) (NovelHistory, error) {
-	return repository.NewHistory(p.pool, ErrNotFound).NovelHistory(ctx, id, limit, offset)
-}
-func (p *Postgres) NovelContributors(ctx context.Context, id int32) (json.RawMessage, error) {
-	return repository.NewHistory(p.pool, ErrNotFound).NovelContributors(ctx, id)
-}
-func (p *Postgres) NovelRevisionChanges(ctx context.Context, id int32, revision uuid.UUID, limit, offset int) (repository.RevisionChanges, error) {
-	return repository.NewHistory(p.pool, ErrNotFound).NovelRevisionChanges(ctx, id, revision, limit, offset)
-}

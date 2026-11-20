@@ -86,7 +86,6 @@ func (p *Postgres) CheckATHubSchema(ctx context.Context) error {
 		`SELECT role,total_call_limit,updated_by,updated_at FROM athub_key_limits LIMIT 0`,
 		`SELECT role,review_required,updated_at FROM athub_role_policies LIMIT 0`,
 		`SELECT role,operation,method,path,allowed,total_call_limit FROM athub_access_rules LIMIT 0`,
-		`SELECT id,user_id,payload,status,reviewer_id FROM athub_reviews LIMIT 0`,
 		`SELECT operation FROM athub_api_calls LIMIT 0`,
 		`SELECT id,user_id,name,token_hash,prefix,created_at,expires_at,revoked_at,last_used_at,is_current,authenticated_calls FROM athub_api_keys LIMIT 0`,
 		`SELECT id,user_id,key_id,request_id,method,path,port,authenticated,status,duration_ms,response_bytes,started_at,completed_at FROM athub_api_calls LIMIT 0`,

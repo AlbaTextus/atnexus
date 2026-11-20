@@ -17,8 +17,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// History owns contribution recording and revision queries. The current account
-// database remains the transitional persistence adapter.
+// History owns contribution recording and revision queries. Its store is the
+// creator database; without one it answers that history is unavailable.
 type History struct {
 	store   any
 	logger  *slog.Logger

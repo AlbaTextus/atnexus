@@ -58,7 +58,7 @@ func TestAllReviewsResolvesHistoricalContributorAndReviewerAvatars(t *testing.T)
 			Contributor: contributor, Reviewer: reviewer, Status: "approved"},
 		reviewer: store.User{ID: reviewerID, AvatarURL: "https://example.test/reviewer.png", Email: "private@example.test"},
 	}
-	a.Store = s
+	a.Store, a.reviews = s, s
 	request := keyRequest("GET", "")
 	request.URL.Path = "/api/v4/admin/athub/reviews"
 	request.URL.RawQuery = "offset=20"
@@ -102,7 +102,7 @@ func TestHistoricalReviewResolvesSelectedAvatar(t *testing.T) {
 			reviewer:       store.User{ID: reviewerID, AvatarURL: "https://example.test/selected-avatar.png", Email: "private@example.test"},
 			missing:        missing,
 		}
-		a.Store = s
+		a.Store, a.reviews = s, s
 		request := keyRequest("GET", "")
 		request.URL.Path = "/api/v4/admin/athub/reviews/" + s.review.ID.String()
 		params := chi.NewRouteContext()

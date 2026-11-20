@@ -56,17 +56,18 @@ func TestOAuthSessionAdmission(t *testing.T) {
 }
 
 func TestCreatorHistoryUsesOAuthSession(t *testing.T) {
-	st := &historyAccessStore{}
+	st, creator := &accessStore{}, &historyReads{}
 	access, err := New(st, ":8005", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	access.EnableCreatorStorage(creator)
 	identity := auth.Identity{UserID: uuid.New(), SessionID: uuid.New()}
 	access.EnableSessions(sessionVerifier{identity: identity})
 	access.Wrap(http.NotFoundHandler())
 	w := httptest.NewRecorder()
 	access.ServeHistory(w, httptest.NewRequest("GET", "/api/v4/history?novelId=7&limit=10", nil))
-	if w.Code != 200 || st.novelID != 7 || st.call.Path != "/api/v3/history" || !st.finished || st.call.KeyID != nil || st.call.SessionID == nil || *st.call.SessionID != identity.SessionID {
+	if w.Code != 200 || creator.novelID != 7 || st.call.Path != "/api/v3/history" || !st.finished || st.call.KeyID != nil || st.call.SessionID == nil || *st.call.SessionID != identity.SessionID {
 		t.Fatalf("status=%d audit=%+v body=%s", w.Code, st.call, w.Body)
 	}
 }

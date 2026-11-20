@@ -201,7 +201,7 @@ func TestPendingChangesAreKeptFromAccountsThatMayNotEdit(t *testing.T) {
 // With the account database as the authority, the changes are read by an
 // account whose level may edit novels, and by no other.
 func TestPendingChangesFollowTheAccountsPermissions(t *testing.T) {
-	accounts, creator, source, target, _, _ := splitFixture(t)
+	accounts, creator, source, target := splitFixture(t)
 	ctx := context.Background()
 	queued := queueAt(t, target, "pending", `{"v":1,"novels":{"17":[{"key":"Novel","action":"UPDATE","id":17,"before":{"title":"旧"},"after":{"title":"新"}}]}}`, time.Date(2026, 11, 18, 8, 0, 0, 0, time.UTC))
 	reader, err := accounts.UpsertUser(ctx, store.UserSeed{Email: "pending-reader@example.test", PasswordHash: "unused", Role: "USER"})

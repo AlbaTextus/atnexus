@@ -21,7 +21,6 @@ Optional build environment:
   NEXT_PUBLIC_ATHUB_API_URL http://localhost:8010
   NEXT_PUBLIC_CREATPLAT_API_URL  public creator API origin
   CREATPLAT_BACKEND_URL     http://127.0.0.1:8010
-  NEXT_PUBLIC_WIKI_URL      http://localhost:3200
 
 Local .env files are excluded. Public URLs must be set before building.`)
   process.exit(0)
@@ -82,7 +81,6 @@ const urls = {
   CREATPLAT_BACKEND_URL: process.env.CREATPLAT_BACKEND_URL || "http://127.0.0.1:8010",
   NEXT_PUBLIC_ATHUB_API_URL: process.env.NEXT_PUBLIC_ATHUB_API_URL || "http://localhost:8010",
   NEXT_PUBLIC_CREATPLAT_API_URL: process.env.NEXT_PUBLIC_CREATPLAT_API_URL || "http://localhost:8010",
-  NEXT_PUBLIC_WIKI_URL: process.env.NEXT_PUBLIC_WIKI_URL || "http://localhost:3200",
 }
 for (const [key, value] of Object.entries(urls)) {
   const parsed = new URL(value)
@@ -144,10 +142,6 @@ try {
   console.log("[2/5] Cross-compiling Go server for linux/amd64")
   run("go", ["build", "-trimpath", "-ldflags=-s -w", "-o", path.join(bundle, "atnexus"), "./cmd/server"],
     source, { CGO_ENABLED: "0", GOOS: "linux", GOARCH: "amd64", GOAMD64: "v1" })
-  run("go", ["build", "-trimpath", "-ldflags=-s -w", "-o", path.join(bundle, "atnexus-migrate-creatplat"), "./cmd/migrate-creatplat"],
-    source, { CGO_ENABLED: "0", GOOS: "linux", GOARCH: "amd64", GOAMD64: "v1" })
-  run("go", ["build", "-trimpath", "-ldflags=-s -w", "-o", path.join(bundle, "atnexus-migrate-image"), "./cmd/migrate-image"],
-    source, { CGO_ENABLED: "0", GOOS: "linux", GOARCH: "amd64", GOAMD64: "v1" })
 
   console.log("[3/5] Building Next.js using the host toolchain")
   pnpm(["install", "--frozen-lockfile", "--prod=false"], source, buildEnv)
@@ -205,7 +199,7 @@ Verify archive: sha256sum -c ${name}.tar.gz.sha256
 Verify extracted files: sha256sum -c SHA256SUMS
 Preserve the existing .env, encryption keys, databases and user data.
 For a new installation, copy .env.example to .env and configure it; chmod 600 .env.
-chmod +x atnexus atnexus-migrate-creatplat atnexus-migrate-image start-backend.sh start-frontend.sh
+chmod +x atnexus start-backend.sh start-frontend.sh
 Run ./start-backend.sh and ./start-frontend.sh as separate services.
 The backend serves all five APIs on port 8010 (GATEWAY_HTTP_ADDR); the frontend uses 3288.
 When upgrading, point reverse proxies and API clients to the gateway instead of the old module ports.
@@ -220,16 +214,10 @@ Frontend launch does not load the backend .env.
 Database schemas and migrations: database/account, database/content, database/creator, database/image.
 Apply pending migrations using your established Prisma deployment workflow.
 CREATPLAT_DATABASE_URL must point to a separate PostgreSQL database.
-After applying creator migrations, stop all backend writers and run
-./atnexus-migrate-creatplat to import and verify legacy reviews/history.
-Source data is retained; do not resume the old backend after cutover.
-IMAGE_DATABASE_URL must point to its own PostgreSQL database. Apply account
-and image migrations, stop legacy image writers, back up SQLite and file bytes,
-then run ./atnexus-migrate-image -source /path/to/database.sqlite.
+IMAGE_DATABASE_URL must point to its own PostgreSQL database.
 Set IMAGE_LOCAL_ROOT to the existing byte directory and IMAGE_PUBLIC_URL to the
 public origin. Existing /file paths are served by the gateway; route any old
 public image origin to the gateway if those links must remain reachable.
-The original image frontend is not included or modified by this migration.
 Startup does not migrate databases or seed data.
 Local .env files are excluded from the build and package.
 `)

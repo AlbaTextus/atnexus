@@ -55,15 +55,22 @@ func (s *uploadStore) FinishATHubCall(_ context.Context, _ uuid.UUID, status int
 type reviewedUploadStore struct {
 	*uploadStore
 	store.ATHubPolicyStore
-	store.ATHubReviewStore
-	queued *store.ATHubReview
 }
 
 func (s *reviewedUploadStore) ATHubPolicy(context.Context, string) (store.ATHubRolePolicy, error) {
 	return store.ATHubRolePolicy{ReviewRequired: true, Rules: []store.ATHubAccessRule{{Operation: "upload", Allowed: true}}}, nil
 }
-func (s *reviewedUploadStore) QueueATHubReview(_ context.Context, item store.ATHubReview) (store.ATHubReview, error) {
-	s.queued = &item
+
+// uploadReviews stands in for the creator database's review queue: it keeps
+// the change that was last sent to review.
+type uploadReviews struct {
+	store.NovelHistoryStore
+	store.ATHubReviewStore
+	queued *store.ATHubReview
+}
+
+func (q *uploadReviews) QueueATHubReview(_ context.Context, item store.ATHubReview) (store.ATHubReview, error) {
+	q.queued = &item
 	return item, nil
 }
 
@@ -89,6 +96,8 @@ type uploadFixture struct {
 	api   *API
 	store *uploadStore
 	host  *imageHost
+	// What was sent to review, if anything was.
+	reviews *uploadReviews
 	// What the content API received, if the upload reached it.
 	content *http.Request
 	body    []byte
@@ -102,7 +111,7 @@ type uploadFixture struct {
 func newUploadFixture(t *testing.T) *uploadFixture {
 	t.Helper()
 	a, keys := keyAPI(t)
-	f := &uploadFixture{api: a, host: &imageHost{}, store: &uploadStore{
+	f := &uploadFixture{api: a, host: &imageHost{}, reviews: &uploadReviews{}, store: &uploadStore{
 		submitAPIStore: &submitAPIStore{keyStore: keys, session: store.Session{
 			ID: uuid.New(), UserID: keys.user.ID, ExpiresAt: time.Now().Add(time.Hour),
 		}},
@@ -120,6 +129,7 @@ func (f *uploadFixture) wire(t *testing.T, st store.ATHubStore) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	access.EnableCreatorStorage(f.reviews)
 	access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// A reviewed change is rehearsed first; only a real call is recorded.
 		if athub.Rehearsing(r.Context()) {
@@ -300,20 +310,20 @@ func TestRefusedIllustrationIsRemovedFromTheImageHost(t *testing.T) {
 
 func TestKeyIllustrationUploadIsReviewed(t *testing.T) {
 	f := newUploadFixture(t)
-	reviewed := &reviewedUploadStore{uploadStore: f.store}
-	f.wire(t, reviewed)
+	f.wire(t, &reviewedUploadStore{uploadStore: f.store})
 	w := f.serve(withKey(uploadRequest(t, illustrationTarget, picture(t))))
 	if w.Code != 202 || f.content != nil || f.host.saved != 1 {
 		t.Fatalf("status=%d body=%s stored=%d", w.Code, w.Body, f.host.saved)
 	}
 	var stored storedIllustration
-	if reviewed.queued == nil || json.Unmarshal(reviewed.queued.Payload, &stored) != nil {
-		t.Fatalf("illustration was not queued: %+v", reviewed.queued)
+	queued := f.reviews.queued
+	if queued == nil || json.Unmarshal(queued.Payload, &stored) != nil {
+		t.Fatalf("illustration was not queued: %+v", queued)
 	}
-	if reviewed.queued.ID != f.store.call.ID || reviewed.queued.UserID == nil || *reviewed.queued.UserID != f.store.identity.UserID ||
-		reviewed.queued.Path != "/api/v2/illustrations" || reviewed.queued.Query != "novelId=17" ||
+	if queued.ID != f.store.call.ID || queued.UserID == nil || *queued.UserID != f.store.identity.UserID ||
+		queued.Path != "/api/v2/illustrations" || queued.Query != "novelId=17" ||
 		stored.URL != "https://images.test/book/illustrations/17/1.jpg" {
-		t.Fatalf("review lost the novel or image: %+v", reviewed.queued)
+		t.Fatalf("review lost the novel or image: %+v", queued)
 	}
 	if f.rehearsed != 1 || len(f.host.removed) != 0 {
 		t.Fatalf("rehearsed=%d removed=%v", f.rehearsed, f.host.removed)
@@ -324,14 +334,13 @@ func TestKeyIllustrationUploadIsReviewed(t *testing.T) {
 // queued for a reviewer, and the image stored for it does not stay behind.
 func TestReviewedUploadIsRefusedBeforeItIsQueued(t *testing.T) {
 	f := newUploadFixture(t)
-	reviewed := &reviewedUploadStore{uploadStore: f.store}
-	f.wire(t, reviewed)
+	f.wire(t, &reviewedUploadStore{uploadStore: f.store})
 	f.rehearsalStatus = 404
 	w := f.serve(withKey(uploadRequest(t, illustrationTarget, picture(t))))
 	if w.Code != 404 || !strings.Contains(w.Body.String(), "novel_not_found") {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body)
 	}
-	if reviewed.queued != nil || f.content != nil {
+	if f.reviews.queued != nil || f.content != nil {
 		t.Fatal("a refused change was queued or applied")
 	}
 	if len(f.host.removed) != 1 {

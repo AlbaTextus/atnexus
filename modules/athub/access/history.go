@@ -20,7 +20,7 @@ func (a *Access) RecordChanges(ctx context.Context, batch string, drafts []athub
 	if err := a.holdNewImages(ctx, drafts); err != nil {
 		return nil, err
 	}
-	finish, err := creatplat.NewHistory(a.historyStore(), a.logger).RecordChanges(ctx, batch, drafts)
+	finish, err := creatplat.NewHistory(a.creatorHistory, a.logger).RecordChanges(ctx, batch, drafts)
 	if err != nil {
 		return nil, err
 	}
@@ -140,15 +140,7 @@ func (a *Access) releaseImage(ctx context.Context, category, entityID, location 
 
 // ReconcileRevisions settles revisions whose completion was lost, until ctx ends.
 func (a *Access) ReconcileRevisions(ctx context.Context, content creatplat.RevisionReceipts) {
-	creatplat.NewHistory(a.historyStore(), a.logger).RunReconciler(ctx, content)
-}
-
-func (a *Access) historyStore() any {
-	if a.creatorHistory != nil {
-		return a.creatorHistory
-	}
-	// Isolated legacy fixtures use their own explicit in-memory history store.
-	return a.store
+	creatplat.NewHistory(a.creatorHistory, a.logger).RunReconciler(ctx, content)
 }
 
 func (a *Access) contributor(ctx context.Context, userID uuid.UUID) (athub.Contributor, error) {
@@ -170,7 +162,7 @@ func (a *Access) contributor(ctx context.Context, userID uuid.UUID) (athub.Contr
 }
 
 func (a *Access) history(w http.ResponseWriter, r *http.Request) {
-	history := creatplat.NewHistory(a.historyStore(), a.logger)
+	history := creatplat.NewHistory(a.creatorHistory, a.logger)
 	// Revisions keep the avatar address their contributor had at the time, which
 	// may since have been replaced and deleted. Show the current one instead.
 	if accounts, ok := a.store.(interface {

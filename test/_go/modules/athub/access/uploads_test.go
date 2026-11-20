@@ -48,6 +48,7 @@ func TestKeyCoverUploadIsAdmittedBeforeTheFileIsStored(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			access.EnableCreatorStorage(&st.queue)
 			// A signed-in browser must not stand in for a key that was refused.
 			access.EnableSessions(sessionVerifier{identity: auth.Identity{UserID: uuid.New(), SessionID: uuid.New()}})
 			access.Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -72,7 +73,7 @@ func TestKeyCoverUploadIsAdmittedBeforeTheFileIsStored(t *testing.T) {
 			if response.Code != scenario.want || saved != (scenario.want == 200) {
 				t.Fatalf("status=%d body=%s saved=%v", response.Code, response.Body, saved)
 			}
-			if st.queued != nil {
+			if st.queue.queued != nil {
 				t.Fatal("cover upload entered the review queue")
 			}
 			if scenario.want == 503 {
@@ -129,6 +130,7 @@ func TestKeyIllustrationUploadFollowsPermissionsAndReview(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			access.EnableCreatorStorage(&st.queue)
 			dispatched := false
 			access.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// A reviewed change is rehearsed first; only a real call counts.
@@ -173,13 +175,14 @@ func TestKeyIllustrationUploadFollowsPermissionsAndReview(t *testing.T) {
 				base.call.KeyID == nil || *base.call.KeyID != base.identity.KeyID {
 				t.Fatalf("call was not recorded as a key illustration upload: %+v", base.call)
 			}
-			if (st.queued != nil) != (scenario.want == 202) {
-				t.Fatalf("review queue=%+v", st.queued)
+			queued := st.queue.queued
+			if (queued != nil) != (scenario.want == 202) {
+				t.Fatalf("review queue=%+v", queued)
 			}
-			if scenario.want == 202 && (st.queued.ID != base.call.ID || st.queued.UserID == nil || *st.queued.UserID != base.identity.UserID ||
-				st.queued.Operation != "upload" || st.queued.Method != "POST" || st.queued.Path != "/api/v2/illustrations" ||
-				st.queued.Query != "novelId=17" || string(st.queued.Payload) != stored) {
-				t.Fatalf("illustration lost its novel or image in review: %+v", st.queued)
+			if scenario.want == 202 && (queued.ID != base.call.ID || queued.UserID == nil || *queued.UserID != base.identity.UserID ||
+				queued.Operation != "upload" || queued.Method != "POST" || queued.Path != "/api/v2/illustrations" ||
+				queued.Query != "novelId=17" || string(queued.Payload) != stored) {
+				t.Fatalf("illustration lost its novel or image in review: %+v", queued)
 			}
 		})
 	}

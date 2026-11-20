@@ -61,15 +61,10 @@ func (p *Postgres) Ping(ctx context.Context) error { return p.pool.Ping(ctx) }
 func (p *Postgres) Close()                         { p.pool.Close() }
 
 func (p *Postgres) CheckSchema(ctx context.Context) error {
-	for _, query := range []string{
-		`SELECT id,user_id,contributor,operation,method,path,query,payload,status,reviewer_id,reviewer,note,result_status,result,created_at,reviewed_at,baseline FROM athub_reviews LIMIT 0`,
-		`SELECT key,source_database,source_server,review_digest,history_digest,review_count,history_count,completed_at FROM creator_migration_state LIMIT 0`,
-	} {
-		rows, err := p.pool.Query(ctx, query)
-		if err != nil {
-			return err
-		}
-		rows.Close()
+	rows, err := p.pool.Query(ctx, `SELECT id,user_id,contributor,operation,method,path,query,payload,status,reviewer_id,reviewer,note,result_status,result,created_at,reviewed_at,baseline FROM athub_reviews LIMIT 0`)
+	if err != nil {
+		return err
 	}
+	rows.Close()
 	return p.CheckNovelHistorySchema(ctx)
 }

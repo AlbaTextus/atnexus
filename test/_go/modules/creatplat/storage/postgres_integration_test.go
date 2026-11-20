@@ -70,7 +70,7 @@ func testSchema(t *testing.T, dsn, migrations string) string {
 	return parsed.String()
 }
 
-func splitFixture(t *testing.T) (*store.Postgres, *Postgres, *pgxpool.Pool, *pgxpool.Pool, string, string) {
+func splitFixture(t *testing.T) (*store.Postgres, *Postgres, *pgxpool.Pool, *pgxpool.Pool) {
 	t.Helper()
 	sourceURL, targetURL := os.Getenv("OAUTH_TEST_DATABASE_URL"), os.Getenv("CREATPLAT_TEST_DATABASE_URL")
 	if sourceURL == "" || targetURL == "" {
@@ -105,70 +105,12 @@ func splitFixture(t *testing.T) (*store.Postgres, *Postgres, *pgxpool.Pool, *pgx
 	if err := creator.RequireSeparateDatabases(ctx, targetURL); err == nil {
 		t.Fatal("same database accepted as independent")
 	}
-	return accounts, creator, source, target, sourceURL, targetURL
-}
-
-func TestImportPreservesLegacyCreatorData(t *testing.T) {
-	accounts, creator, source, target, sourceURL, _ := splitFixture(t)
-	ctx := context.Background()
-	user, err := accounts.CreateUser(ctx, "creator-import@example.test", "unused", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	id, batch, revision := uuid.New(), uuid.New(), uuid.New()
-	contributor, _ := json.Marshal(map[string]string{"id": user.ID.String(), "name": "真实迁移测试贡献者"})
-	if _, err := source.Exec(ctx, `INSERT INTO athub_reviews(id,user_id,contributor,operation,method,path,payload,status,note) VALUES($1,$2,$3,'upload','POST','/api/v2/tags','{"name":"迁移测试"}','pending','保留审核备注')`, id, user.ID, contributor); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := source.Exec(ctx, `INSERT INTO novel_revisions(id,batch_id,novel_id,user_id,contributor,changes,status) VALUES($1,$2,7,$3,$4,'[{"entity":"Novel","action":"INSERT","after":{"title":"迁移测试"}}]','completed')`, revision, batch, user.ID, contributor); err != nil {
-		t.Fatal(err)
-	}
-	if err := creator.CheckLegacyMigration(ctx, sourceURL); err == nil {
-		t.Fatal("unimported legacy data accepted")
-	}
-	result, err := ImportLegacy(ctx, source, target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.Reviews != 1 || result.History != 1 || result.AlreadyImported {
-		t.Fatalf("result=%+v", result)
-	}
-	if err := creator.CheckLegacyMigration(ctx, sourceURL); err != nil {
-		t.Fatal(err)
-	}
-	review, err := creator.ATHubReview(ctx, user.ID, id, false)
-	if err != nil || review.ID != id || review.Note != "保留审核备注" || review.Status != "pending" {
-		t.Fatalf("review=%+v err=%v", review, err)
-	}
-	history, err := creator.NovelHistory(ctx, 7, 20, 0)
-	if err != nil || history.Total != 1 || history.Revisions[0].ID != revision {
-		t.Fatalf("history=%+v err=%v", history, err)
-	}
-	var count int
-	if err := source.QueryRow(ctx, `SELECT COUNT(*) FROM athub_reviews`).Scan(&count); err != nil || count != 1 {
-		t.Fatal("source was modified")
-	}
-	result, err = ImportLegacy(ctx, source, target)
-	if err != nil || !result.AlreadyImported {
-		t.Fatalf("repeat import=%+v err=%v", result, err)
-	}
-	if _, err := source.Exec(ctx, `UPDATE athub_reviews SET note='unexpected old writer' WHERE id=$1`, id); err != nil {
-		t.Fatal(err)
-	}
-	if err := creator.CheckLegacyMigration(ctx, sourceURL); err == nil {
-		t.Fatal("post-cutover source changes ignored")
-	}
-	if _, err := ImportLegacy(ctx, source, target); err == nil {
-		t.Fatal("changed source overwrote destination")
-	}
+	return accounts, creator, source, target
 }
 
 func TestSplitReviewLifecycleAndHistory(t *testing.T) {
-	accounts, creator, source, target, sourceURL, _ := splitFixture(t)
+	accounts, creator, source, target := splitFixture(t)
 	ctx := context.Background()
-	if err := creator.CheckLegacyMigration(ctx, sourceURL); err != nil {
-		t.Fatal(err)
-	}
 	author, err := accounts.UpsertUser(ctx, store.UserSeed{Email: "split-author@example.test", PasswordHash: "unused", Role: "LEVEL_2"})
 	if err != nil {
 		t.Fatal(err)
@@ -190,12 +132,15 @@ func TestSplitReviewLifecycleAndHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var oldCount, newCount int
-	if err := source.QueryRow(ctx, `SELECT COUNT(*) FROM athub_reviews`).Scan(&oldCount); err != nil {
-		t.Fatal(err)
+	// Reviews and history are kept by the creator database alone: the account
+	// database has no table that could hold either.
+	var gone bool
+	if err := source.QueryRow(ctx, `SELECT to_regclass('athub_reviews') IS NULL AND to_regclass('novel_revisions') IS NULL`).Scan(&gone); err != nil || !gone {
+		t.Fatalf("the account database still has a review or history table: %v", err)
 	}
-	if err := target.QueryRow(ctx, `SELECT COUNT(*) FROM athub_reviews`).Scan(&newCount); err != nil || oldCount != 0 || newCount != 1 {
-		t.Fatal("review was not isolated in creator database")
+	var queued int
+	if err := target.QueryRow(ctx, `SELECT COUNT(*) FROM athub_reviews`).Scan(&queued); err != nil || queued != 1 {
+		t.Fatalf("review was not kept in the creator database: %d %v", queued, err)
 	}
 	if _, err := creator.ListATHubReviews(ctx, author.ID, true, "", 0); !errors.Is(err, store.ErrUserForbidden) {
 		t.Fatal("author could access all reviews", err)
@@ -244,38 +189,8 @@ func TestSplitReviewLifecycleAndHistory(t *testing.T) {
 	if err := creator.FinishNovelRevisions(ctx, batch, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := source.QueryRow(ctx, `SELECT COUNT(*) FROM novel_revisions`).Scan(&oldCount); err != nil || oldCount != 0 {
-		t.Fatal("history was written to account database")
-	}
-}
-
-func TestImportFailureLeavesBothDatabasesIntact(t *testing.T) {
-	_, _, source, target, _, _ := splitFixture(t)
-	ctx := context.Background()
-	if _, err := source.Exec(ctx, `INSERT INTO athub_reviews(id,contributor,operation,method,path,payload,note) VALUES($1,'{}','upload','POST','/api/v2/tags','{"large_number":9007199254740993}','reject_for_test')`, uuid.New()); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := target.Exec(ctx, `ALTER TABLE athub_reviews ADD CONSTRAINT migration_failure_test CHECK(note<>'reject_for_test')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ImportLegacy(ctx, source, target); err == nil {
-		t.Fatal("expected destination constraint failure")
-	}
-	var count int
-	if err := target.QueryRow(ctx, `SELECT (SELECT COUNT(*) FROM athub_reviews)+(SELECT COUNT(*) FROM novel_revisions)+(SELECT COUNT(*) FROM creator_migration_state)`).Scan(&count); err != nil || count != 0 {
-		t.Fatal("failed migration left partial destination data", err)
-	}
-	if err := source.QueryRow(ctx, `SELECT COUNT(*) FROM athub_reviews`).Scan(&count); err != nil || count != 1 {
-		t.Fatal("failed migration modified source", err)
-	}
-	if _, err := target.Exec(ctx, `ALTER TABLE athub_reviews DROP CONSTRAINT migration_failure_test`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ImportLegacy(ctx, source, target); err != nil {
-		t.Fatal(err)
-	}
-	var number string
-	if err := target.QueryRow(ctx, `SELECT payload->>'large_number' FROM athub_reviews`).Scan(&number); err != nil || number != "9007199254740993" {
-		t.Fatalf("JSON precision lost: %q %v", number, err)
+	var recorded int
+	if err := target.QueryRow(ctx, `SELECT COUNT(*) FROM novel_revisions WHERE batch_id=$1 AND status='completed'`, batch).Scan(&recorded); err != nil || recorded != 1 {
+		t.Fatalf("history was not kept in the creator database: %d %v", recorded, err)
 	}
 }

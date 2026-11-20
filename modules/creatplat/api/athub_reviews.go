@@ -56,11 +56,8 @@ func (a *API) athubReviews(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	st, ok := a.Store.(store.ATHubReviewStore)
-	if a.reviews != nil {
-		st, ok = a.reviews, true
-	}
-	if !ok {
+	st := a.reviews
+	if st == nil {
 		a.PolicyError(w, errors.New("review store unavailable"))
 		return
 	}

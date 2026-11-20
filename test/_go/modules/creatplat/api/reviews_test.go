@@ -14,7 +14,7 @@ func TestATHubReviewHTTPAccessAndValidation(t *testing.T) {
 		a, keys := keyAPI(t)
 		keys.user.Role = role
 		s := &policyAPIStore{keyStore: keys}
-		a.Store = s
+		a.Store, a.reviews = s, s
 		request := keyRequest("GET", "")
 		request.URL.Path = "/api/v4/admin/athub/reviews"
 		w := httptest.NewRecorder()
@@ -31,7 +31,7 @@ func TestATHubReviewHTTPAccessAndValidation(t *testing.T) {
 		a, keys := keyAPI(t)
 		keys.user.Role = "ADMIN"
 		s := &policyAPIStore{keyStore: keys}
-		a.Store = s
+		a.Store, a.reviews = s, s
 		var forgotten []string
 		a.SetATHubReceiptForgetter(func(_ context.Context, id string) error {
 			forgotten = append(forgotten, id)
@@ -79,6 +79,32 @@ func TestATHubReviewHTTPAccessAndValidation(t *testing.T) {
 		}
 		if want == 200 && s.finishedStatus != 200 {
 			t.Fatal("review audit not completed")
+		}
+	}
+}
+
+// Reviews are kept by the creator database only. Without it the endpoints
+// answer that they are unavailable, and an account store that could list or
+// decide reviews is not asked.
+func TestATHubReviewsNeedTheCreatorDatabase(t *testing.T) {
+	for _, method := range []string{"GET", "POST"} {
+		a, keys := keyAPI(t)
+		keys.user.Role = "ADMIN"
+		s := &policyAPIStore{keyStore: keys}
+		a.Store = s
+		request := keyRequest(method, `{"decision":"approve"}`)
+		request.URL.Path = "/api/v4/admin/athub/reviews"
+		if method == "POST" {
+			reviewID := uuid.NewString()
+			request.URL.Path += "/" + reviewID
+			params := chi.NewRouteContext()
+			params.URLParams.Add("id", reviewID)
+			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, params))
+		}
+		w := httptest.NewRecorder()
+		a.athubReviews(w, request)
+		if w.Code != 503 || s.listed || s.decided {
+			t.Fatalf("%s: status=%d listed=%v decided=%v body=%s", method, w.Code, s.listed, s.decided, w.Body)
 		}
 	}
 }

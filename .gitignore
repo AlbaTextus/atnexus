@@ -11,7 +11,8 @@ web/node_modules/
 *.tsbuildinfo
 atnexus
 atnexus.exe
+seed.exe
+server.exe
 .codegraph/
 release/
 temp/
-
